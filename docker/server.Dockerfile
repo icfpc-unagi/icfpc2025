@@ -53,7 +53,7 @@ COPY configs/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 COPY --from=vis /www /www
 COPY --from=service /app/www /usr/local/bin/app
 COPY static /www/static
-COPY 3d/web/www /www/3d/web/www
+# COPY 3d/web/www /www/3d/web/www
 WORKDIR /app
 ENV RUST_BACKTRACE 1
 
