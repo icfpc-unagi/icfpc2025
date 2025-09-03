@@ -22,6 +22,9 @@ DOCKER_REGISTRY = asia-docker.pkg.dev/icfpc-primary/asia
 .PHONY: test
 test: test/rust
 
+.PHONY: lint
+lint: lint/rust
+
 .PHONY:
 check:
 	@bash ./scripts/check_unagi_password.sh --logtostderr
