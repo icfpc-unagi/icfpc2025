@@ -1,0 +1,26 @@
+steps:
+  - id: 'build-server'
+    name: 'gcr.io/cloud-builders/docker'
+    entrypoint: '/usr/bin/bash'
+    args: [
+      '-c',
+      'make push/server'
+    ]
+  - id: 'deploy-server'
+    name: 'gcr.io/cloud-builders/gcloud'
+    args: [
+      'run',
+      'services',
+      'update',
+      'server',
+      '--project=icfpc-primary',
+      '--region=asia-northeast1',
+      '--image=asia-docker.pkg.dev/icfpc-primary/asia/server:latest'
+    ]
+
+options:
+  env:
+    - 'DOCKER_BUILDKIT=1'
+    - 'UNAGI_PASSWORD=${_UNAGI_PASSWORD}'
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_32'

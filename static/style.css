@@ -1,0 +1,374 @@
+:root {
+	--width: calc(max(100vw, 900px));
+	--height: calc(max(100vh, 800px));
+	--main-left: calc(max(var(--width) / 2 - 600px, 0px));
+	--main-right: calc(min(var(--width) / 2 + 600px, var(--width)));
+	--nav-height: 70px;
+	--padding: calc(min(15px, var(--width) / 100));
+}
+
+/*****************************************************************************
+ * Global configurations
+ *****************************************************************************/
+
+ html, body {
+	/* Fix body's background size. */
+	width: calc(var(--width));
+	/* Enable contents (incl. the nav bar) to have a full width. */
+	margin: 0;
+}
+
+body {
+    background: #f0f0f5;
+
+	/* Default font families. */
+	font-family: 'ヒラギノ角ゴ Pro W3', 'Hiragino Kaku Gothic Pro',
+	    'メイリオ', Meiryo, 'ＭＳ Ｐゴシック', sans-serif;
+
+	/* Adjust text spacing globally. */
+	line-height: 1.9;
+	letter-spacing: -0.005em;
+}
+
+/* Firefox does not use Hiragino Kaku Gothic Pro W10 for bold texts.  This
+   intentionally sets Hiragino Kaku Gothic Pro W10 to bold tags. */
+h1, h2, h3, h4, h5, b, strong {
+	font-family: 'ヒラギノ角ゴ Pro W10', 'ヒラギノ角ゴ Pro W10', 'Hiragino Kaku Gothic Pro',
+	    'メイリオ', Meiryo, 'ＭＳ Ｐゴシック', sans-serif;
+}
+
+a {
+	color: #37b;
+	text-decoration: none;
+}
+
+/*****************************************************************************
+ * Navigation bar
+ *****************************************************************************/
+
+ body > nav {
+	position: fixed;
+	top: 0;
+	z-index: 1000;
+	width: calc(var(--width));
+	box-sizing: border-box;
+	height: calc(var(--nav-height));
+	padding:
+		0 calc(100vw - var(--main-right) + var(--padding) * 2)
+		0 calc(var(--main-left) + var(--padding) * 2);
+	background: #fff;
+	filter: drop-shadow(0px 2px 1px rgba(0, 0, 0, 0.05));
+}
+
+body > nav > *, body > nav > ul > li {
+	/*display: inline-block;*/
+	display: inline-flex;
+	align-items: center;
+	height: calc(var(--nav-height));
+	line-height: calc(var(--nav-height));
+	vertical-align: middle;
+	margin: 0;
+	padding: 0;
+}
+
+body > nav * {
+	text-decoration: none;
+	color: #666;
+}
+
+body > nav > a:first-child {
+	font-family: "Helvetica Neue";
+	font-weight: 400;
+	letter-spacing: 0.02ex;
+	word-spacing: -0.4ex;
+	font-size: 27px;
+}
+
+/* The title's imos icon in the navigation bar. */
+body > nav > a:first-child:before {
+	content: "";
+	display: inline-block;
+	height: calc(var(--nav-height) * 7 / 10);
+	width: calc(var(--nav-height) * 7 / 10);
+	background: url(/static/unagi.png) no-repeat;
+	margin: 0 8px;
+	border: 1px solid #eee;
+	background-size: calc(var(--nav-height) * 7 / 10);
+	vertical-align: middle;
+	border-radius: calc(var(--nav-height));
+}
+
+/* The title in the navigation bar. */
+body > nav > a:first-child:after {
+	content: "Unagi";
+	display: inline-block;
+	vertical-align: middle;
+	color: #666;
+}
+
+body > nav > ul {
+	/* It adds the margin from the title. This is set to the UL tag so as to
+	   avoid the title from having margins for small displays. */
+	padding-left: 30px;
+}
+
+body > nav > ul > li {
+	padding: 0px 15px;
+}
+
+body > nav .menu_button {
+	float: right;
+	font-size: 250%;
+}
+
+body > nav .menu_button:before {
+	content: "≡";
+	color: #666;
+	display: none;
+	padding: 0 0 0.3ex calc(var(--padding) * 1);
+	line-height: calc(var(--nav-height) * 0.92);
+}
+
+body > nav .menu_button.visible:before {
+	content: "×";
+}
+
+body > nav a.language_button:before {
+	height: calc(var(--nav-height));
+	background-repeat: no-repeat;
+	background-position: 50% 48%;
+	margin: 0px 4px 0px 0px;
+}
+
+body > nav a.language_button {
+	float: right;
+	margin: 0px calc(var(--padding) * 1.5) 0px 0px;
+}
+
+/*****************************************************************************
+ * Main area
+ *****************************************************************************/
+
+ body > main {
+	width: calc(var(--width));
+	display: flex;
+	background: #f0f0f5;
+	min-height: calc(var(--height) - var(--nav-height));
+	box-sizing: border-box;
+	padding:
+		0 calc(var(--main-left) + var(--padding))
+		0 calc(var(--width) - var(--main-right) + var(--padding));
+	text-align: justify;
+	overflow: hidden;
+    margin-top: var(--nav-height);
+}
+
+/* This blurs the background if the drawer is open. */
+#shadow {
+	display: none;
+	background-color: rgba(0, 0, 0, 0.2);
+	backdrop-filter: blur(3px);
+	position: fixed;
+	width: 100%;
+	height: 100%;
+	top: 0;
+	left: 0;
+}
+
+body > main > article {
+	width: 100%;
+	max-width: calc(min(100%, var(--width) - var(--padding) * 8));
+	min-height: calc(var(--height) - var(--nav-height));
+	margin: 0 calc(var(--padding));
+	padding: 15px calc(var(--padding) * 2) 90px calc(var(--padding) * 2);
+	background: #fff;
+	filter: drop-shadow(0px 2px 1px rgba(0, 0, 0, 0.05));
+}
+
+body > main > aside {
+	width: 300px;
+	min-width: 300px;
+	padding: 0px calc(var(--padding));
+}
+
+/* A first child should have no top margin even if they are H tags. */
+article > *:first-child,
+article > section:first-child > *:first-child,
+aside > section > *:first-child {
+	margin-top: 0;
+}
+
+/*****************************************************************************
+ * Article
+ *****************************************************************************/
+
+article h1 {
+	margin: 1.5ex 0 1ex;
+	padding: 0.3ex 0;
+	font-size: 150%;
+	color: #359;
+
+	/* Border-related parameters. */
+  border-bottom: solid 3px #cdf;
+  position: relative;
+}
+
+/* Border-related parameters. */
+article h1:after {
+  content: " ";
+  display: block;
+  position: absolute;
+  border-bottom: solid 3px #56c;
+  bottom: -3px;
+  width: 15%;
+}
+
+article h2 {
+	margin: 1.5ex 0 1ex;
+	font-size: 140%;
+	color: #359;
+	border-bottom: 1px solid #359;
+	position: relative;
+}
+
+article h3 {
+	margin: 2ex 0 1ex;
+	font-size: 120%;
+	color: #57b;
+	border-left: 4px solid #57b;
+	padding-left: 7px;
+	line-height: 1.4;
+}
+
+article h4 {
+	margin: 2ex 0 1ex;
+	font-size:  110%;
+	text-decoration: underline;
+}
+
+article h5 {
+	margin: 2ex 0 1ex;
+	font-size:  105%;
+	font-style: italic;
+	font-weight: normal;
+}
+
+article ul {
+	padding-inline-start: calc(min(40px, 4vw));
+}
+
+article tbody > tr:nth-child(even) {
+    background-color: #eee;
+}
+
+article table {
+    border-collapse: collapse;
+}
+
+article table td {
+    padding: 2px 5px;
+}
+
+article table .align-r {
+	text-align: right;
+}
+
+article textarea {
+	font-family: 'Courier New', Courier, monospace;
+}
+
+article a[name] {
+	position: absolute;
+	top: calc(var(--nav-height) * -1);
+}
+
+article input[type=text], article select {
+	border: 1px solid #ccc;
+	border-radius: 3px;
+	margin: 0 1ex;
+	padding: 1ex;
+}
+
+article pre {
+	border: 1px solid #ccc;
+	border-radius: 5px;
+	width: 100%;
+	box-sizing: border-box;
+	padding: 1ex;
+	font-family: 'Courier New', Courier, monospace;
+}
+
+article textarea {
+	width: 100%;
+	/* padding: 1ex; */
+	/* min-width: 100%;
+	max-width: calc(var(--main-right) - var(--main-left) - var(--padding) * 8); */
+}
+
+article textarea.code {
+	border: 1px solid #ccc;
+	border-radius: 3px;
+	margin: 1ex 0;
+	width: 100%;
+	box-sizing: border-box;
+	padding: 1ex;
+	min-width: 100%;
+	max-width: 100%;
+}
+
+article input[type=submit] {
+	border: 1px solid #36c;	
+	background: #fff;
+    color: #36c;
+    line-height: 200%;
+    font-size: 120%;
+    border-radius: 5px;
+    padding: 1ex 5ex;
+	margin: 1ex 2ex 1ex 0;
+}
+
+article input[type=submit].primary {
+    border: none;
+    background: #36c;
+	color: #fff;
+}
+
+article .alert-danger {
+	color: #721c24;
+	background: #f5c6cb;
+	border: 1px solid #f8d7da;
+	padding: 1.5ex;
+	border-radius: 5px;
+	box-sizing: border-box;
+	margin: 1ex 0;
+}
+
+article .alert-success {
+	color: #155724;
+	background: #d4edda;
+	border: 1px solid #c3e6cb;
+	padding: 1.5ex;
+	border-radius: 5px;
+	box-sizing: border-box;
+	margin: 1ex 0;
+}
+
+article #vis {
+	width: 100%;
+	height: calc((var(--main-right) - var(--main-left)) / 2);
+}
+
+/* For visualizer */
+rect:hover { fill: #ffff0066; }
+
+/* For submission tags */
+.tag {
+	display: inline-block;
+	margin: 0.2ex;
+	padding: 0.2ex 0.6ex;
+	border-radius: 10px;
+	background: #eee;
+	border: 1px solid #ccc;
+	color: #666;
+	font-size: 90%;
+}

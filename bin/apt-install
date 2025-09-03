@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+set -eux
+
+apt-get update -qq
+
+# Check if every package is available.
+for package in "$@"; do
+    # Ignore command line options.
+    if [[ "${package}" == -* ]]; then
+        continue
+    fi
+    apt-cache show "${package}" > /dev/null
+done
+
+apt-get install -qq -y --no-install-recommends "$@"
+apt-get clean
+rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*

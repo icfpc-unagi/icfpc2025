@@ -54,6 +54,17 @@ lint/rust:
 	cargo clippy -- -D warnings
 	cargo fmt --check
 
+###############################################################################
+# Format rules
+###############################################################################
+
+.PHONY: format/rust
+format/rust:
+	cargo fmt
+
+.PHONY: format
+format: format/rust
+
 .PHONY: test/secrets
 test/secrets: secrets
 
