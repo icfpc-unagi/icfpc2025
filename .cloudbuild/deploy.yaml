@@ -1,0 +1,65 @@
+steps:
+  - id: 'hash-cargo-toml'
+    name: 'ubuntu:24.04'
+    entrypoint: 'bash'
+    args: ['-c', 'sha1sum Cargo.toml | cut -d" " -f1 > Cargo.sha1']
+  - id: 'pull-rust-cache'
+    name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args: ['-c', 'docker pull asia-docker.pkg.dev/icfpc-primary/asia/cache/rust-builder:$(cat Cargo.sha1) || exit 0']
+  - id: 'build-rust-cache'
+    name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args:
+    - '-c'
+    - 'docker buildx build
+          -t asia-docker.pkg.dev/icfpc-primary/asia/cache/rust-builder
+          --cache-from asia-docker.pkg.dev/icfpc-primary/asia/cache/rust-builder:$(cat Cargo.sha1)
+          -f docker/builder.Dockerfile
+          --target rust-builder
+          --build-arg BUILDKIT_INLINE_CACHE=1
+          .'
+  - id: 'push-tag-cache'
+    name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args:
+    - '-c'
+    - 'docker tag asia-docker.pkg.dev/icfpc-primary/asia/cache/rust-builder
+          asia-docker.pkg.dev/icfpc-primary/asia/cache/rust-builder:$(cat Cargo.sha1)'
+  - id: 'push-rust-cache'
+    name: 'gcr.io/cloud-builders/docker'
+    entrypoint: 'bash'
+    args:
+    - '-c'
+    - 'docker push asia-docker.pkg.dev/icfpc-primary/asia/cache/rust-builder:$(cat Cargo.sha1)'
+  - id: 'build-secrets'
+    name: 'gcr.io/cloud-builders/docker'
+    entrypoint: '/usr/bin/bash'
+    args: [
+      '-c',
+      'make secrets/service_account.json@host'
+    ]
+    waitFor: ['-']
+  - id: 'build-binaries'
+    name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'build',
+      '-t', 'asia-docker.pkg.dev/icfpc-primary/asia/cache/builder',
+      '--cache-from', 'asia-docker.pkg.dev/icfpc-primary/asia/cache/rust-builder',
+      '-f', 'docker/builder.Dockerfile',
+      '.'
+    ]
+    waitFor: ['build-rust-cache', 'build-secrets']
+  - id: 'push-binaries'
+    name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'run', '--rm', 'asia-docker.pkg.dev/icfpc-primary/asia/cache/builder',
+      'bash', '/work/scripts/deploy_binaries.sh', '$SHORT_SHA',
+    ]
+
+options:
+  env:
+    - 'DOCKER_BUILDKIT=1'
+    - 'UNAGI_PASSWORD=${_UNAGI_PASSWORD}'
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_32'
