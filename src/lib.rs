@@ -1,10 +1,6 @@
 use anyhow::Context;
 #[cfg(feature = "reqwest")]
 use reqwest::Client;
-use std::fmt::Display;
-
-use itertools::Itertools;
-use num::bigint::BigInt;
 
 #[cfg(feature = "tokio")]
 #[cfg(feature = "reqwest")]
@@ -48,7 +44,7 @@ pub async fn get_bearer_async() -> anyhow::Result<String> {
     let unagi_password = std::env::var("UNAGI_PASSWORD").context("UNAGI_PASSWORD not set")?;
     let client = Client::new();
     let res = client
-        .get(&format!(
+        .get(format!(
             "https://storage.googleapis.com/icfpc2024-data/{}/bearer.txt",
             unagi_password,
         ))
@@ -58,7 +54,6 @@ pub async fn get_bearer_async() -> anyhow::Result<String> {
     res.text()
         .await
         .context("Failed to get bearer")
-        .map_err(Into::into)
         .map(|s| format!("Bearer {}", s))
 }
 
@@ -68,6 +63,4 @@ pub fn get_bearer() -> anyhow::Result<String> {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-}
+mod tests {}

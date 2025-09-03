@@ -42,6 +42,15 @@ test/rust:
 	cargo test
 	cargo build --bins
 
+###############################################################################
+# Lint rules
+###############################################################################
+
+.PHONY: lint/rust
+lint/rust:
+	cargo clippy -- -D warnings
+	cargo fmt --check
+
 .PHONY: test/secrets
 test/secrets: secrets
 
