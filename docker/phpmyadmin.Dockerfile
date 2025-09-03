@@ -1,4 +1,4 @@
-FROM phpmyadmin/phpmyadmin:5.2.1
+FROM phpmyadmin/phpmyadmin:5.2.2
 
 ARG UNAGI_PASSWORD
 RUN [ "${UNAGI_PASSWORD}" != '' ]
