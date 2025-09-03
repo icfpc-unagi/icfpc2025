@@ -71,10 +71,10 @@ async fn main() -> Result<()> {
             let external_ip = it
                 .get("networkInterfaces")
                 .and_then(|v| v.as_array())
-                .and_then(|arr| arr.get(0))
+                .and_then(|arr| arr.first())
                 .and_then(|ni| ni.get("accessConfigs"))
                 .and_then(|v| v.as_array())
-                .and_then(|arr| arr.get(0))
+                .and_then(|arr| arr.first())
                 .and_then(|ac| ac.get("natIP"))
                 .and_then(|v| v.as_str())
                 .unwrap_or("-")
@@ -109,32 +109,32 @@ fn print_table(headers: &[&str; 5], rows: &[[String; 5]]) {
     }
 
     // Header
-    for i in 0..5 {
+    for (i, h) in headers.iter().enumerate() {
         if i > 0 {
             print!("  ");
         }
-        print!("{:width$}", headers[i], width = widths[i]);
+        print!("{:width$}", h, width = widths[i]);
     }
-    println!("");
+    println!();
 
     // Separator
-    for i in 0..5 {
+    for (i, w) in widths.iter().enumerate() {
         if i > 0 {
             print!("  ");
         }
-        print!("{}", "-".repeat(widths[i]));
+        print!("{}", "-".repeat(*w));
     }
-    println!("");
+    println!();
 
     // Rows
     for row in rows {
-        for i in 0..5 {
+        for (i, cell) in row.iter().enumerate() {
             if i > 0 {
                 print!("  ");
             }
-            print!("{:width$}", row[i], width = widths[i]);
+            print!("{:width$}", cell, width = widths[i]);
         }
-        println!("");
+        println!();
     }
 }
 
