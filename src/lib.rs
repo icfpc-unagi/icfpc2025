@@ -45,7 +45,7 @@ pub async fn get_bearer_async() -> anyhow::Result<String> {
     let client = Client::new();
     let res = client
         .get(format!(
-            "https://storage.googleapis.com/icfpc2024-data/{}/bearer.txt",
+            "https://storage.googleapis.com/icfpc2025-data/{}/bearer.txt",
             unagi_password,
         ))
         .send()
