@@ -1,4 +1,4 @@
-FROM rust:1.79 AS rust-builder
+FROM rust:1.89 AS rust-builder
 RUN rustup target add x86_64-unknown-linux-musl
 RUN rustup target add wasm32-unknown-unknown
 # RUN cargo install wasm-pack  # It was very slow.
