@@ -171,4 +171,3 @@ pub struct ShieldedInstanceConfig {
 pub struct Tags {
     pub items: Vec<String>,
 }
-

@@ -35,4 +35,3 @@ pub async fn create_instance(
     let result: Value = response.json().await?;
     Ok(result)
 }
-

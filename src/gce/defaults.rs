@@ -43,9 +43,8 @@ pub fn create_default_instance_request(name: &str) -> InstanceRequest {
         instance_encryption_key: serde_json::json!({}),
         key_revocation_action_type: "NONE".to_string(),
         labels,
-        machine_type:
-            "projects/icfpc-primary/zones/asia-northeast1-b/machineTypes/c2d-standard-4"
-                .to_string(),
+        machine_type: "projects/icfpc-primary/zones/asia-northeast1-b/machineTypes/c2d-standard-4"
+            .to_string(),
         metadata: Metadata {
             items: vec![MetadataItem {
                 key: "enable-osconfig".to_string(),
@@ -59,9 +58,8 @@ pub fn create_default_instance_request(name: &str) -> InstanceRequest {
                 network_tier: "PREMIUM".to_string(),
             }],
             stack_type: "IPV4_ONLY".to_string(),
-            subnetwork:
-                "projects/icfpc-primary/regions/asia-northeast1/subnetworks/default"
-                    .to_string(),
+            subnetwork: "projects/icfpc-primary/regions/asia-northeast1/subnetworks/default"
+                .to_string(),
         }],
         params: Params {
             resource_manager_tags: serde_json::json!({}),
@@ -88,4 +86,3 @@ pub fn create_default_instance_request(name: &str) -> InstanceRequest {
         zone: "projects/icfpc-primary/zones/asia-northeast1-b".to_string(),
     }
 }
-
