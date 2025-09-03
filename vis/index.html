@@ -1,0 +1,21 @@
+<html>
+
+<head>
+  <title>Visualizer</title>
+  <meta content="text/html;charset=utf-8" http-equiv="Content-Type" />
+</head>
+
+<body>
+    <script type="module">
+    import init, { hello_world } from './vis.js';
+
+    async function run() {
+        await init();
+        var output = hello_world();
+        // Append the output to the body.
+        document.body.appendChild(document.createTextNode(output));
+    }
+    run();
+    </script>
+</body>
+</html>
