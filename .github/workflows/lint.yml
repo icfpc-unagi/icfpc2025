@@ -1,0 +1,30 @@
+name: lint
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the "main" branch
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+env:
+  UNAGI_PASSWORD: ${{ secrets.UNAGI_PASSWORD }}
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Initialize Rust toolchain
+        run: rustup toolchain install stable --profile minimal
+      - name: Install wasm-pack CLI
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - name: Cache Rust crates
+        uses: Swatinem/rust-cache@v2
+      - name: Run lint
+        run: make lint/rust

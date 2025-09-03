@@ -1,0 +1,117 @@
+name: test
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the "main" branch
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+env:
+  UNAGI_PASSWORD: ${{ secrets.UNAGI_PASSWORD }}
+  DOCKER_BUILDKIT: 1
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Initialize Rust toolchain
+        run: rustup toolchain install stable --profile minimal
+      - name: Install wasm-pack CLI
+        run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+      - name: Cache Rust crates
+        uses: Swatinem/rust-cache@v2
+      - name: Run tests
+        run: make test/rust
+
+  # go:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - uses: docker/setup-buildx-action@v1
+  #     - name: Run tests
+  #       run: make test/go
+
+  # secrets:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - name: Run tests
+  #       run: make test/secrets
+
+  # server:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - name: Cache Docker layers
+  #       uses: actions/cache@v2
+  #       with:
+  #         path: /tmp/.buildx-cache
+  #         key: server-${{ github.ref }}-${{ github.sha }}
+  #         restore-keys: |
+  #           server-${{ github.ref }}-${{ github.sha }}
+  #           server-${{ github.ref }}
+  #           server-refs/head/main
+  #     - uses: docker/setup-buildx-action@v1
+  #     - name: Set up credentials
+  #       run: make secrets
+  #     - name: Build and push
+  #       id: docker_build
+  #       uses: docker/build-push-action@v2
+  #       with:
+  #         context: ./
+  #         file: ./docker/server.Dockerfile
+  #         build-args: UNAGI_PASSWORD=${{ secrets.UNAGI_PASSWORD }}
+  #         builder: ${{ steps.buildx.outputs.name }}
+  #         push: false
+  #         cache-from: type=local,src=/tmp/.buildx-cache
+  #         cache-to: type=local,dest=/tmp/.buildx-cache
+
+  # runner:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - uses: docker/setup-buildx-action@v1
+  #     - name: Set up credentials
+  #       run: make secrets/service_account.json
+  #     - name: Build an image
+  #       run: make docker/runner
+
+  # builder:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - name: Cache Docker layers
+  #       uses: actions/cache@v2
+  #       with:
+  #         path: /tmp/.buildx-cache
+  #         key: builder-${{ github.ref }}-${{ github.sha }}
+  #         restore-keys: |
+  #           builder-${{ github.ref }}-${{ github.sha }}
+  #           builder-${{ github.ref }}
+  #           builder-refs/head/main
+  #     - uses: docker/setup-buildx-action@v1
+  #     - name: Set up credentials
+  #       run: make secrets
+  #     - name: Build and push
+  #       id: docker_build
+  #       uses: docker/build-push-action@v2
+  #       with:
+  #         context: ./
+  #         file: ./docker/builder.Dockerfile
+  #         builder: ${{ steps.buildx.outputs.name }}
+  #         push: false
+  #         load: true
+  #         tags: icfpc-unagi/builder
+  #         cache-from: type=local,src=/tmp/.buildx-cache
+  #         cache-to: type=local,dest=/tmp/.buildx-cache
+  #     - name: Deploy binaries
+  #       run: |
+  #         docker run --rm icfpc-unagi/builder \
+  #             bash /work/scripts/deploy_binaries.sh \
+  #             "$(git rev-parse --short HEAD)"
