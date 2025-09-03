@@ -1,4 +1,4 @@
-FROM rust:1.91 AS rust-builder
+FROM rust:1.89 AS rust-builder
 RUN rustup target add x86_64-unknown-linux-musl
 RUN mkdir -p /work/src
 WORKDIR /work
