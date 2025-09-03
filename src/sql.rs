@@ -17,7 +17,7 @@ static CLIENT: Lazy<mysql::Pool> = Lazy::new(|| {
             password,
             env::var("MYSQL_HOSTNAME")
                 .as_deref()
-                .unwrap_or("34.84.6.97")
+                .unwrap_or("104.198.121.248")
         ),
     };
     let pool = Pool::new(url).unwrap();
