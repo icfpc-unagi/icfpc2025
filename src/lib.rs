@@ -70,5 +70,4 @@ pub fn get_bearer() -> anyhow::Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-
 }
