@@ -197,3 +197,27 @@ pub fn create_instance_request(
         zone: format!("projects/{}/zones/{}", project_id, zone),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_request_paths() {
+        let name = "test-vm";
+        let project = "icfpc-primary";
+        let zone = "asia-northeast1-b";
+        let mtype = "c2d-standard-4";
+        let req = create_instance_request(name, project, zone, mtype, None);
+        assert!(
+            req.machine_type
+                .ends_with(&format!("/machineTypes/{}", mtype))
+        );
+        assert!(req.machine_type.contains(project));
+        assert!(req.machine_type.contains(zone));
+        assert!(req.zone.ends_with(&format!("/zones/{}", zone)));
+        assert!(req.zone.contains(project));
+        assert_eq!(req.name, name);
+        assert_eq!(req.disks.len(), 1);
+    }
+}
