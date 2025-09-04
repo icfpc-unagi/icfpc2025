@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::gce::types::*;
+use crate::gcp::gce::types::*;
 
 pub fn create_default_instance_request(name: &str) -> InstanceRequest {
     let mut labels = HashMap::new();

@@ -43,7 +43,7 @@ async fn main() -> Result<()> {
         instance_name, zone, args.machine_type
     );
 
-    let instance_request = icfpc2025::gce::create_instance_request(
+    let instance_request = icfpc2025::gcp::gce::create_instance_request(
         instance_name,
         project_id,
         zone,
@@ -51,7 +51,7 @@ async fn main() -> Result<()> {
         startup_script.as_deref(),
     );
 
-    match icfpc2025::gce::create_instance(project_id, zone, &instance_request).await {
+    match icfpc2025::gcp::gce::create_instance(project_id, zone, &instance_request).await {
         Ok(result) => {
             println!("Instance creation initiated successfully!");
             println!(

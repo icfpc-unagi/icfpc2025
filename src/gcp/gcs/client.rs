@@ -1,8 +1,8 @@
 use anyhow::{Context, Result, bail};
 use reqwest::Url;
 
-use crate::gce::get_access_token;
-use crate::gcs::types::{FileInfo, ListResponse, ObjectItem};
+use crate::gcp::gcs::types::{FileInfo, ListResponse, ObjectItem};
+use crate::gcp::get_access_token;
 
 pub fn parse_gs_url(s: &str) -> Result<(String, String)> {
     let rest = s
@@ -96,7 +96,6 @@ pub async fn list_dir(bucket: &str, prefix: &str) -> Result<(Vec<String>, Vec<St
 }
 
 pub async fn list_dir_detailed(bucket: &str, prefix: &str) -> Result<(Vec<String>, Vec<FileInfo>)> {
-    // For directory-like listing, ensure prefix ends with '/'
     let mut eff_prefix = prefix.to_string();
     if !eff_prefix.is_empty() && !eff_prefix.ends_with('/') {
         eff_prefix.push('/');
@@ -182,7 +181,6 @@ pub async fn get_object_metadata(bucket: &str, object: &str) -> Result<ObjectIte
         .context("Failed to get access token")?;
 
     let client = reqwest::Client::new();
-    // Use list API with prefix and filter exact match to avoid percent-encoding complexities.
     let mut page_token: Option<String> = None;
     loop {
         let mut url = Url::parse(&format!(
