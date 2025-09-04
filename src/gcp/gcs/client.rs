@@ -170,3 +170,37 @@ pub async fn get_object_metadata(bucket: &str, object: &str) -> Result<ObjectIte
     }
     bail!("Object not found: gs://{}/{}", bucket, object)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anyhow::Result;
+    use std::env;
+
+    #[tokio::test]
+    async fn parse_gs_url_basic() -> Result<()> {
+        let (b, p) = parse_gs_url("gs://bucket").unwrap();
+        assert_eq!(b, "bucket");
+        assert_eq!(p, "");
+        let (b, p) = parse_gs_url("gs://bucket/prefix/dir").unwrap();
+        assert_eq!(b, "bucket");
+        assert_eq!(p, "prefix/dir");
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn list_dir_smoke() -> Result<()> {
+        // Read-only listing on public-ish bucket path; expect no error
+        let _ = list_dir("icfpc2025-data", "").await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn get_sa_metadata_by_env() -> Result<()> {
+        let password = env::var("UNAGI_PASSWORD").expect("UNAGI_PASSWORD not set");
+        let object = format!("{}/service_account.json", password);
+        let meta = get_object_metadata("icfpc2025-data", &object).await?;
+        assert_eq!(meta.name, object);
+        Ok(())
+    }
+}

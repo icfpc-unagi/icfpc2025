@@ -35,3 +35,16 @@ pub async fn create_instance(
     let result: Value = response.json().await?;
     Ok(result)
 }
+
+#[cfg(test)]
+mod tests {
+    use anyhow::Result;
+
+    // ネットワークアクセス前提。UNAGI_PASSWORD が設定されている必要があります。
+    #[tokio::test]
+    async fn can_get_access_token() -> Result<()> {
+        let token = crate::gcp::get_access_token().await?;
+        assert!(!token.is_empty());
+        Ok(())
+    }
+}
