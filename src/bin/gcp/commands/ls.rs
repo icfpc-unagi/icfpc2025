@@ -1,66 +1,44 @@
 use anyhow::Result;
-use clap::Parser;
-use icfpc2025::gcp::gcs;
 
-#[derive(Parser, Debug)]
-#[command(
-    name = "gcs_list_objects",
-    about = "List GCS objects like ls for a gs:// URL"
-)]
-struct Args {
-    /// Enable long listing format (size, updated)
-    #[arg(short = 'l', long = "long")]
-    long: bool,
+pub async fn run(long: bool, recursive: bool, url: &str) -> Result<()> {
+    let (bucket, prefix) = icfpc2025::gcp::gcs::parse_gs_url(url)?;
 
-    /// Recursive listing
-    #[arg(short = 'R', long = "recursive")]
-    recursive: bool,
-
-    /// gs://bucket[/prefix or object]
-    url: String,
-}
-
-#[tokio::main]
-async fn main() -> Result<()> {
-    let args = Args::parse();
-    let (bucket, prefix) = gcs::parse_gs_url(&args.url)?;
-
-    // If prefix is not empty and not ending with '/', try object metadata
     if !prefix.is_empty()
         && !prefix.ends_with('/')
-        && let Ok(meta) = gcs::get_object_metadata(&bucket, &prefix).await
+        && let Ok(meta) = icfpc2025::gcp::gcs::get_object_metadata(&bucket, &prefix).await
     {
         print_object_details(&bucket, &meta)?;
         return Ok(());
     }
 
-    if args.recursive {
-        walk_recursive(&bucket, &prefix, &args).await?;
-    } else if args.long {
-        let (dirs, files) = gcs::list_dir_detailed(&bucket, &prefix).await?;
+    if recursive {
+        walk_recursive(&bucket, &prefix, long).await
+    } else if long {
+        let (dirs, files) = icfpc2025::gcp::gcs::list_dir_detailed(&bucket, &prefix).await?;
         for d in dirs {
             print_long_dir(&d);
         }
         for f in files {
             print_long_file(&f);
         }
+        Ok(())
     } else {
-        let (dirs, files) = gcs::list_dir(&bucket, &prefix).await?;
+        let (dirs, files) = icfpc2025::gcp::gcs::list_dir(&bucket, &prefix).await?;
         for d in dirs {
             println!("{}/", d.trim_end_matches('/'));
         }
         for f in files {
             println!("{}", f);
         }
+        Ok(())
     }
-    Ok(())
 }
 
 fn print_long_dir(name: &str) {
     println!("{:>12}  {:<20}  {}/", "-", "-", name.trim_end_matches('/'));
 }
 
-fn print_long_file(f: &gcs::types::FileInfo) {
+fn print_long_file(f: &icfpc2025::gcp::gcs::types::FileInfo) {
     let size = f
         .size
         .map(|v| v.to_string())
@@ -69,10 +47,9 @@ fn print_long_file(f: &gcs::types::FileInfo) {
     println!("{:>12}  {:<20}  {}", size, updated, f.name);
 }
 
-async fn walk_recursive(bucket: &str, prefix: &str, args: &Args) -> Result<()> {
+async fn walk_recursive(bucket: &str, prefix: &str, long: bool) -> Result<()> {
     let mut stack: Vec<String> = vec![prefix.to_string()];
     while let Some(current) = stack.pop() {
-        // Header
         let header = if current.is_empty() {
             format!("gs://{}/", bucket)
         } else {
@@ -80,8 +57,9 @@ async fn walk_recursive(bucket: &str, prefix: &str, args: &Args) -> Result<()> {
         };
         println!("{}:", header);
 
-        if args.long {
-            let (mut dirs, files) = gcs::list_dir_detailed(bucket, &current).await?;
+        if long {
+            let (mut dirs, files) =
+                icfpc2025::gcp::gcs::list_dir_detailed(bucket, &current).await?;
             for d in &dirs {
                 print_long_dir(d);
             }
@@ -89,7 +67,6 @@ async fn walk_recursive(bucket: &str, prefix: &str, args: &Args) -> Result<()> {
                 print_long_file(f);
             }
             println!();
-            // Push children in reverse to process in lexical order
             dirs.sort();
             for d in dirs.into_iter().rev() {
                 let new_prefix = if current.is_empty() {
@@ -100,7 +77,7 @@ async fn walk_recursive(bucket: &str, prefix: &str, args: &Args) -> Result<()> {
                 stack.push(new_prefix);
             }
         } else {
-            let (mut dirs, files) = gcs::list_dir(bucket, &current).await?;
+            let (mut dirs, files) = icfpc2025::gcp::gcs::list_dir(bucket, &current).await?;
             for d in &dirs {
                 println!("{}/", d.trim_end_matches('/'));
             }
@@ -122,7 +99,7 @@ async fn walk_recursive(bucket: &str, prefix: &str, args: &Args) -> Result<()> {
     Ok(())
 }
 
-fn print_object_details(bucket: &str, meta: &gcs::types::ObjectItem) -> Result<()> {
+fn print_object_details(bucket: &str, meta: &icfpc2025::gcp::gcs::types::ObjectItem) -> Result<()> {
     let name = &meta.name;
     let size = meta.size.as_deref().unwrap_or("-");
     let updated = meta.updated.as_deref().unwrap_or("-");
