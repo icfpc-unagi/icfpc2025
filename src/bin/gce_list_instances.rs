@@ -18,7 +18,7 @@ async fn main() -> Result<()> {
     let zone = args.get(1).map(|s| s.as_str()).unwrap_or(DEFAULT_ZONE);
     let project_id = DEFAULT_PROJECT;
 
-    let token = icfpc2025::gce::get_access_token()
+    let token = icfpc2025::gcp::get_access_token()
         .await
         .context("Failed to get access token")?;
 

@@ -1,8 +1,8 @@
 use anyhow::Result;
 use serde_json::Value;
 
-use crate::gce::auth::get_access_token;
-use crate::gce::types::InstanceRequest;
+use crate::gcp::gce::types::InstanceRequest;
+use crate::gcp::get_access_token;
 
 const GCE_API_BASE: &str = "https://compute.googleapis.com/compute/v1";
 
