@@ -12,6 +12,9 @@ pub mod sql;
 #[cfg(all(feature = "reqwest", feature = "tokio"))]
 pub mod gce;
 
+#[cfg(all(feature = "reqwest", feature = "tokio"))]
+pub mod gcs;
+
 pub trait SetMinMax {
     fn setmin(&mut self, v: Self) -> bool;
     fn setmax(&mut self, v: Self) -> bool;
