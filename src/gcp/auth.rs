@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use serde::{Deserialize, Serialize};
 
-use crate::gcp::gce::types::{AccessToken, ServiceAccount};
+use crate::gcp::types::{AccessToken, ServiceAccount};
 
 const TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
 

@@ -18,7 +18,14 @@ pub fn parse_gs_url(s: &str) -> Result<(String, String)> {
     Ok((bucket, prefix))
 }
 
-pub async fn list_dir(bucket: &str, prefix: &str) -> Result<(Vec<String>, Vec<String>)> {
+async fn list_dir_internal<T, F>(
+    bucket: &str,
+    prefix: &str,
+    map: F,
+) -> Result<(Vec<String>, Vec<T>)>
+where
+    F: Fn(ObjectItem, &str) -> Option<T>,
+{
     // For directory-like listing, ensure prefix ends with '/'
     let mut eff_prefix = prefix.to_string();
     if !eff_prefix.is_empty() && !eff_prefix.ends_with('/') {
@@ -33,7 +40,7 @@ pub async fn list_dir(bucket: &str, prefix: &str) -> Result<(Vec<String>, Vec<St
 
     let mut page_token: Option<String> = None;
     let mut dirs: Vec<String> = Vec::new();
-    let mut files: Vec<String> = Vec::new();
+    let mut out_items: Vec<T> = Vec::new();
 
     loop {
         let mut url = Url::parse(&format!(
@@ -73,93 +80,16 @@ pub async fn list_dir(bucket: &str, prefix: &str) -> Result<(Vec<String>, Vec<St
         }
         for it in body.items {
             // Each item name is eff_prefix + file
-            let name = it
-                .name
-                .strip_prefix(&eff_prefix)
-                .unwrap_or(&it.name)
-                .to_string();
-            if !name.is_empty() && !name.ends_with('/') {
-                files.push(name);
-            }
-        }
-
-        page_token = body.next_page_token;
-        if page_token.is_none() {
-            break;
-        }
-    }
-
-    dirs.sort();
-    files.sort();
-
-    Ok((dirs, files))
-}
-
-pub async fn list_dir_detailed(bucket: &str, prefix: &str) -> Result<(Vec<String>, Vec<FileInfo>)> {
-    let mut eff_prefix = prefix.to_string();
-    if !eff_prefix.is_empty() && !eff_prefix.ends_with('/') {
-        eff_prefix.push('/');
-    }
-
-    let token = get_access_token()
-        .await
-        .context("Failed to get access token")?;
-
-    let client = reqwest::Client::new();
-
-    let mut page_token: Option<String> = None;
-    let mut dirs: Vec<String> = Vec::new();
-    let mut files: Vec<FileInfo> = Vec::new();
-
-    loop {
-        let mut url = Url::parse(&format!(
-            "https://storage.googleapis.com/storage/v1/b/{}/o",
-            bucket
-        ))?;
-        {
-            let mut qp = url.query_pairs_mut();
-            qp.append_pair("delimiter", "/");
-            if !eff_prefix.is_empty() {
-                qp.append_pair("prefix", &eff_prefix);
-            }
-            if let Some(ref t) = page_token {
-                qp.append_pair("pageToken", t);
-            }
-        }
-
-        let res = client
-            .get(url)
-            .header("Authorization", format!("Bearer {}", token))
-            .send()
-            .await
-            .context("Failed to call GCS list API")?;
-
-        if !res.status().is_success() {
-            let status = res.status();
-            let body = res.text().await.unwrap_or_default();
-            bail!("GCS list failed ({}): {}", status, body);
-        }
-
-        let body: ListResponse = res.json().await.context("Invalid GCS response")?;
-
-        for p in body.prefixes {
-            let name = p.strip_prefix(&eff_prefix).unwrap_or(&p).to_string();
-            dirs.push(name);
-        }
-        for it in body.items {
             let rel = it
                 .name
                 .strip_prefix(&eff_prefix)
                 .unwrap_or(&it.name)
                 .to_string();
-            if !rel.is_empty() && !rel.ends_with('/') {
-                let size = it.size.as_deref().and_then(|s| s.parse::<u64>().ok());
-                let updated = it.updated.clone();
-                files.push(FileInfo {
-                    name: rel,
-                    size,
-                    updated,
-                });
+            if rel.is_empty() || rel.ends_with('/') {
+                continue;
+            }
+            if let Some(mapped) = map(it, &rel) {
+                out_items.push(mapped);
             }
         }
 
@@ -170,8 +100,27 @@ pub async fn list_dir_detailed(bucket: &str, prefix: &str) -> Result<(Vec<String
     }
 
     dirs.sort();
-    files.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok((dirs, out_items))
+}
 
+pub async fn list_dir(bucket: &str, prefix: &str) -> Result<(Vec<String>, Vec<String>)> {
+    list_dir_internal(bucket, prefix, |_it, rel| Some(rel.to_string())).await
+}
+
+pub async fn list_dir_detailed(bucket: &str, prefix: &str) -> Result<(Vec<String>, Vec<FileInfo>)> {
+    let (dirs, files) = list_dir_internal(bucket, prefix, |it, rel| {
+        let size = it.size.as_deref().and_then(|s| s.parse::<u64>().ok());
+        let updated = it.updated.clone();
+        Some(FileInfo {
+            name: rel.to_string(),
+            size,
+            updated,
+        })
+    })
+    .await?;
+
+    let mut files = files;
+    files.sort_by(|a, b| a.name.cmp(&b.name));
     Ok((dirs, files))
 }
 
