@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="UTF-8">
+	<title>Plot</title>
+	<script type="text/javascript" charset="utf8" src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.2/math.min.js"></script>
+	<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+
+	<label>
+		run_ids:
+		<input type="text" id="run_ids" onkeydown="checkForEnter(event)" onblur="update()">
+	</label>
+	<label>
+		x:
+		<input type="text" id="x" onkeydown="checkForEnter(event)" onblur="update()">
+	</label>&emsp;
+	<label>
+		y:
+		<select id="y-selector" onchange="update()">
+			{{#each result_keys}}
+			<option value="{{ this }}">{{ this }}</option>
+			{{/each}}
+		</select>
+	</label>&emsp;
+	<label>
+		Filter:
+		<input type="text" id="input_filter" onkeydown="checkForEnter(event)" onblur="updateTable()">
+	</label>&emsp;
+	<text id="num_inputs"></text>
+	<br>
+	<canvas id="chart" width="800" height="600"></canvas>
+
+	<script>
+		const set_name = "{{ set_name }}";
+		const inputs = {{{ inputs }}};
+		const result = {{{ result }}};
+
+		function round(v) {
+			return Math.round(v * 1000) / 1000;
+		}
+
+		function checkForEnter(event) {
+			if (event.key === "Enter") {
+				update();
+			}
+		}
+
+		function vis(run_id, input) {
+			$.get(`/static/${set_name}/in/${input}.txt`, function (input_txt) {
+				$.get(`/static/${set_name}/run/${run_id}/out/${input}.txt`, function (output_txt) {
+					const win = window.open('/vis/index.html', '_blank');
+					win.onload = function () {
+						win.document.getElementById("input").value = input_txt;
+						win.document.getElementById("output").value = output_txt;
+						const inputElement = win.document.getElementById("input");
+						let p = inputElement.parentElement;
+						while (p) {
+							let prevElement = p.previousElementSibling;
+							while (prevElement) {
+								let elementToRemove = prevElement;
+								prevElement = prevElement.previousElementSibling;
+								elementToRemove.remove();
+							}
+							p = p.parentElement;
+						}
+						let name = document.createElement("p");
+						name.innerHTML = `set:${set_name} run:${run_id} input:${input} <a href="/static/${set_name}/run/${run_id}/err/${input}.txt" target="_blank">err</a>`;
+						win.document.body.insertBefore(name, win.document.body.firstChild);
+						win.updateOutput();
+					}
+				});
+			});
+		}
+
+		function update() {
+			const y = $('#y-selector').val();
+			const filter = $('#input_filter').val().trim();
+			let input_ids;
+			try {
+				input_ids = Array.from({ length: inputs.length }, (_, i) => i).filter(i => filter == '' ? true : math.evaluate(filter, JSON.parse(JSON.stringify(inputs[i].features))));
+			} catch (err) {
+				console.log(err);
+				$("#num_inputs").html("Invalid");
+				return;
+			}
+			$("#num_inputs").html(`#inputs = ${input_ids.length}`);
+			let dataPoints = [];
+
+
+
+			let dataSet = result.map(item => {
+				let row = input_ids.map(i => item.logs[i][field] !== undefined ? item.logs[i][field] : "");
+				let sum = 0;
+				let min = null;
+				let min_input = null;
+				let max = null;
+				let max_input = null;
+				let ac = 0;
+				for (let i = 0; i < row.length; i++) {
+					const v = parseFloat(row[i]);
+					if (!isNaN(v)) {
+						sum += v;
+						if (min == null || min > v) {
+							min = v;
+							min_input = inputs[input_ids[i]].file;
+						}
+						if (max == null || max < v) {
+							max = v;
+							max_input = inputs[input_ids[i]].file;
+						}
+					}
+					if (item.logs[input_ids[i]]["status"] == "AC") {
+						ac += 1;
+					}
+				}
+				let min_str = (min == null) ? "" : `${round(min).toLocaleString('en-US')} (${min_input})`;
+				let max_str = (max == null) ? "" : `${round(max).toLocaleString('en-US')} (${max_input})`;
+				return [item.id, item.date, item.msg, `<a href="/static/${item.url}" target="_blank">${item.src}</a>`, ac, round(sum).toLocaleString('en-US'), round(sum / input_ids.length).toLocaleString('en-US'), min_str, max_str].concat(row);
+			});
+			let inputNames = input_ids.map(i => {
+				return { title: `<a href="/static/${inputs[i].url}" target="_blank">${inputs[i].file}</a>` };
+			});
+			if ($.fn.DataTable.isDataTable('#resultTable')) {
+				$('#resultTable').DataTable().destroy();
+				$('#resultTable').empty();
+			}
+			$('#resultTable').DataTable({
+				data: dataSet,
+				paging: false,
+				info: false,
+				columns: [
+					{ title: "id" },
+					{ title: "date" },
+					{ title: "msg" },
+					{ title: "src" },
+					{ title: "ac" },
+					{ title: "sum" },
+					{ title: "avg" },
+					{ title: "min" },
+					{ title: "max" },
+				].concat(inputNames),
+				columnDefs: Array.from({ length: input_ids.length }, (_, i) => i).map(i => ({
+					targets: i + 9,
+					render: function (data, type, row) {
+						if (type === 'display') {
+							if (!isNaN(data) && data !== '') {
+								return parseFloat(data).toLocaleString('en-US');
+							}
+						}
+						return data;
+					},
+					createdCell: function (td, cellData, rowData, row, col) {
+						$(td).click(function () {
+							vis(rowData[0], inputs[input_ids[i]].file);
+						});
+					}
+				})).concat([{
+					targets: 0,
+					render: function (data, type, row) {
+						if (type == 'display') {
+							return `<a href="/list?set=${set_name}&key=${field}&run_ids=${data}" target="_blank">${data}</a>`;
+						} else {
+							return data;
+						}
+					}
+				}])
+			});
+			var footer = $('<tfoot></tfoot>');
+			$('#resultTable thead tr').clone().appendTo(footer);
+			footer.appendTo('#resultTable');
+		}
+		$('#field-selector').val("{{ default_key }}");
+		$('#field-selector').trigger('change');
+	</script>
+
+</body>
+
+</html>

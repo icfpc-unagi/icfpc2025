@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="UTF-8">
+	<title>Result</title>
+	<link rel="stylesheet" type="text/css" href="https://cdn.datatables.net/1.13.6/css/jquery.dataTables.min.css">
+	<link rel="stylesheet" type="text/css"
+		href="https://cdn.datatables.net/fixedcolumns/4.3.0/css/fixedColumns.dataTables.min.css">
+	<script type="text/javascript" charset="utf8" src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+	<script type="text/javascript" charset="utf8"
+		src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+	<script type="text/javascript" charset="utf8"
+		src="https://cdn.datatables.net/fixedcolumns/4.3.0/js/dataTables.fixedColumns.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjs/11.11.2/math.min.js"></script>
+</head>
+
+<body>
+
+	<a href="/vis/index.html" target="_blank">Visualizer</a>&emsp;
+	<a href="/vis/recent" target="_blank">Recent</a><br>
+	<label>
+		Key:
+		<select id="field-selector" onchange="updateTable()">
+			{{#each result_keys}}
+			<option value="{{ this }}">{{ this }}</option>
+			{{/each}}
+		</select>
+	</label>&emsp;
+	<label>
+		Filter:
+		<input type="text" id="input_filter" onchange="updateTable()">
+	</label>&emsp;
+	<text id="num_inputs"></text>
+	<br>
+	<table id="resultTable" class="display compact">
+	</table>
+
+	<script>
+		math.import(
+			{
+				equal: function (x, y) {
+					if (typeof x === "string" && typeof y === "string") {
+						return math.equalText(x, y);
+					}
+					if (x === null) {
+						return y === null;
+					}
+					if (y === null) {
+						return x === null;
+					}
+					if (x === undefined) {
+						return y === undefined;
+					}
+					if (y === undefined) {
+						return x === undefined;
+					}
+					return math.equalScalar(x, y);
+				},
+				unequal: function (x, y) {
+					return !math.equal(x, y);
+				}
+			},
+			{ override: true }
+		);
+		const set_name = "{{ set_name }}";
+		const inputs = {{{ inputs }}};
+		const result = {{{ result }}};
+		const show_details = {{{ show_details }}};
+
+		function round(v) {
+			return Math.round(v * 1000) / 1000;
+		}
+
+		function vis(run_id, input) {
+			$.get(`/static/${set_name}/in/${input}.txt`, function (input_txt) {
+				$.get(`/static/${set_name}/run/${run_id}/out/${input}.txt`, function (output_txt) {
+					const win = window.open('/vis/index.html', '_blank');
+					win.onload = function () {
+						win.document.getElementById("input").value = input_txt;
+						win.document.getElementById("output").value = output_txt;
+						const inputElement = win.document.getElementById("input");
+						let p = inputElement.parentElement;
+						while (p) {
+							let prevElement = p.previousElementSibling;
+							while (prevElement) {
+								let elementToRemove = prevElement;
+								prevElement = prevElement.previousElementSibling;
+								elementToRemove.remove();
+							}
+							p = p.parentElement;
+						}
+						let name = document.createElement("p");
+						name.innerHTML = `set:${set_name} run:${run_id} input:${input} <a href="/static/${set_name}/run/${run_id}/err/${input}.txt" target="_blank">err</a>`;
+						win.document.body.insertBefore(name, win.document.body.firstChild);
+						win.updateOutput();
+					}
+				});
+			});
+		}
+
+		function updateTable() {
+			const field = $('#field-selector').val();
+			const filter = $('#input_filter').val().trim();
+			let input_ids;
+			try {
+				input_ids = Array.from({ length: inputs.length }, (_, i) => i).filter(i => filter == '' ? true : math.evaluate(filter, { ...inputs[i].features }));
+			} catch (err) {
+				console.log(err);
+				$("#num_inputs").html("Invalid");
+				return;
+			}
+			$("#num_inputs").html(`#inputs = ${input_ids.length}`);
+			let dataSet = result.map(item => {
+				let row = input_ids.map(i => item.logs[i][field] !== undefined ? item.logs[i][field] : "");
+				let sum = 0;
+				let min = null;
+				let min_input = null;
+				let max = null;
+				let max_input = null;
+				let ac = 0;
+				for (let i = 0; i < row.length; i++) {
+					const v = parseFloat(row[i]);
+					if (!isNaN(v)) {
+						sum += v;
+						if (min == null || min > v) {
+							min = v;
+							min_input = inputs[input_ids[i]].file;
+						}
+						if (max == null || max < v) {
+							max = v;
+							max_input = inputs[input_ids[i]].file;
+						}
+					}
+					if (item.logs[input_ids[i]]["status"] == "AC") {
+						ac += 1;
+					}
+				}
+				let min_str = (min == null) ? "" : `${round(min).toLocaleString('en-US')} (${min_input})`;
+				let max_str = (max == null) ? "" : `${round(max).toLocaleString('en-US')} (${max_input})`;
+				return [item.id, item.src_id, item.date, item.msg, `<a href="/static/${item.url}" target="_blank">${item.src}</a>`, ac, round(sum).toLocaleString('en-US'), (ac > 0) ? round(sum / ac).toLocaleString('en-US') : "", min_str, max_str].concat(show_details ? row : []);
+			});
+			let inputNames = input_ids.map(i => {
+				return { title: `<a href="/static/${inputs[i].url}" target="_blank">${inputs[i].file}</a>` };
+			});
+			if ($.fn.DataTable.isDataTable('#resultTable')) {
+				$('#resultTable').DataTable().destroy();
+				$('#resultTable').empty();
+			}
+			const table = $('#resultTable').DataTable({
+				data: dataSet,
+				paging: true,
+				pageLength: 20,
+				lengthMenu: [10, 20, 50, 100, 1000],
+				scrollX: true,
+				order: [[0, "desc"]],
+				columns: [
+					{ title: "id" },
+					{ title: "sid" },
+					{ title: "date" },
+					{ title: "msg" },
+					{ title: "src" },
+					{ title: "ac" },
+					{ title: "sum" },
+					{ title: "avg" },
+					{ title: "min" },
+					{ title: "max" },
+				].concat(show_details ? inputNames : []),
+				columnDefs: Array.from({ length: show_details ? input_ids.length : 0 }, (_, i) => i).map(i => ({
+					targets: i + 10,
+					render: function (data, type, row) {
+						if (type === 'display') {
+							if (!isNaN(data) && data !== '') {
+								return parseFloat(data).toLocaleString('en-US');
+							}
+						}
+						return data;
+					},
+					createdCell: function (td, cellData, rowData, row, col) {
+						$(td).click(function () {
+							vis(rowData[0], inputs[input_ids[i]].file);
+						});
+					}
+				})).concat([{
+					targets: 0,
+					render: function (data, type, row) {
+						if (type == 'display') {
+							return `<a href="/list?set=${set_name}&key=${field}&run_ids=${data}" target="_blank">${data}</a>`;
+						} else {
+							return data;
+						}
+					}
+				}])
+			});
+			$('#resultTable').css('margin-left', '0px');
+			new $.fn.dataTable.FixedColumns($('#resultTable').DataTable(), {
+				leftColumns: 6
+			});
+			$('#resultTable').on('click', 'td', function () {
+				if ($(this).find('input').length > 0) {
+					return;
+				}
+				const cell = table.cell(this);
+				if (cell.index().column == 3) {
+					const data = cell.data();
+					const input = $('<input type="text" style="width: 100%; font-size: 16px; padding: 0; margin: 0;">').val(data);
+					$(this).html(input);
+					input.focus().on('blur', function () {
+						const newData = input.val();
+						const id = table.row(this.parentNode).data()[0];
+						cell.data(newData).draw();
+						$.ajax({
+							url: `/update_msg`,
+							type: 'POST',
+							contentType: 'application/json',
+							data: JSON.stringify({
+								set: set_name,
+								id: id,
+								msg: newData
+							})
+						});
+					});
+					input.on('keyup', function (e) {
+						if (e.key === 'Enter') {
+							input.blur();
+						}
+					});
+				}
+			});
+		}
+		$('#field-selector').val("{{ default_key }}");
+		$('#field-selector').trigger('change');
+	</script>
+
+</body>
+
+</html>

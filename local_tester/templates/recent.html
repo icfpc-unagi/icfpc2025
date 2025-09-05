@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+	<meta charset="UTF-8">
+	<title>Recent</title>
+	<script type="text/javascript" charset="utf8" src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+	<style>
+		body,
+		html {
+			margin: 0;
+			padding: 0;
+			height: 100%;
+			overflow: hidden;
+		}
+
+		#inner {
+			border: none;
+			width: 100vw;
+			height: 100vh;
+			position: absolute;
+			top: 0;
+			left: 0;
+		}
+	</style>
+</head>
+
+<body>
+	<iframe src="/vis/index.html" id="inner"></iframe>
+	<script>
+		const inner = document.getElementById("inner");
+		inner.onload = function () {
+			$.get(`/static/in.txt`, function (input_txt) {
+				$.get(`/static/out.txt`, function (output_txt) {
+					setTimeout(() => {
+						let doc = inner.contentDocument || inner.contentWindow.document;
+						doc.getElementById("input").value = input_txt;
+						doc.getElementById("output").value = output_txt;
+						const inputElement = doc.getElementById("input");
+						let p = inputElement.parentElement;
+						while (p) {
+							let prevElement = p.previousElementSibling;
+							while (prevElement) {
+								let elementToRemove = prevElement;
+								prevElement = prevElement.previousElementSibling;
+								elementToRemove.remove();
+							}
+							p = p.parentElement;
+						}
+						inner.contentWindow.updateOutput();
+					}, 10);
+				});
+			});
+		}
+	</script>
+
+</body>
+
+</html>
