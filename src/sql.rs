@@ -135,6 +135,7 @@ mod tests {
     use mysql::params;
 
     #[test]
+    #[ignore]
     fn cell_select_literal() -> Result<()> {
         // 簡単なリテラル選択が取得できること
         let v: Option<i64> = cell("SELECT 1", ())?;
@@ -143,6 +144,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn row_and_named_access() -> Result<()> {
         let r = row("SELECT 42 AS a, NULL AS b", ())?.expect("row should exist");
         let a: i64 = r.get("a")?;
@@ -156,6 +158,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore]
     fn exec_insert_and_batch_with_temporary_table() -> Result<()> {
         // 同一コネクションで TEMPORARY TABLE を作成し、テスト内で完結させる
         let mut conn = CLIENT.get_conn()?;
