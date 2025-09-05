@@ -8,7 +8,7 @@ pub fn generate_as_vec(n_rooms: usize) -> Vec<([usize; 6], u8)> {
 
     // List all 6 doors (unnumberred) in all rooms, and connect in random pairs.
     let mut doors: Vec<usize> = (0..n_rooms)
-        .flat_map(|i| std::iter::repeat(i).take(6))
+        .flat_map(|i| std::iter::repeat_n(i, 6))
         .collect();
     doors.shuffle(&mut rng);
     let conns: Vec<_> = doors
@@ -25,10 +25,10 @@ pub fn generate_as_vec(n_rooms: usize) -> Vec<([usize; 6], u8)> {
 
     // Construct the output with room hash.
     let mut map: Vec<([usize; 6], u8)> = Vec::with_capacity(n_rooms);
-    for i in 0..n_rooms {
+    for (i, neighbors) in adj.iter().enumerate() {
         let hash = (i % 4) as u8;
         let mut doors = [0; 6];
-        doors.copy_from_slice(&adj[i]);
+        doors.copy_from_slice(&neighbors[..6]);
         map.push((doors, hash));
     }
     map
