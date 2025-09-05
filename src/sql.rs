@@ -127,3 +127,61 @@ impl Row {
         self.at_option(self.idx(name)?)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use mysql::params;
+
+    #[test]
+    fn cell_select_literal() -> Result<()> {
+        // 簡単なリテラル選択が取得できること
+        let v: Option<i64> = cell("SELECT 1", ())?;
+        assert_eq!(v, Some(1));
+        Ok(())
+    }
+
+    #[test]
+    fn row_and_named_access() -> Result<()> {
+        let r = row("SELECT 42 AS a, NULL AS b", ())?.expect("row should exist");
+        let a: i64 = r.get("a")?;
+        let b: Option<i64> = r.get_option("b")?;
+        assert_eq!(a, 42);
+        assert_eq!(b, None);
+        // 位置指定も動くこと
+        let a0: i64 = r.at(0)?;
+        assert_eq!(a0, 42);
+        Ok(())
+    }
+
+    #[test]
+    fn exec_insert_and_batch_with_temporary_table() -> Result<()> {
+        // 同一コネクションで TEMPORARY TABLE を作成し、テスト内で完結させる
+        let mut conn = CLIENT.get_conn()?;
+
+        conn.exec_drop(
+            "CREATE TEMPORARY TABLE tmp_agents (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                v INT
+            )",
+            (),
+        )?;
+
+        // insert（last_insert_id が返る）
+        conn.exec_drop("INSERT INTO tmp_agents(v) VALUES (123)", ())?;
+        assert_eq!(conn.last_insert_id(), 1);
+
+        // batch で複数行追加
+        conn.exec_batch(
+            "INSERT INTO tmp_agents(v) VALUES (:v)",
+            vec![params! {"v" => 456}, params! {"v" => 789}],
+        )?;
+
+        // 件数確認（同一コネクションなので TEMPORARY TABLE が見える）
+        let cnt: Option<i64> = conn.exec_first("SELECT COUNT(*) FROM tmp_agents", ())?;
+        assert_eq!(cnt, Some(3));
+
+        // TEMPORARY TABLE はコネクションクローズで自動削除される
+        Ok(())
+    }
+}
