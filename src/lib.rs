@@ -9,6 +9,9 @@ pub mod www;
 #[cfg(feature = "mysql")]
 pub mod sql;
 
+#[cfg(feature = "mysql")]
+pub mod lock;
+
 #[cfg(all(feature = "reqwest", feature = "tokio"))]
 pub mod gcp;
 
