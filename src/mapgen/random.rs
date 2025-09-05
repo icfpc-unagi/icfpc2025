@@ -1,10 +1,13 @@
 use crate::api;
-use rand::Rng;
 use rand::seq::SliceRandom;
+use rand::{Rng, SeedableRng};
 
 /// Generates a random map of n rooms: room index -> (door -> connected room index, room hash)
-pub fn generate_as_vec(n_rooms: usize) -> Vec<([usize; 6], u8)> {
-    let mut rng = rand::rng();
+pub fn generate_as_vec(n_rooms: usize, seed: Option<u64>) -> Vec<([usize; 6], u8)> {
+    let mut rng = match seed {
+        Some(s) => rand::rngs::StdRng::seed_from_u64(s),
+        None => rand::rngs::StdRng::from_os_rng(),
+    };
 
     // List all 6 doors (unnumberred) in all rooms, and connect in random pairs.
     let mut doors: Vec<usize> = (0..n_rooms)
@@ -34,8 +37,11 @@ pub fn generate_as_vec(n_rooms: usize) -> Vec<([usize; 6], u8)> {
     map
 }
 
-pub fn generate_as_api_map(n_rooms: usize) -> api::Map {
-    let mut rng = rand::rng();
+pub fn generate_as_api_map(n_rooms: usize, seed: Option<u64>) -> api::Map {
+    let mut rng = match seed {
+        Some(s) => rand::rngs::StdRng::seed_from_u64(s),
+        None => rand::rngs::StdRng::from_os_rng(),
+    };
 
     // Create a list of all doors for all rooms.
     let mut all_doors = (0..n_rooms)
@@ -74,7 +80,7 @@ mod tests {
     #[test]
     fn test_generate_as_vec() {
         let n_rooms = 10;
-        let map = generate_as_vec(n_rooms);
+        let map = generate_as_vec(n_rooms, Some(123));
 
         // Check that the map has the correct number of rooms
         assert_eq!(map.len(), n_rooms);
@@ -95,7 +101,7 @@ mod tests {
     #[test]
     fn test_generate_as_api_map() {
         let n_rooms = 20;
-        let api_map = generate_as_api_map(n_rooms);
+        let api_map = generate_as_api_map(n_rooms, Some(123));
 
         assert_eq!(api_map.rooms.len(), n_rooms, "rooms: {:?}", api_map.rooms);
         assert_eq!(
