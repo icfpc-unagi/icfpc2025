@@ -20,7 +20,8 @@ static CLIENT: Lazy<mysql::Pool> = Lazy::new(|| {
                 .unwrap_or("104.198.121.248")
         ),
     };
-    let pool = Pool::new(url).unwrap();
+    let opts = Opts::from_url(&url).expect("Invalid MySQL URL");
+    let pool = Pool::new(opts).expect("Failed to create MySQL pool");
     eprintln!("MySQL connection established.");
     pool
 });
