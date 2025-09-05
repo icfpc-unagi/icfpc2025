@@ -40,7 +40,27 @@ pub fn lock(ttl: Duration) -> Result<Option<String>> {
         eprintln!("[lock] acquired: token={} ttl_secs={}", token, ttl_secs);
         Ok(Some(token))
     } else {
-        eprintln!("[lock] busy: could not acquire");
+        // Fetch current holder info for diagnostics.
+        let info = sql::row(
+            r#"
+            SELECT lock_user,
+                   DATE_FORMAT(lock_expired, '%Y-%m-%d %H:%i:%s') AS lock_expired
+            FROM locks WHERE lock_id = 1
+            "#,
+            (),
+        )
+        .ok()
+        .flatten();
+        if let Some(r) = info {
+            let user: Option<String> = r.get_option("lock_user").unwrap_or(None);
+            let exp: Option<String> = r.get_option("lock_expired").unwrap_or(None);
+            eprintln!(
+                "[lock] busy: could not acquire (user={:?}, expires={:?})",
+                user, exp
+            );
+        } else {
+            eprintln!("[lock] busy: could not acquire (no row)");
+        }
         Ok(None)
     }
 }
