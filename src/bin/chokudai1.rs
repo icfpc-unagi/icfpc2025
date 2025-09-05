@@ -1,3 +1,4 @@
+#![allow(clippy::collapsible_if, clippy::cast_abs_to_unsigned, clippy::ptr_arg)]
 use clap::Parser;
 use icfpc2025::judge::*;
 use rand::prelude::*;
