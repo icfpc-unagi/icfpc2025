@@ -138,7 +138,7 @@ fn validate_map(map: &api::Map) -> Result<()> {
         }
     }
     // starting_room must be valid index
-    if (map.starting_room as usize) >= map.rooms.len() {
+    if map.starting_room >= map.rooms.len() {
         bail!("startingRoom is out of range");
     }
     let n = map.rooms.len();
