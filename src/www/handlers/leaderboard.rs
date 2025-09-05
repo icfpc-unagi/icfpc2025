@@ -56,6 +56,19 @@ pub async fn show(path: web::Path<ProblemPath>) -> impl Responder {
 }
 
 async fn render_problem_leaderboard(bucket: &str, problem: &str) -> Result<String> {
+    // Build problem navigation links
+    let mut nav_links: Vec<String> = Vec::new();
+    nav_links.push("[<a href=\"/leaderboard/global\">Global</a>]".to_string());
+    for p in crate::problems::all_problems() {
+        nav_links.push(format!(
+            "[<a href=\"/leaderboard/{}\">{}</a>]",
+            p.problem_name, p.problem_name
+        ));
+    }
+    let nav_html = format!(
+        "<div class=\"lb-nav\" style=\"margin:8px 0;\">{}</div>",
+        nav_links.join(" ")
+    );
     // List timestamps under history/
     let (dirs, _files) = crate::gcp::gcs::list_dir(bucket, "history").await?;
     // dirs like "YYYYMMDD-hhmmss/"; normalize and sort
@@ -114,84 +127,115 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str) -> Result<Strin
 
     let html = format!(
         r#"
+{nav}
 <div>
   <h2>Problem: {problem}</h2>
   <p>Snapshots: {count}</p>
 </div>
-<div id="chart" style="width: 100%; height: 600px;"></div>
-<script src="https://d3js.org/d3.v7.min.js"></script>
+<div id="chart" style="width: 100%; height: 500px;"></div>
+<div id="lb-table" style="margin-top:16px;"></div>
+<script src="https://cdn.jsdelivr.net/npm/luxon@3/build/global/luxon.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon"></script>
 <script>
 const snapshots = {series};
+const problem = "{problem}";
 
-// Build team -> time series with real timestamps
-const parseTs = d3.timeParse("%Y%m%d-%H%M%S");
-const seriesByTeam = new Map();
-for (const snap of snapshots) {
-  const date = parseTs(snap.ts);
-  if (!date) continue;
+// Labels (timestamps) as Date objects
+function parseTs(ts) {{
+  const y = +ts.slice(0,4), mo = +ts.slice(4,6)-1, d = +ts.slice(6,8);
+  const h = +ts.slice(9,11), mi = +ts.slice(11,13), s = +ts.slice(13,15);
+  // Interpret original timestamp as UTC, then Chart.js formats in Asia/Tokyo
+  return new Date(Date.UTC(y, mo, d, h, mi, s));
+}}
+const labels = snapshots.map(s => parseTs(s.ts));
+
+// Build datasets per team (null when no value at a label)
+const teamToData = new Map();
+snapshots.forEach((snap, idx) => {{
   const arr = Array.isArray(snap.data) ? snap.data : [];
-  for (const rec of arr) {
+  for (const rec of arr) {{
     const team = rec.teamName;
     const score = rec.score;
     if (!team || score == null) continue;
-    if (!seriesByTeam.has(team)) seriesByTeam.set(team, []);
-    seriesByTeam.get(team).push({ date, score: +score });
-  }
-}
-for (const pts of seriesByTeam.values()) {
-  pts.sort((a,b) => a.date - b.date);
-}
+    if (!teamToData.has(team)) teamToData.set(team, Array(labels.length).fill(null));
+    teamToData.get(team)[idx] = +score;
+  }}
+}});
 
-// Compute domains
-const allPoints = Array.from(seriesByTeam.values()).flat();
-if (allPoints.length === 0) {
-  document.getElementById('chart').innerText = 'No data';
-} else {
-  const xExtent = d3.extent(allPoints, d => d.date);
-  const yMax = d3.max(allPoints, d => d.score) || 0;
+function colorFor(name) {{
+  let h=0; for (let i=0;i<name.length;i++) h=(h*31+name.charCodeAt(i))>>>0;
+  const hue=h%360; return `hsl(${{hue}} 70% 45%)`;
+}}
 
-  // Layout
-  const container = document.getElementById('chart');
-  const width = container.clientWidth;
-  const height = container.clientHeight;
-  const margin = { top: 20, right: 20, bottom: 40, left: 60 };
-  const iw = Math.max(100, width - margin.left - margin.right);
-  const ih = Math.max(100, height - margin.top - margin.bottom);
+const datasets = Array.from(teamToData.entries()).map(([team, data]) => ({{
+  label: team,
+  data,
+  borderColor: team === 'Unagi' ? '#e53935' : colorFor(team),
+  backgroundColor: 'transparent',
+  spanGaps: false,
+  tension: 0.2,
+  pointRadius: team === 'Unagi' ? 3 : 1,
+  borderWidth: team === 'Unagi' ? 3 : 1,
+}}));
 
-  const svg = d3.select(container)
-    .append('svg')
-    .attr('width', width)
-    .attr('height', height);
+const container = document.getElementById('chart');
+const canvas = document.createElement('canvas');
+container.appendChild(canvas);
 
-  const g = svg.append('g').attr('transform', `translate(${margin.left},${margin.top})`);
+new Chart(canvas.getContext('2d'), {{
+  type: 'line',
+  data: {{ labels, datasets }},
+  options: {{
+    responsive: true,
+    maintainAspectRatio: false,
+    interaction: {{ mode: 'nearest', intersect: false }},
+    plugins: {{
+      tooltip: {{ enabled: true }},
+      legend: {{ display: false }},
+    }},
+    scales: {{
+      x: {{ type: 'time', time: {{ unit: 'minute' }} }},
+      y: {{ beginAtZero: true }},
+    }},
+    adapters: {{
+      date: {{ zone: 'Asia/Tokyo' }},
+    }},
+  }},
+}});
 
-  const x = d3.scaleTime().domain(xExtent).range([0, iw]);
-  const y = d3.scaleLinear().domain([0, yMax]).nice().range([ih, 0]);
-
-  g.append('g')
-    .attr('transform', `translate(0,${ih})`)
-    .call(d3.axisBottom(x));
-  g.append('g').call(d3.axisLeft(y));
-
-  const color = d3.scaleOrdinal(d3.schemeCategory10)
-    .domain(Array.from(seriesByTeam.keys()));
-
-  const line = d3.line()
-    .x(d => x(d.date))
-    .y(d => y(d.score));
-
-  for (const [team, pts] of seriesByTeam.entries()) {
-    if (pts.length < 2) continue;
-    g.append('path')
-      .datum(pts)
-      .attr('fill', 'none')
-      .attr('stroke', color(team))
-      .attr('stroke-width', 1.5)
-      .attr('d', line);
-  }
-}
+// Build latest-score table
+function esc(s) {{
+  return String(s).replace(/[&<>"']/g, c => ({{
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'
+  }})[c]);
+}}
+const latest = [];
+for (const [team, data] of teamToData.entries()) {{
+  let last = null;
+  for (let i = data.length - 1; i >= 0; i--) {{
+    if (data[i] != null) {{ last = data[i]; break; }}
+  }}
+  if (last == null) continue;
+  latest.push({{ team, score: last }});
+}}
+if (problem === 'global') {{
+  latest.sort((a,b) => b.score - a.score);
+}} else {{
+  latest.sort((a,b) => a.score - b.score);
+}}
+const rows = latest.map(r => {{
+  const name = r.team === 'Unagi' ? `<strong>${{esc(r.team)}}</strong>` : esc(r.team);
+  return `<tr><td style="padding:4px 8px;">${{name}}</td><td style="padding:4px 8px; text-align:right;">${{r.score}}</td></tr>`;
+}}).join('');
+document.getElementById('lb-table').innerHTML = `
+  <table style="border-collapse:collapse; width:100%; font: 13px sans-serif;">
+    <thead><tr><th style="text-align:left; padding:4px 8px;">Team</th><th style="text-align:right; padding:4px 8px;">Score</th></tr></thead>
+    <tbody>${{rows}}</tbody>
+  </table>`;
 </script>
 "#,
+        nav = nav_html,
         problem = problem,
         count = snaps.len(),
         series = series_js,
