@@ -224,13 +224,23 @@ if (problem === 'global') {{
 }} else {{
   latest.sort((a,b) => a.score - b.score);
 }}
-const rows = latest.map(r => {{
+const rows = latest.map((r, i) => {{
   const name = r.team === 'Unagi' ? `<strong>${{esc(r.team)}}</strong>` : esc(r.team);
-  return `<tr><td style="padding:4px 8px;">${{name}}</td><td style="padding:4px 8px; text-align:right;">${{r.score}}</td></tr>`;
+  return `<tr>
+    <td style="padding:4px 8px; text-align:right;">${{i+1}}</td>
+    <td style="padding:4px 8px;">${{name}}</td>
+    <td style="padding:4px 8px; text-align:right;">${{r.score}}</td>
+  </tr>`;
 }}).join('');
 document.getElementById('lb-table').innerHTML = `
   <table style="border-collapse:collapse; width:100%; font: 13px sans-serif;">
-    <thead><tr><th style="text-align:left; padding:4px 8px;">Team</th><th style="text-align:right; padding:4px 8px;">Score</th></tr></thead>
+    <thead>
+      <tr>
+        <th style="text-align:right; padding:4px 8px;">Rank</th>
+        <th style="text-align:left; padding:4px 8px;">Team</th>
+        <th style="text-align:right; padding:4px 8px;">Score</th>
+      </tr>
+    </thead>
     <tbody>${{rows}}</tbody>
   </table>`;
 </script>
