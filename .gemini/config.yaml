@@ -1,0 +1,6 @@
+have_fun: true
+code_review:
+  pull_request_opened:
+    help: true
+ignore_patterns:
+  - Cargo.lock
