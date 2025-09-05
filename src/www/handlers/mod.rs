@@ -8,6 +8,7 @@ use crate::*;
 // pub mod submissions;
 pub mod template;
 // pub mod visualize;
+pub mod api;
 
 use actix_web::{HttpResponse, Responder, web};
 
