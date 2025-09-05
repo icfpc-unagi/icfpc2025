@@ -1,4 +1,6 @@
 FROM ubuntu:24.04
+RUN sed -i.bak -e "s%http://archive.ubuntu.com/ubuntu/%http://asia-northeast1.gce.archive.ubuntu.com/ubuntu/%g" \
+    /etc/apt/sources.list.d/ubuntu.sources
 RUN apt-get update -qy && apt-get install -qy apt-transport-https ca-certificates gnupg curl
 RUN echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt cloud-sdk main" \
     | tee -a /etc/apt/sources.list.d/google-cloud-sdk.list \
