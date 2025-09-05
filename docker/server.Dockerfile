@@ -19,23 +19,23 @@ RUN rustup target add wasm32-unknown-unknown
 # RUN cargo install wasm-pack  # It was very slow.
 RUN curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
-FROM rust-builder AS vis
-COPY Cargo.toml /app/Cargo.toml
-COPY vis/Cargo.toml /app/vis/Cargo.toml
-WORKDIR /app
-RUN mkdir -p ./src ./vis/src \
-    && touch ./src/lib.rs ./vis/src/lib.rs \
-    && cd ./vis \
-    && cargo vendor \
-    && { wasm-pack build --target web || true; } \
-    && rm -rf ./src ./vis/src
-COPY src /app/src
-COPY vis/src /app/vis/src
-COPY vis/index.html /www/visualizer.html
-RUN touch ./src/lib.rs ./vis/src/lib.rs \
-    && cd ./vis \
-    && wasm-pack build --target web \
-    && cp ./pkg/*.js ./pkg/*.wasm /www/
+# FROM rust-builder AS vis
+# COPY Cargo.toml /app/Cargo.toml
+# COPY vis/Cargo.toml /app/vis/Cargo.toml
+# WORKDIR /app
+# RUN mkdir -p ./src ./vis/src \
+#     && touch ./src/lib.rs ./vis/src/lib.rs \
+#     && cd ./vis \
+#     && cargo vendor \
+#     && { wasm-pack build --target web || true; } \
+#     && rm -rf ./src ./vis/src
+# COPY src /app/src
+# COPY vis/src /app/vis/src
+# COPY vis/index.html /www/visualizer.html
+# RUN touch ./src/lib.rs ./vis/src/lib.rs \
+#     && cd ./vis \
+#     && wasm-pack build --target web \
+#     && cp ./pkg/*.js ./pkg/*.wasm /www/
 
 FROM rust-builder AS service
 COPY Cargo.toml /app/Cargo.toml
@@ -65,7 +65,7 @@ RUN rm /etc/nginx/sites-enabled/default
 COPY configs/nginx.conf /etc/nginx/sites-enabled/
 COPY configs/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-COPY --from=vis /www /www
+# COPY --from=vis /www /www
 COPY --from=service /app/www /usr/local/bin/app
 COPY static /www/static
 # COPY 3d/web/www /www/3d/web/www
