@@ -1,6 +1,6 @@
 use crate::*;
 // pub mod api_proxy;
-// pub mod cron;
+pub mod cron;
 // pub mod my_submissions;
 // pub mod my_userboard;
 // pub mod problem_png;
