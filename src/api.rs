@@ -136,14 +136,11 @@ fn start_lock_manager_blocking() -> Result<()> {
         let mut consecutive_failures = 0u32;
         loop {
             // Sleep in 1s ticks to respond quickly to stop requests, overall 5s per cycle
-            for _ in 0..5 {
+            for _ in 0..50 {
                 if stop_clone.load(Ordering::SeqCst) {
                     return;
                 }
-                thread::sleep(Duration::from_secs(1));
-            }
-            if stop_clone.load(Ordering::SeqCst) {
-                return;
+                thread::sleep(Duration::from_millis(100));
             }
             match crate::lock::extend(&token_clone, LOCK_TTL) {
                 Ok(true) => {
@@ -185,8 +182,10 @@ fn stop_lock_manager_blocking() {
     let mut mgr = LOCK_MANAGER.lock().unwrap();
     if let Some(mut lr) = mgr.take() {
         lr.stop.store(true, Ordering::SeqCst);
-        if let Some(h) = lr.handle.take() {
-            let _ = h.join();
+        if let Some(h) = lr.handle.take()
+            && let Err(e) = h.join()
+        {
+            eprintln!("Lock renewal thread panicked: {:?}", e);
         }
         let _ = crate::lock::unlock(&lr.token, false);
     }

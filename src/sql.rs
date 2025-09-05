@@ -46,11 +46,10 @@ pub fn cell<T: FromValue>(query: &str, params: impl Into<Params>) -> Result<Opti
     }
 }
 
-pub fn exec(query: &str, params: impl Into<Params>) -> Result<()> {
-    CLIENT
-        .get_conn()?
-        .exec_drop(query, params)
-        .map_err(|e| e.into())
+pub fn exec(query: &str, params: impl Into<Params>) -> Result<u64> {
+    let mut conn = CLIENT.get_conn()?;
+    conn.exec_drop(query, params)?;
+    Ok(conn.affected_rows())
 }
 
 // insert is the same as exec, but it returns the last insert ID.
