@@ -52,6 +52,35 @@ pub fn lock(ttl: Duration) -> Result<Option<String>> {
     Ok(verified)
 }
 
+/// Extend the lock if the token matches and the lock is still active.
+/// Sets lock_expired = CURRENT_TIMESTAMP + ttl seconds.
+/// Returns true if extended, false if not (e.g., token mismatch or already expired).
+pub fn extend(lock_token: &str, ttl: Duration) -> Result<bool> {
+    let ttl_secs = (ttl.as_secs().min(i64::MAX as u64)) as i64;
+    sql::exec(
+        r#"
+        UPDATE locks
+        SET lock_expired = DATE_ADD(CURRENT_TIMESTAMP, INTERVAL :ttl SECOND)
+        WHERE lock_id = 1
+          AND lock_token = :lock_token
+          AND lock_expired > CURRENT_TIMESTAMP
+        "#,
+        params! { "ttl" => ttl_secs, "lock_token" => lock_token },
+    )?;
+
+    let ok: Option<i64> = sql::cell(
+        r#"
+        SELECT 1
+        FROM locks
+        WHERE lock_id = 1
+          AND lock_token = :lock_token
+          AND lock_expired > CURRENT_TIMESTAMP
+        "#,
+        params! { "lock_token" => lock_token },
+    )?;
+    Ok(ok.is_some())
+}
+
 /// Release the lock.
 /// - If `force` is false: expire only when the token matches and lock is active.
 /// - If `force` is true: forcefully expire, set lock_user to current user, and clear token.
