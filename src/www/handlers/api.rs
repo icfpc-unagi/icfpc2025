@@ -1,7 +1,7 @@
 use crate::sql;
 use actix_web::{HttpRequest, HttpResponse, Responder, http::header, web};
 use chrono::Utc;
-use mysql::params;
+// use mysql::params; // removed, not needed
 use reqwest::{Client, header as reqwest_header};
 use std::time::Instant;
 
@@ -53,9 +53,9 @@ async fn forward_and_log(path: &str, body: web::Bytes, req: &HttpRequest) -> Htt
     let select_id: i64 = if path_for_log == "/select" {
         0
     } else {
-        sql::cell::<i64>(
+        sql::cell1::<i64, &str>(
             "SELECT MAX(api_log_id) FROM api_logs WHERE api_log_path = '/select'",
-            (),
+            "",
         )
         .ok()
         .flatten()
@@ -73,16 +73,16 @@ async fn forward_and_log(path: &str, body: web::Bytes, req: &HttpRequest) -> Htt
     .to_string();
 
     let req_body = String::from_utf8(body.to_vec()).unwrap_or_default();
-    let log_id: u64 = sql::insert(
-        "INSERT INTO api_logs (api_log_select_id, api_log_path, api_log_metadata, api_log_request, api_log_response_code, api_log_response) VALUES (:sid, :path, :meta, :req, :code, :resp)",
-        params! {
-            "sid" => select_id,
-            "path" => path_for_log,
-            "meta" => meta,
-            "req" => req_body,
-            "code" => status_code as i32,
-            "resp" => &resp_body,
-        },
+    let mut args = sqlx::mysql::MySqlArguments::default();
+    let _ = sqlx::Arguments::add(&mut args, select_id);
+    let _ = sqlx::Arguments::add(&mut args, path_for_log);
+    let _ = sqlx::Arguments::add(&mut args, meta.clone());
+    let _ = sqlx::Arguments::add(&mut args, req_body.clone());
+    let _ = sqlx::Arguments::add(&mut args, status_code as i32);
+    let _ = sqlx::Arguments::add(&mut args, resp_body.clone());
+    let log_id: u64 = sql::insert_with(
+        "INSERT INTO api_logs (api_log_select_id, api_log_path, api_log_metadata, api_log_request, api_log_response_code, api_log_response) VALUES (?, ?, ?, ?, ?, ?)",
+        args,
     )
     .unwrap_or_default();
 

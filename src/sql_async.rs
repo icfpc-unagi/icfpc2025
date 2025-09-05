@@ -1,3 +1,11 @@
+// --- generic insert_with ---
+pub async fn insert_with<A>(pool: &Pool<MySql>, query: &str, args: A) -> Result<u64>
+where
+    for<'q> A: sqlx::IntoArguments<'q, MySql> + Send,
+{
+    let result = sqlx::query_with(query, args).execute(pool).await?;
+    Ok(result.last_insert_id())
+}
 use anyhow::Result;
 use sqlx::mysql::MySqlRow;
 use sqlx::{MySql, Pool};

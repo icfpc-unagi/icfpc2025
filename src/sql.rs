@@ -1,3 +1,10 @@
+// --- generic insert_with ---
+pub fn insert_with<A>(query: &str, args: A) -> Result<u64>
+where
+    for<'q> A: sqlx::IntoArguments<'q, MySql> + Send,
+{
+    TOKIO_RUNTIME.block_on(sql_async::insert_with(&CLIENT, query, args))
+}
 use anyhow::Result;
 use once_cell::sync::Lazy;
 use sqlx::mysql::{MySqlPoolOptions, MySqlRow};
