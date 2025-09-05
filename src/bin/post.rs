@@ -1,11 +1,10 @@
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use icfpc2025::api;
 use icfpc2025::problems;
 use serde_json::Value;
 use std::env;
 
-#[tokio::main]
-async fn main() -> Result<()> {
+fn main() -> Result<()> {
     let mut args = env::args().skip(1);
     let sub = args.next().unwrap_or_default();
     let json_arg = args.next().unwrap_or_default();
@@ -16,9 +15,9 @@ async fn main() -> Result<()> {
     }
 
     match sub.as_str() {
-        "select" => handle_select(&json_arg).await,
-        "explore" => handle_explore(&json_arg).await,
-        "guess" => handle_guess(&json_arg).await,
+        "select" => handle_select(&json_arg),
+        "explore" => handle_explore(&json_arg),
+        "guess" => handle_guess(&json_arg),
         _ => {
             eprintln!("Unknown subcommand: {}", sub);
             bail!("unknown subcommand")
@@ -26,7 +25,7 @@ async fn main() -> Result<()> {
     }
 }
 
-async fn handle_select(json_arg: &str) -> Result<()> {
+fn handle_select(json_arg: &str) -> Result<()> {
     let v: Value = serde_json::from_str(json_arg).context("invalid JSON for select")?;
     let obj = v.as_object().context("select expects a JSON object")?;
 
@@ -42,34 +41,35 @@ async fn handle_select(json_arg: &str) -> Result<()> {
 
     // Validate optional id if provided matches fetched id.
     let input_id = obj.get("id").and_then(|v| v.as_str());
-    let id = api::get_id_async().await?;
-    if let Some(given) = input_id {
-        if given != id {
-            bail!("provided id does not match local id.json");
-        }
+    let id = api::get_id()?;
+    if let Some(given) = input_id
+        && given != id
+    {
+        bail!("provided id does not match local id.json");
     }
 
-    let selected = api::select_async(problem_name).await?;
+    let selected = api::select(problem_name)?;
     let out = serde_json::json!({ "problemName": selected });
     println!("{}", serde_json::to_string(&out)?);
     Ok(())
 }
 
 fn validate_plan(s: &str) -> bool {
-    s.bytes().all(|b| matches!(b, b'0'|b'1'|b'2'|b'3'|b'4'|b'5'))
+    s.bytes()
+        .all(|b| matches!(b, b'0' | b'1' | b'2' | b'3' | b'4' | b'5'))
 }
 
-async fn handle_explore(json_arg: &str) -> Result<()> {
+fn handle_explore(json_arg: &str) -> Result<()> {
     let v: Value = serde_json::from_str(json_arg).context("invalid JSON for explore")?;
     let obj = v.as_object().context("explore expects a JSON object")?;
 
     // Validate optional id if provided.
     let input_id = obj.get("id").and_then(|v| v.as_str());
-    let id = api::get_id_async().await?;
-    if let Some(given) = input_id {
-        if given != id {
-            bail!("provided id does not match local id.json");
-        }
+    let id = api::get_id()?;
+    if let Some(given) = input_id
+        && given != id
+    {
+        bail!("provided id does not match local id.json");
     }
 
     let plans_v = obj
@@ -82,12 +82,15 @@ async fn handle_explore(json_arg: &str) -> Result<()> {
             .as_str()
             .with_context(|| format!("plans[{}] must be a string", i))?;
         if !validate_plan(s) {
-            bail!("plans[{}] contains non-digit or out-of-range digit (allowed: 0-5)", i);
+            bail!(
+                "plans[{}] contains non-digit or out-of-range digit (allowed: 0-5)",
+                i
+            );
         }
         plans.push(s.to_string());
     }
 
-    let resp = api::explore_async(plans).await?;
+    let resp = api::explore(plans)?;
     let out = serde_json::json!({
         "results": resp.results,
         "queryCount": resp.query_count,
@@ -96,17 +99,17 @@ async fn handle_explore(json_arg: &str) -> Result<()> {
     Ok(())
 }
 
-async fn handle_guess(json_arg: &str) -> Result<()> {
+fn handle_guess(json_arg: &str) -> Result<()> {
     let v: Value = serde_json::from_str(json_arg).context("invalid JSON for guess")?;
     let obj = v.as_object().context("guess expects a JSON object")?;
 
     // Validate optional id if provided.
     let input_id = obj.get("id").and_then(|v| v.as_str());
-    let id = api::get_id_async().await?;
-    if let Some(given) = input_id {
-        if given != id {
-            bail!("provided id does not match local id.json");
-        }
+    let id = api::get_id()?;
+    if let Some(given) = input_id
+        && given != id
+    {
+        bail!("provided id does not match local id.json");
     }
 
     // Deserialize map using the API types.
@@ -117,7 +120,7 @@ async fn handle_guess(json_arg: &str) -> Result<()> {
     let guess: GuessIn = serde_json::from_value(v).context("'map' is required for guess")?;
     validate_map(&guess.map)?;
 
-    let correct = api::guess_async(&guess.map).await?;
+    let correct = api::guess(&guess.map)?;
     let out = serde_json::json!({ "correct": correct });
     println!("{}", serde_json::to_string(&out)?);
     Ok(())
@@ -148,4 +151,3 @@ fn validate_map(map: &api::Map) -> Result<()> {
     }
     Ok(())
 }
-
