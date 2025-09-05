@@ -124,6 +124,46 @@ pub async fn list_dir_detailed(bucket: &str, prefix: &str) -> Result<(Vec<String
     Ok((dirs, files))
 }
 
+pub async fn upload_object(
+    bucket: &str,
+    name: &str,
+    data: &[u8],
+    content_type: &str,
+) -> Result<ObjectItem> {
+    let token = get_access_token()
+        .await
+        .context("Failed to get access token")?;
+    let client = reqwest::Client::new();
+
+    let mut url = Url::parse(&format!(
+        "https://storage.googleapis.com/upload/storage/v1/b/{}/o",
+        bucket
+    ))?;
+    {
+        let mut qp = url.query_pairs_mut();
+        qp.append_pair("uploadType", "media");
+        qp.append_pair("name", name);
+    }
+
+    let res = client
+        .post(url)
+        .header("Authorization", format!("Bearer {}", token))
+        .header("Content-Type", content_type)
+        .body(data.to_vec())
+        .send()
+        .await
+        .context("Failed to call GCS upload API")?;
+
+    if !res.status().is_success() {
+        let status = res.status();
+        let body = res.text().await.unwrap_or_default();
+        bail!("GCS upload failed ({}): {}", status, body);
+    }
+
+    let item: ObjectItem = res.json().await.context("Invalid GCS upload response")?;
+    Ok(item)
+}
+
 pub async fn get_object_metadata(bucket: &str, object: &str) -> Result<ObjectItem> {
     let token = get_access_token()
         .await
