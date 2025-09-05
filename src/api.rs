@@ -135,7 +135,7 @@ struct ExploreRequest<'a> {
 #[cfg(feature = "reqwest")]
 #[derive(Debug, Clone, Deserialize)]
 pub struct ExploreResponse {
-    pub results: Vec<Vec<i32>>,
+    pub results: Vec<Vec<usize>>,
     #[serde(rename = "queryCount")]
     pub query_count: u64,
 }
@@ -145,13 +145,20 @@ pub struct ExploreResponse {
 pub fn explore<I, S>(plans: I) -> Result<ExploreResponse>
 where
     I: IntoIterator<Item = S>,
-    S: AsRef<str>,
+    S: AsRef<Vec<usize>>,
 {
     let client = http_client()?;
-    let url = format!("{}/explore", aedificium_base());
-
+    let url = format!("{}/explore", AEDIFICIUM_BASE_URL);
     let id = get_id()?;
-    let plans_vec: Vec<String> = plans.into_iter().map(|s| s.as_ref().to_string()).collect();
+    let plans_vec: Vec<String> = plans
+        .into_iter()
+        .map(|s| {
+            s.as_ref()
+                .iter()
+                .map(|&x| (b'0' + (x as u8)) as char)
+                .collect()
+        })
+        .collect();
     let req = ExploreRequest {
         id: id.as_str(),
         plans: &plans_vec,
@@ -176,8 +183,8 @@ where
 #[cfg(feature = "reqwest")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MapConnectionEnd {
-    pub room: u32,
-    pub door: u32,
+    pub room: usize,
+    pub door: usize,
 }
 
 #[cfg(feature = "reqwest")]
@@ -190,9 +197,9 @@ pub struct MapConnection {
 #[cfg(feature = "reqwest")]
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Map {
-    pub rooms: Vec<u32>,
+    pub rooms: Vec<usize>,
     #[serde(rename = "startingRoom")]
-    pub starting_room: u32,
+    pub starting_room: usize,
     pub connections: Vec<MapConnection>,
 }
 
