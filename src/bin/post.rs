@@ -76,7 +76,7 @@ fn handle_explore(json_arg: &str) -> Result<()> {
         .get("plans")
         .context("explore requires field 'plans': [string]")?;
     let plans_arr = plans_v.as_array().context("'plans' must be an array")?;
-    let mut plans: Vec<String> = Vec::with_capacity(plans_arr.len());
+    let mut plans: Vec<Vec<usize>> = Vec::with_capacity(plans_arr.len());
     for (i, p) in plans_arr.iter().enumerate() {
         let s = p
             .as_str()
@@ -87,7 +87,11 @@ fn handle_explore(json_arg: &str) -> Result<()> {
                 i
             );
         }
-        plans.push(s.to_string());
+        plans.push(
+            s.chars()
+                .map(|c| c.to_digit(10).unwrap() as usize)
+                .collect(),
+        );
     }
 
     let resp = api::explore(plans)?;
@@ -137,7 +141,7 @@ fn validate_map(map: &api::Map) -> Result<()> {
     if (map.starting_room as usize) >= map.rooms.len() {
         bail!("startingRoom is out of range");
     }
-    let n = map.rooms.len() as u32;
+    let n = map.rooms.len();
     // connections: room indices valid and door numbers 0..=5
     for (i, c) in map.connections.iter().enumerate() {
         for (side, end) in [("from", &c.from), ("to", &c.to)] {
