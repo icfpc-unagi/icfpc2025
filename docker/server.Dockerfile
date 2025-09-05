@@ -40,6 +40,8 @@ FROM rust-builder AS server
 ARG UNAGI_PASSWORD
 ENV UNAGI_PASSWORD ${UNAGI_PASSWORD}
 
+RUN sed -i.bak -e "s%http://archive.ubuntu.com/ubuntu/%http://asia-northeast1.gce.archive.ubuntu.com/ubuntu/%g" \
+    /etc/apt/sources.list
 RUN apt-get update \
     && apt-get install -y nginx apache2-utils supervisor \
     && rm -rf /var/lib/apt/lists/*
