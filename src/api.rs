@@ -4,9 +4,9 @@ use anyhow::{Context, Result};
 use once_cell::sync::OnceCell;
 #[cfg(feature = "reqwest")]
 use reqwest::blocking::Client;
+use serde::{Deserialize, Serialize};
 #[cfg(feature = "reqwest")]
 use std::time::Duration;
-use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "reqwest")]
 const API_REQUEST_TIMEOUT_SECS: u64 = 120;
@@ -63,7 +63,22 @@ pub fn get_id() -> anyhow::Result<String> {
 }
 
 #[cfg(feature = "reqwest")]
-const AEDIFICIUM_BASE_URL: &str = "https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.com";
+fn aedificium_base() -> String {
+    std::env::var("AEDIFICIUM_ENDPOINT")
+        .ok()
+        .map(|s| s.trim_end_matches('/').to_string())
+        .unwrap_or_else(|| "https://icfpc.sx9.jp/api".to_string())
+}
+
+#[cfg(feature = "reqwest")]
+fn log_unagi_header(res: &reqwest::blocking::Response) {
+    let name = reqwest::header::HeaderName::from_static("x-unagi-log");
+    if let Some(val) = res.headers().get(name)
+        && let Ok(s) = val.to_str()
+    {
+        eprintln!("X-Unagi-Log: {}", s);
+    }
+}
 
 #[cfg(feature = "reqwest")]
 #[derive(Serialize)]
@@ -86,7 +101,7 @@ struct SelectResponse {
 #[cfg(feature = "reqwest")]
 pub fn select(problem_name: &str) -> Result<String> {
     let client = http_client()?;
-    let url = format!("{}/select", AEDIFICIUM_BASE_URL);
+    let url = format!("{}/select", aedificium_base());
 
     // Obtain id via get_id (parsed from id.json)
     let id = get_id()?;
@@ -99,9 +114,9 @@ pub fn select(problem_name: &str) -> Result<String> {
         .json(&req)
         .send()
         .context("Failed to POST /select")?;
-
-    if !res.status().is_success() {
-        let status = res.status();
+    let status = res.status();
+    log_unagi_header(&res);
+    if !status.is_success() {
         let body = res.text().unwrap_or_default();
         anyhow::bail!("/select returned {}: {}", status, body);
     }
@@ -133,7 +148,7 @@ where
     S: AsRef<str>,
 {
     let client = http_client()?;
-    let url = format!("{}/explore", AEDIFICIUM_BASE_URL);
+    let url = format!("{}/explore", aedificium_base());
 
     let id = get_id()?;
     let plans_vec: Vec<String> = plans.into_iter().map(|s| s.as_ref().to_string()).collect();
@@ -147,9 +162,9 @@ where
         .json(&req)
         .send()
         .context("Failed to POST /explore")?;
-
-    if !res.status().is_success() {
-        let status = res.status();
+    let status = res.status();
+    log_unagi_header(&res);
+    if !status.is_success() {
         let body = res.text().unwrap_or_default();
         anyhow::bail!("/explore returned {}: {}", status, body);
     }
@@ -198,7 +213,7 @@ struct GuessResponse {
 #[cfg(feature = "reqwest")]
 pub fn guess(map: &Map) -> Result<bool> {
     let client = http_client()?;
-    let url = format!("{}/guess", AEDIFICIUM_BASE_URL);
+    let url = format!("{}/guess", aedificium_base());
 
     let id = get_id()?;
     let req = GuessRequest {
@@ -211,9 +226,9 @@ pub fn guess(map: &Map) -> Result<bool> {
         .json(&req)
         .send()
         .context("Failed to POST /guess")?;
-
-    if !res.status().is_success() {
-        let status = res.status();
+    let status = res.status();
+    log_unagi_header(&res);
+    if !status.is_success() {
         let body = res.text().unwrap_or_default();
         anyhow::bail!("/guess returned {}: {}", status, body);
     }
