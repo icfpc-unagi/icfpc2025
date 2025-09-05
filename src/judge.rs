@@ -236,3 +236,19 @@ pub fn get_judge_from_stdin() -> Box<dyn Judge> {
         panic!("local_remote must be 'local' or 'remote'");
     }
 }
+
+pub fn check_explore(guess: &Guess, plans: &[Vec<usize>], results: &[Vec<usize>]) -> bool {
+    assert_eq!(plans.len(), results.len());
+    for (plan, result) in plans.iter().zip(results.iter()) {
+        let mut u = guess.start;
+        let mut route = vec![guess.rooms[u]];
+        for &door in plan {
+            u = guess.graph[u][door].0;
+            route.push(guess.rooms[u]);
+        }
+        if &route != result {
+            return false;
+        }
+    }
+    true
+}
