@@ -107,7 +107,11 @@ static CTRL_C_INSTALLED: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(false))
 #[cfg(feature = "reqwest")]
 fn start_lock_manager_blocking() -> Result<()> {
     // Already running? nothing to do.
-    if LOCK_MANAGER.lock().expect("LOCK_MANAGER mutex was poisoned").is_some() {
+    if LOCK_MANAGER
+        .lock()
+        .expect("LOCK_MANAGER mutex was poisoned")
+        .is_some()
+    {
         return Ok(());
     }
 
