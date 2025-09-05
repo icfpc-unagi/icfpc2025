@@ -152,11 +152,10 @@ fn start_lock_manager_blocking() -> Result<()> {
                     consecutive_failures = 0;
                 }
                 Ok(false) => {
-                    consecutive_failures += 1;
-                    eprintln!(
-                        "Lock extend rejected (streak {} / 6).",
-                        consecutive_failures
-                    );
+                    // Extension was explicitly rejected (token mismatch/expired):
+                    // this indicates the lock cannot be continued; exit immediately.
+                    eprintln!("Lock extend rejected; exiting immediately.");
+                    std::process::exit(1);
                 }
                 Err(e) => {
                     consecutive_failures += 1;
