@@ -14,6 +14,15 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .route("/", web::get().to(www::handlers::index))
             // .route("/comm", web::get().to(www::handlers::comm))
+            .route(
+                "/api/select",
+                web::post().to(www::handlers::api::post_select),
+            )
+            .route(
+                "/api/explore",
+                web::post().to(www::handlers::api::post_explore),
+            )
+            .route("/api/guess", web::post().to(www::handlers::api::post_guess))
             .service(Files::new("/", "/www"))
     })
     .bind(bind_address)?
