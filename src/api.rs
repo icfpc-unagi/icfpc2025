@@ -131,6 +131,8 @@ fn start_lock_manager_blocking() -> Result<()> {
         let _ = ctrlc::set_handler(move || {
             let _ = crate::lock::unlock(&token_for_sig, false);
             stop_for_sig.store(true, Ordering::SeqCst);
+            // Exit immediately after unlocking on Ctrl+C
+            std::process::exit(130);
         });
     }
 
