@@ -124,6 +124,49 @@ pub async fn list_dir_detailed(bucket: &str, prefix: &str) -> Result<(Vec<String
     Ok((dirs, files))
 }
 
+pub async fn download_object(bucket: &str, object: &str) -> Result<Vec<u8>> {
+    let token = get_access_token()
+        .await
+        .context("Failed to get access token")?;
+    let client = reqwest::Client::new();
+
+    // Percent-encode object as a single path component (encode '/')
+    fn encode_component(s: &str) -> String {
+        let mut out = String::with_capacity(s.len() * 3);
+        for b in s.as_bytes() {
+            let c = *b as char;
+            if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '~') {
+                out.push(c);
+            } else {
+                out.push('%');
+                out.push_str(&format!("{:02X}", b));
+            }
+        }
+        out
+    }
+    let encoded = encode_component(object);
+    let url = Url::parse(&format!(
+        "https://storage.googleapis.com/storage/v1/b/{}/o/{}?alt=media",
+        bucket, encoded
+    ))?;
+
+    let res = client
+        .get(url)
+        .header("Authorization", format!("Bearer {}", token))
+        .send()
+        .await
+        .context("Failed to download GCS object")?;
+
+    if !res.status().is_success() {
+        let status = res.status();
+        let body = res.text().await.unwrap_or_default();
+        bail!("GCS download failed ({}): {}", status, body);
+    }
+
+    let bytes = res.bytes().await.context("Failed to read GCS body")?;
+    Ok(bytes.to_vec())
+}
+
 pub async fn upload_object(
     bucket: &str,
     name: &str,
