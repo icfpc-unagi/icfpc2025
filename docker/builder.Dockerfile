@@ -1,5 +1,12 @@
 FROM rust:1.89 AS rust-builder
 RUN rustup target add x86_64-unknown-linux-musl
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        clang \
+        build-essential \
+        pkg-config \
+        libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /work/src
 WORKDIR /work
 COPY Cargo.lock /work/Cargo.lock

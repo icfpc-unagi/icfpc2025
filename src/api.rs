@@ -1,10 +1,16 @@
 use anyhow::{Context, Result};
 
 #[cfg(feature = "reqwest")]
-use once_cell::sync::OnceCell;
+use once_cell::sync::{Lazy, OnceCell};
 #[cfg(feature = "reqwest")]
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "reqwest")]
+use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(feature = "reqwest")]
+use std::sync::{Arc, Mutex};
+#[cfg(feature = "reqwest")]
+use std::thread;
 #[cfg(feature = "reqwest")]
 use std::time::Duration;
 
@@ -80,6 +86,115 @@ fn log_unagi_header(res: &reqwest::blocking::Response) {
     }
 }
 
+// ---------------- Lock renewal thread (select/guess lifecycle) ----------------
+#[cfg(feature = "reqwest")]
+const LOCK_TTL: Duration = Duration::from_secs(30);
+#[cfg(feature = "reqwest")]
+const LOCK_RENEW_INTERVAL: Duration = Duration::from_secs(5);
+
+#[cfg(feature = "reqwest")]
+struct LockRunner {
+    stop: Arc<AtomicBool>,
+    handle: Option<std::thread::JoinHandle<()>>,
+    token: String,
+}
+
+#[cfg(feature = "reqwest")]
+static LOCK_MANAGER: Lazy<Mutex<Option<LockRunner>>> = Lazy::new(|| Mutex::new(None));
+#[cfg(feature = "reqwest")]
+static CTRL_C_INSTALLED: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(false));
+
+#[cfg(feature = "reqwest")]
+fn start_lock_manager_blocking() -> Result<()> {
+    // Already running? nothing to do.
+    if LOCK_MANAGER
+        .lock()
+        .expect("LOCK_MANAGER mutex was poisoned")
+        .is_some()
+    {
+        return Ok(());
+    }
+
+    // Acquire lock with retries every 5 seconds.
+    let token = loop {
+        match crate::lock::lock(LOCK_TTL)? {
+            Some(t) => break t,
+            None => thread::sleep(LOCK_RENEW_INTERVAL),
+        }
+    };
+
+    let stop = Arc::new(AtomicBool::new(false));
+    // Install Ctrl+C handler once; it will attempt best-effort unlock.
+    if !CTRL_C_INSTALLED.swap(true, Ordering::SeqCst) {
+        let stop_for_sig = stop.clone();
+        let token_for_sig = token.clone();
+        let _ = ctrlc::set_handler(move || {
+            let _ = crate::lock::unlock(&token_for_sig, false);
+            stop_for_sig.store(true, Ordering::SeqCst);
+        });
+    }
+
+    let token_clone = token.clone();
+    let stop_clone = stop.clone();
+    let handle = thread::spawn(move || {
+        let mut consecutive_failures = 0u32;
+        loop {
+            // Sleep in 1s ticks to respond quickly to stop requests, overall 5s per cycle
+            for _ in 0..50 {
+                if stop_clone.load(Ordering::SeqCst) {
+                    return;
+                }
+                thread::sleep(Duration::from_millis(100));
+            }
+            match crate::lock::extend(&token_clone, LOCK_TTL) {
+                Ok(true) => {
+                    // Success: reset failure streak
+                    consecutive_failures = 0;
+                }
+                Ok(false) => {
+                    consecutive_failures += 1;
+                    eprintln!(
+                        "Lock extend rejected (streak {} / 6).",
+                        consecutive_failures
+                    );
+                }
+                Err(e) => {
+                    consecutive_failures += 1;
+                    eprintln!(
+                        "Lock extend error (streak {} / 6): {}",
+                        consecutive_failures, e
+                    );
+                }
+            }
+            if consecutive_failures >= 6 {
+                eprintln!("Lock extend failed 6 times consecutively; exiting process.");
+                std::process::exit(1);
+            }
+        }
+    });
+
+    *LOCK_MANAGER.lock().unwrap() = Some(LockRunner {
+        stop,
+        handle: Some(handle),
+        token,
+    });
+    Ok(())
+}
+
+#[cfg(feature = "reqwest")]
+fn stop_lock_manager_blocking() {
+    let mut mgr = LOCK_MANAGER.lock().unwrap();
+    if let Some(mut lr) = mgr.take() {
+        lr.stop.store(true, Ordering::SeqCst);
+        if let Some(h) = lr.handle.take()
+            && let Err(e) = h.join()
+        {
+            eprintln!("Lock renewal thread panicked: {:?}", e);
+        }
+        let _ = crate::lock::unlock(&lr.token, false);
+    }
+}
+
 #[cfg(feature = "reqwest")]
 #[derive(Serialize)]
 struct SelectRequest<'a> {
@@ -100,6 +215,8 @@ struct SelectResponse {
 /// Returns the `problemName` echoed by the service.
 #[cfg(feature = "reqwest")]
 pub fn select(problem_name: &str) -> Result<String> {
+    // Acquire process-wide lock and start renewal thread
+    start_lock_manager_blocking()?;
     let client = http_client()?;
     let url = format!("{}/select", aedificium_base());
 
@@ -241,6 +358,8 @@ pub fn guess(map: &Map) -> Result<bool> {
     }
 
     let body: GuessResponse = res.json().context("Failed to parse /guess response")?;
+    // Stop renewal and unlock immediately after guess
+    stop_lock_manager_blocking();
     Ok(body.correct)
 }
 
