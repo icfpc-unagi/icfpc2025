@@ -1,3 +1,4 @@
+#[cfg(feature = "reqwest")]
 use anyhow::Context;
 #[cfg(feature = "reqwest")]
 use reqwest::Client;
