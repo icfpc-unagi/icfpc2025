@@ -77,7 +77,7 @@ pub fn to_error_response(result: &anyhow::Error) -> HttpResponse {
         .content_type("text/html")
         .body(render(&format!(
             "<h1>エラー</h1><pre><code>{}</code></pre>",
-            escape_html(&format!("{:?}", result))
+            escape_html(&format!("{result:?}"))
         )))
 }
 

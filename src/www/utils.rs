@@ -20,7 +20,7 @@ pub fn maybe_enrich_datetime_str(datetime_str: String) -> String {
             chrono_humanize::Accuracy::Rough,
             chrono_humanize::Tense::Past,
         );
-        format!("{} ({})", datetime_str, human_time)
+        format!("{datetime_str} ({human_time})")
     } else {
         datetime_str
     }

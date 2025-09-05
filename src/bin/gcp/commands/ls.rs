@@ -28,7 +28,7 @@ pub async fn run(long: bool, recursive: bool, url: &str) -> Result<()> {
             println!("{}/", d.trim_end_matches('/'));
         }
         for f in files {
-            println!("{}", f);
+            println!("{f}");
         }
         Ok(())
     }
@@ -51,11 +51,11 @@ async fn walk_recursive(bucket: &str, prefix: &str, long: bool) -> Result<()> {
     let mut stack: Vec<String> = vec![prefix.to_string()];
     while let Some(current) = stack.pop() {
         let header = if current.is_empty() {
-            format!("gs://{}/", bucket)
+            format!("gs://{bucket}/")
         } else {
-            format!("gs://{}/{}", bucket, current)
+            format!("gs://{bucket}/{current}")
         };
-        println!("{}:", header);
+        println!("{header}:");
 
         if long {
             let (mut dirs, files) =
@@ -82,7 +82,7 @@ async fn walk_recursive(bucket: &str, prefix: &str, long: bool) -> Result<()> {
                 println!("{}/", d.trim_end_matches('/'));
             }
             for f in &files {
-                println!("{}", f);
+                println!("{f}");
             }
             println!();
             dirs.sort();
@@ -111,15 +111,15 @@ fn print_object_details(bucket: &str, meta: &icfpc2025::gcp::gcs::types::ObjectI
     let metagen = meta.metageneration.as_deref().unwrap_or("-");
     let etag = meta.etag.as_deref().unwrap_or("-");
 
-    println!("Name: gs://{}/{}", bucket, name);
-    println!("Size: {}", size);
-    println!("Updated: {}", updated);
-    println!("Content-Type: {}", content_type);
-    println!("Storage-Class: {}", storage_class);
-    println!("CRC32C: {}", crc32c);
-    println!("MD5: {}", md5);
-    println!("Generation: {}", generation_str);
-    println!("Metageneration: {}", metagen);
-    println!("ETag: {}", etag);
+    println!("Name: gs://{bucket}/{name}");
+    println!("Size: {size}");
+    println!("Updated: {updated}");
+    println!("Content-Type: {content_type}");
+    println!("Storage-Class: {storage_class}");
+    println!("CRC32C: {crc32c}");
+    println!("MD5: {md5}");
+    println!("Generation: {generation_str}");
+    println!("Metageneration: {metagen}");
+    println!("ETag: {etag}");
     Ok(())
 }

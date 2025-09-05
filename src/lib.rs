@@ -6,8 +6,10 @@ use reqwest::Client;
 #[cfg(feature = "reqwest")]
 pub mod www;
 
-#[cfg(feature = "mysql")]
+#[cfg(feature = "sqlx")]
 pub mod sql;
+#[cfg(feature = "sqlx")]
+pub mod sql_async;
 
 #[cfg(all(feature = "reqwest", feature = "tokio"))]
 pub mod gcp;
@@ -48,8 +50,7 @@ pub async fn get_bearer_async() -> anyhow::Result<String> {
     let client = Client::new();
     let res = client
         .get(format!(
-            "https://storage.googleapis.com/icfpc2025-data/{}/bearer.txt",
-            unagi_password,
+            "https://storage.googleapis.com/icfpc2025-data/{unagi_password}/bearer.txt"
         ))
         .send()
         .await
@@ -57,7 +58,7 @@ pub async fn get_bearer_async() -> anyhow::Result<String> {
     res.text()
         .await
         .context("Failed to get bearer")
-        .map(|s| format!("Bearer {}", s))
+        .map(|s| format!("Bearer {s}"))
 }
 
 #[cfg(all(feature = "reqwest", feature = "tokio"))]

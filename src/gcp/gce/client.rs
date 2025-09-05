@@ -14,14 +14,11 @@ pub async fn create_instance(
     let token = get_access_token().await?;
 
     let client = reqwest::Client::new();
-    let url = format!(
-        "{}/projects/{}/zones/{}/instances",
-        GCE_API_BASE, project_id, zone
-    );
+    let url = format!("{GCE_API_BASE}/projects/{project_id}/zones/{zone}/instances");
 
     let response = client
         .post(&url)
-        .header("Authorization", format!("Bearer {}", token))
+        .header("Authorization", format!("Bearer {token}"))
         .header("Content-Type", "application/json")
         .json(instance_request)
         .send()
