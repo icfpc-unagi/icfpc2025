@@ -1,4 +1,19 @@
 FROM rust:1.89 AS rust-builder
+RUN set -eux; \
+    MIRROR="http://asia-northeast1.gce.archive.ubuntu.com/ubuntu/"; \
+    for f in /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list; do \
+      if [ -f "$f" ]; then \
+        sed -i.bak -e "s|http://archive.ubuntu.com/ubuntu/|$MIRROR|g" "$f"; \
+      fi; \
+    done
+# Toolchain and native build deps for crates that use cc/clang (e.g., ring, openssl)
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        clang \
+        build-essential \
+        pkg-config \
+        libssl-dev \
+    && rm -rf /var/lib/apt/lists/*
 RUN rustup target add x86_64-unknown-linux-musl
 RUN rustup target add wasm32-unknown-unknown
 # RUN cargo install wasm-pack  # It was very slow.
@@ -40,13 +55,6 @@ FROM rust-builder AS server
 ARG UNAGI_PASSWORD
 ENV UNAGI_PASSWORD ${UNAGI_PASSWORD}
 
-RUN set -eux; \
-    MIRROR="http://asia-northeast1.gce.archive.ubuntu.com/ubuntu/"; \
-    for f in /etc/apt/sources.list.d/ubuntu.sources /etc/apt/sources.list; do \
-      if [ -f "$f" ]; then \
-        sed -i.bak -e "s|http://archive.ubuntu.com/ubuntu/|$MIRROR|g" "$f"; \
-      fi; \
-    done
 RUN apt-get update \
     && apt-get install -y nginx apache2-utils supervisor \
     && rm -rf /var/lib/apt/lists/*
