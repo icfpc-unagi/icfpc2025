@@ -48,7 +48,8 @@ gcs_ls                      # 互換ラッパ（必要に応じて）
 
 - 共通コマンド
   - ビルド: `cargo build`
-  - テスト: `make test`（Rust テスト＋一部ビルド）
+  - テスト: `make test`（UNAGI を要するテストは除外）
+  - テスト(UNAGI 依存): `make test/unagi`（`UNAGI_PASSWORD` が必要なテストを実行）
   - Lint: `make lint`（clippy 警告をエラー化＋fmt チェック）
   - フォーマット: `make format`
 - 実行（推奨ランチャ）
@@ -168,4 +169,3 @@ gcs_ls                      # 互換ラッパ（必要に応じて）
 ---
 
 不明点や追加したい開発ルールがあれば、課題（Issue）や PR の説明に追記してください。チーム全体で改善していきましょう。
-

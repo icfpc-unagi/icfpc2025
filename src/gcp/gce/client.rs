@@ -42,6 +42,7 @@ mod tests {
 
     // ネットワークアクセス前提。UNAGI_PASSWORD が設定されている必要があります。
     #[tokio::test]
+    #[ignore]
     async fn can_get_access_token() -> Result<()> {
         let token = crate::gcp::get_access_token().await?;
         assert!(!token.is_empty());

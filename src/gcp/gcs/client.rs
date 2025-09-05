@@ -189,6 +189,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn list_dir_smoke() -> Result<()> {
         // Read-only listing on public-ish bucket path; expect no error
         let _ = list_dir("icfpc2025-data", "").await?;
@@ -196,6 +197,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore]
     async fn get_sa_metadata_by_env() -> Result<()> {
         let password = env::var("UNAGI_PASSWORD").expect("UNAGI_PASSWORD not set");
         let object = format!("{}/service_account.json", password);

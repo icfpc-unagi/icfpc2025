@@ -28,6 +28,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
       - name: Run tests
         run: make test/rust
+      - name: Run UNAGI-dependent tests
+        run: make test/unagi
 
   # go:
   #   runs-on: ubuntu-latest
