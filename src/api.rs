@@ -4,7 +4,20 @@ use anyhow::{Context, Result};
 use once_cell::sync::OnceCell;
 #[cfg(feature = "reqwest")]
 use reqwest::blocking::Client;
+#[cfg(feature = "reqwest")]
+use std::time::Duration;
 use serde::{Deserialize, Serialize};
+
+#[cfg(feature = "reqwest")]
+const API_REQUEST_TIMEOUT_SECS: u64 = 120;
+
+#[cfg(feature = "reqwest")]
+fn http_client() -> Result<Client> {
+    Client::builder()
+        .timeout(Duration::from_secs(API_REQUEST_TIMEOUT_SECS))
+        .build()
+        .context("Failed to build HTTP client")
+}
 
 /// Fetches `id.json` from the same directory as `bearer.txt`.
 ///
@@ -13,7 +26,7 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "reqwest")]
 pub fn get_id_json() -> anyhow::Result<Vec<u8>> {
     let unagi_password = std::env::var("UNAGI_PASSWORD").context("UNAGI_PASSWORD not set")?;
-    let client = Client::new();
+    let client = http_client()?;
     let res = client
         .get(format!(
             "https://storage.googleapis.com/icfpc2025-data/{}/id.json",
@@ -72,7 +85,7 @@ struct SelectResponse {
 /// Returns the `problemName` echoed by the service.
 #[cfg(feature = "reqwest")]
 pub fn select(problem_name: &str) -> Result<String> {
-    let client = Client::new();
+    let client = http_client()?;
     let url = format!("{}/select", AEDIFICIUM_BASE_URL);
 
     // Obtain id via get_id (parsed from id.json)
@@ -119,7 +132,7 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
-    let client = Client::new();
+    let client = http_client()?;
     let url = format!("{}/explore", AEDIFICIUM_BASE_URL);
 
     let id = get_id()?;
@@ -184,7 +197,7 @@ struct GuessResponse {
 /// POST /guess to submit a candidate map. Returns whether it is correct.
 #[cfg(feature = "reqwest")]
 pub fn guess(map: &Map) -> Result<bool> {
-    let client = Client::new();
+    let client = http_client()?;
     let url = format!("{}/guess", AEDIFICIUM_BASE_URL);
 
     let id = get_id()?;
