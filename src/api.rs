@@ -133,26 +133,41 @@ fn start_lock_manager_blocking() -> Result<()> {
     let token_clone = token.clone();
     let stop_clone = stop.clone();
     let handle = thread::spawn(move || {
+        let mut consecutive_failures = 0u32;
         loop {
+            // Sleep in 1s ticks to respond quickly to stop requests, overall 5s per cycle
             for _ in 0..5 {
                 if stop_clone.load(Ordering::SeqCst) {
                     return;
                 }
-                thread::sleep(Duration::from_millis(1000));
+                thread::sleep(Duration::from_secs(1));
             }
             if stop_clone.load(Ordering::SeqCst) {
                 return;
             }
             match crate::lock::extend(&token_clone, LOCK_TTL) {
-                Ok(true) => {}
+                Ok(true) => {
+                    // Success: reset failure streak
+                    consecutive_failures = 0;
+                }
                 Ok(false) => {
-                    eprintln!("Lock extend rejected; exiting.");
-                    std::process::exit(1);
+                    consecutive_failures += 1;
+                    eprintln!(
+                        "Lock extend rejected (streak {} / 6).",
+                        consecutive_failures
+                    );
                 }
                 Err(e) => {
-                    eprintln!("Lock extend error: {}; exiting.", e);
-                    std::process::exit(1);
+                    consecutive_failures += 1;
+                    eprintln!(
+                        "Lock extend error (streak {} / 6): {}",
+                        consecutive_failures, e
+                    );
                 }
+            }
+            if consecutive_failures >= 6 {
+                eprintln!("Lock extend failed 6 times consecutively; exiting process.");
+                std::process::exit(1);
             }
         }
     });

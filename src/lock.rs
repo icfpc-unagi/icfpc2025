@@ -49,6 +49,12 @@ pub fn lock(ttl: Duration) -> Result<Option<String>> {
         params! { "lock_token" => &token },
     )?;
 
+    if verified.is_some() {
+        eprintln!("[lock] acquired: token={} ttl_secs={}", token, ttl_secs);
+    } else {
+        eprintln!("[lock] busy: could not acquire");
+    }
+
     Ok(verified)
 }
 
@@ -98,6 +104,23 @@ pub fn unlock(lock_token: &str, force: bool) -> Result<()> {
             "#,
             params! { "lock_user" => &user },
         )?;
+        // Verify lock is now expired
+        let unlocked: Option<i64> = sql::cell(
+            r#"
+            SELECT 1 FROM locks
+            WHERE lock_id = 1 AND lock_expired < CURRENT_TIMESTAMP
+            "#,
+            (),
+        )?;
+        let result = if unlocked.is_some() {
+            "expired"
+        } else {
+            "unknown"
+        };
+        eprintln!(
+            "[unlock] forced=true token={} result={}",
+            lock_token, result
+        );
         return Ok(());
     }
 
@@ -112,6 +135,22 @@ pub fn unlock(lock_token: &str, force: bool) -> Result<()> {
         "#,
         params! { "lock_token" => lock_token },
     )?;
-
+    // Check whether the lock is expired now
+    let unlocked: Option<i64> = sql::cell(
+        r#"
+        SELECT 1 FROM locks
+        WHERE lock_id = 1 AND lock_expired < CURRENT_TIMESTAMP
+        "#,
+        (),
+    )?;
+    let result = if unlocked.is_some() {
+        "expired"
+    } else {
+        "still-active-or-mismatch"
+    };
+    eprintln!(
+        "[unlock] forced=false token={} result={}",
+        lock_token, result
+    );
     Ok(())
 }
