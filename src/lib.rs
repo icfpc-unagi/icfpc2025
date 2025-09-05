@@ -14,6 +14,11 @@ pub mod sql_async;
 #[cfg(all(feature = "reqwest", feature = "tokio"))]
 pub mod gcp;
 
+#[cfg(feature = "reqwest")]
+pub mod api;
+
+pub mod problems;
+
 pub trait SetMinMax {
     fn setmin(&mut self, v: Self) -> bool;
     fn setmax(&mut self, v: Self) -> bool;
