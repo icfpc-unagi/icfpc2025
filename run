@@ -8,9 +8,9 @@ REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 TARGET_DIR="${CARGO_TARGET_DIR:-target}"
 [[ "$TARGET_DIR" = /* ]] || TARGET_DIR="$REPO_DIR/$TARGET_DIR"
 
-for p in "$TARGET_DIR/debug/$name" "$TARGET_DIR/release/$name"; do
-  [ -x "$p" ] && exec "$p" "$@"
-done
+# for p in "$TARGET_DIR/debug/$name" "$TARGET_DIR/release/$name"; do
+#   [ -x "$p" ] && exec "$p" "$@"
+# done
 
 cargo build --manifest-path "$REPO_DIR/Cargo.toml" --bin "$name"
 exec "$TARGET_DIR/debug/$name" "$@"

@@ -67,7 +67,8 @@ fn aedificium_base() -> String {
     std::env::var("AEDIFICIUM_ENDPOINT")
         .ok()
         .map(|s| s.trim_end_matches('/').to_string())
-        .unwrap_or_else(|| "https://icfpc.sx9.jp/api".to_string())
+        // .unwrap_or_else(|| "https://icfpc.sx9.jp/api".to_string())
+        .unwrap_or_else(|| "https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.com".to_string())
 }
 
 #[cfg(feature = "reqwest")]
