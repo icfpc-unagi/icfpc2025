@@ -14,6 +14,7 @@ async fn main() -> std::io::Result<()> {
         App::new()
             .route("/", web::get().to(www::handlers::index))
             // .route("/comm", web::get().to(www::handlers::comm))
+            .route("/cron", web::get().to(www::handlers::cron::run))
             .route(
                 "/api/select",
                 web::post().to(www::handlers::api::post_select),
