@@ -16,6 +16,14 @@ async fn main() -> std::io::Result<()> {
             // .route("/comm", web::get().to(www::handlers::comm))
             .route("/cron", web::get().to(www::handlers::cron::run))
             .route(
+                "/leaderboard",
+                web::get().to(www::handlers::leaderboard::index),
+            )
+            .route(
+                "/leaderboard/{problem}",
+                web::get().to(www::handlers::leaderboard::show),
+            )
+            .route(
                 "/api/select",
                 web::post().to(www::handlers::api::post_select),
             )

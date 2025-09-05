@@ -40,6 +40,9 @@ enum Commands {
         recursive: bool,
         url: String,
     },
+
+    /// Print a GCS object's content to stdout
+    Cat { url: String },
 }
 
 #[tokio::main]
@@ -59,6 +62,7 @@ async fn main() -> Result<()> {
             recursive,
             url,
         } => commands::ls::run(long, recursive, &url).await,
+        Commands::Cat { url } => commands::cat::run(&url).await,
     }
 }
 

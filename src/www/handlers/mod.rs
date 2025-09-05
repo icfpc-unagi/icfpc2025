@@ -9,6 +9,7 @@ pub mod cron;
 pub mod template;
 // pub mod visualize;
 pub mod api;
+pub mod leaderboard;
 
 use actix_web::{HttpResponse, Responder, web};
 
