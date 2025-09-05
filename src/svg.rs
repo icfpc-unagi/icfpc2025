@@ -39,8 +39,8 @@ impl LayoutEngine {
         Self {
             nodes,
             adjacency_matrix,
-            k_repel: 2.0,
-            k_attract: 0.5,
+            k_repel: 10.0,
+            k_attract: 0.1,
             damping: 0.9,
             dt: 0.1,
         }
@@ -113,10 +113,34 @@ impl LayoutEngine {
     }
 
     fn run(&mut self, iterations: usize) {
+        const EPSILON: f64 = 1e-3;
         for i in 0..iterations {
             let t = ((iterations - i) as f64 / (iterations as f64)).powf(2.0) * 100.0;
             self.update_forces();
             self.update_positions(t);
+            eprintln!("Iteration {}/{}", i + 1, iterations);
+            let mut stable = true;
+            for node in &self.nodes {
+                if node.velocity.0.abs() > EPSILON
+                    || node.velocity.1.abs() > EPSILON
+                    || node.force.0.abs() > EPSILON
+                    || node.force.1.abs() > EPSILON
+                {
+                    stable = false;
+                }
+                eprintln!(
+                    "p=({:.2},{:.2}) v=({:.2},{:.2}) f=({:.2},{:.2})",
+                    node.position.0,
+                    node.position.1,
+                    node.velocity.0,
+                    node.velocity.1,
+                    node.force.0,
+                    node.force.1,
+                );
+            }
+            if stable {
+                break;
+            }
         }
     }
 }
@@ -136,7 +160,7 @@ pub fn render(map: &api::Map) -> String {
         .iter()
         .map(|node| node.position)
         .collect::<Vec<_>>();
-        let _forces = layout_engine
+    let _forces = layout_engine
         .nodes
         .iter()
         .map(|node| node.force)
@@ -194,16 +218,10 @@ pub fn render(map: &api::Map) -> String {
         let p2 = positions[conn.to.room];
 
         let angle1 = (conn.from.door as f64) * std::f64::consts::PI / 3.0;
-        let c1 = (
-            p1.0 + radius * angle1.cos(),
-            p1.1 + radius * angle1.sin(),
-        );
+        let c1 = (p1.0 + radius * angle1.cos(), p1.1 + radius * angle1.sin());
 
         let angle2 = (conn.to.door as f64) * std::f64::consts::PI / 3.0;
-        let c2 = (
-            p2.0 + radius * angle2.cos(),
-            p2.1 + radius * angle2.sin(),
-        );
+        let c2 = (p2.0 + radius * angle2.cos(), p2.1 + radius * angle2.sin());
 
         let dist = ((p1.0 - p2.0).powi(2) + (p1.1 - p2.1).powi(2)).sqrt();
 

@@ -1,6 +1,11 @@
+use crate::{api, svg};
+use crate::{api::MapConnection, sql};
 use actix_web::{HttpResponse, Responder, web};
 use anyhow::Result;
+use chrono::NaiveDateTime;
+use mysql::params;
 use serde::Deserialize;
+use std::fmt::Write;
 
 fn html_page(title: &str, body: &str) -> String {
     // Auto-refresh leaderboard pages every 5 minutes
@@ -74,6 +79,72 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str) -> Result<Strin
         "<div class=\"lb-nav\" style=\"margin:8px 0;\">{}</div>",
         nav_links.join(" ")
     );
+
+    // Fetch latest successful map for this problem
+    let mut map_html = String::new();
+    if let Some(row) = sql::row(
+        "
+        SELECT JSON_EXTRACT(g.api_log_request, '$.map') AS map,
+               g.api_log_created AS ts
+        FROM api_logs s
+        JOIN api_logs g
+          ON g.api_log_path = '/guess'
+            AND g.api_log_id > s.api_log_id
+        WHERE s.api_log_path = '/select'
+          AND JSON_EXTRACT(s.api_log_request, '$.problemName') = :problem
+          AND g.api_log_response_code = 200
+          AND JSON_EXTRACT(g.api_log_response, '$.correct') = true",
+        params! { "problem" => problem },
+    )? {
+        let map: api::Map = serde_json::from_str(&row.at::<String>(0)?)?;
+        let n = map.rooms.len();
+        let mut doors = vec![[usize::MAX; 6]; n];
+        let mut adj = vec![vec![0; n]; n];
+        for MapConnection { from, to } in &map.connections {
+            doors[from.room][from.door] = to.room;
+            doors[to.room][to.door] = from.room;
+            adj[from.room][to.room] += 1;
+            adj[to.room][from.room] += 1;
+        }
+        let mut w = &mut map_html;
+        write!(w, "<table><tr><th>d\\r")?;
+        for j in 0..n {
+            write!(w, "<th style=\"width:24px; text-align:center;\">{j}")?;
+        }
+        for i in 0..6 {
+            write!(w, "<tr><td>{i}")?;
+            for j in 0..n {
+                write!(
+                    w,
+                    "<td style=\"background:#afa; text-align:center;\">{}",
+                    doors[j][i]
+                )?;
+            }
+        }
+        write!(w, "</table><table><tr><th>r\\r")?;
+        for i in 0..n {
+            write!(w, "<th style=\"width:24px; text-align:center;\">{i}")?;
+        }
+        for i in 0..n {
+            write!(w, "<tr><td style=\"width:24px; text-align:center;\">{i}")?;
+            for j in 0..n {
+                write!(
+                    w,
+                    "<td style=\"background:#aaf; text-align:center;\">{}",
+                    adj[i][j]
+                )?;
+            }
+        }
+        write!(
+            w,
+            "</table><div>Latest solved map (at {ts} UTC): {svg}</div>",
+            ts = row.at::<NaiveDateTime>(1)?,
+            svg = svg::render(&map),
+        )?;
+    } else {
+        write!(map_html, "<div>No successful guess submitted</div>")?;
+    }
+
     // List timestamps under history/
     let (dirs, _files) = crate::gcp::gcs::list_dir(bucket, "history").await?;
     // dirs like "YYYYMMDD-hhmmss/"; normalize and sort
@@ -114,21 +185,19 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str) -> Result<Strin
     let snaps = downsample(&snaps, 100);
 
     // Build JSON structure for the client side: [{ts, data: <json>}]
-    let mut series_json_parts: Vec<String> = Vec::new();
+    #[derive(serde::Serialize)]
+    struct Snapshot<'a> {
+        ts: &'a str,
+        data: serde_json::Value,
+    }
+    let mut series: Vec<Snapshot> = Vec::with_capacity(snaps.len());
     for (ts, bytes) in &snaps {
         let text = String::from_utf8_lossy(bytes);
-        // As JSON value; if it's invalid, wrap as null to avoid breaking page
-        let parsed = match serde_json::from_str::<serde_json::Value>(&text) {
-            Ok(v) => v,
-            Err(_) => serde_json::Value::Null,
-        };
-        series_json_parts.push(format!(
-            "{{\"ts\":\"{}\",\"data\":{}}}",
-            ts,
-            serde_json::to_string(&parsed)?
-        ));
+        let data =
+            serde_json::from_str::<serde_json::Value>(&text).unwrap_or(serde_json::Value::Null);
+        series.push(Snapshot { ts, data });
     }
-    let series_js = format!("[{}]", series_json_parts.join(","));
+    let series_js = serde_json::to_string(&series)?;
 
     let html = format!(
         r#"
@@ -285,6 +354,7 @@ document.getElementById('lb-table').addEventListener('click', (ev) => {{
   highlightTeam(team);
 }});
 </script>
+{map_html}
 "#,
         nav = nav_html,
         problem = problem,
@@ -292,5 +362,5 @@ document.getElementById('lb-table').addEventListener('click', (ev) => {{
         series = series_js,
     );
 
-    Ok(html_page(&format!("Leaderboard - {}", problem), &html))
+    Ok(html_page(&format!("Leaderboard - {problem}"), &html))
 }

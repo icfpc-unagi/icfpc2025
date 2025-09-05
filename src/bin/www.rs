@@ -9,7 +9,7 @@ async fn main() -> std::io::Result<()> {
     let server_port = env::var("PORT").unwrap_or_else(|_| String::from("8080"));
     let bind_address = format!("{}:{}", server_address, server_port);
 
-    eprintln!("Starting server at: http://{}", bind_address);
+    eprintln!("Starting server at: http://{}/leaderboard/global", bind_address);
     HttpServer::new(|| {
         App::new()
             .route("/", web::get().to(www::handlers::index))

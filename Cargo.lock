@@ -502,6 +502,7 @@ dependencies = [
  "iana-time-zone",
  "js-sys",
  "num-traits",
+ "serde",
  "wasm-bindgen",
  "windows-link",
 ]
@@ -1802,6 +1803,7 @@ dependencies = [
  "btoi",
  "byteorder",
  "bytes",
+ "chrono",
  "crc32fast",
  "flate2",
  "getrandom 0.3.3",
