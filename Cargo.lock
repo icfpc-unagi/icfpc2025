@@ -460,6 +460,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cadical"
+version = "0.1.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a54f8130f9e6a40dd1ec66180c4e8be624257705740b7ce1502146c807c7778e"
+dependencies = [
+ "cc",
+]
+
+[[package]]
 name = "cc"
 version = "1.2.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1296,6 +1305,7 @@ dependencies = [
  "actix-web",
  "anyhow",
  "base64",
+ "cadical",
  "chrono",
  "chrono-humanize",
  "clap",
