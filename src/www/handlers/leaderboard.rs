@@ -3,7 +3,12 @@ use anyhow::Result;
 use serde::Deserialize;
 
 fn html_page(title: &str, body: &str) -> String {
-    crate::www::handlers::template::render(&format!("<h1>{}</h1>\n{}", title, body))
+    // Auto-refresh leaderboard pages every 5 minutes
+    let auto_refresh = "<script>setTimeout(() => location.reload(), 5*60*1000);</script>";
+    crate::www::handlers::template::render(&format!(
+        "<h1>{}</h1>\n{}\n{}",
+        title, auto_refresh, body
+    ))
 }
 
 pub async fn index() -> impl Responder {
