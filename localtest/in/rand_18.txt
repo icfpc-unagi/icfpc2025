@@ -1,0 +1,1 @@
+local random 18 0

@@ -66,12 +66,13 @@ impl Judge for LocalJudge {
         }
         for i in 0..out.graph.len() {
             for door in 0..6 {
-                assert_eq!(out.graph[i][door], (i, door), "Graph is not undirected");
+                let (i2, door2) = out.graph[i][door];
+                assert_eq!(out.graph[i2][door2], (i, door), "Graph is not undirected");
             }
         }
         let n = self.rooms.len();
         let mut dp = mat![false; n; n];
-        if self.rooms[0] != out.rooms[0] {
+        if self.rooms[0] != out.rooms[out.start] {
             eprintln!("!log status WA");
             return false;
         }
@@ -99,6 +100,7 @@ impl Judge for LocalJudge {
 pub struct RemoteJudge {
     problem_name: String,
     num_rooms: usize,
+    cost: usize,
 }
 
 impl Judge for RemoteJudge {
@@ -109,14 +111,31 @@ impl Judge for RemoteJudge {
         &self.problem_name
     }
     fn explore(&mut self, plans: &[Vec<usize>]) -> Vec<Vec<usize>> {
+        println!("explore {}", plans.len());
+        self.cost += plans.len() + 1;
+        for plan in plans {
+            println!("{}", plan.iter().map(|&d| d.to_string()).join(""));
+        }
         assert!(plans.len() <= 18 * self.num_rooms);
         api::explore(plans).expect("Failed to explore").results
     }
     fn guess(&self, out: &Guess) -> bool {
+        println!("guess");
+        println!("{}", out.rooms.iter().map(|&r| r.to_string()).join(""));
+        for i in 0..out.graph.len() {
+            println!(
+                "{}",
+                out.graph[i]
+                    .iter()
+                    .map(|&(r, d)| format!("{} {}", r, d))
+                    .join(" ")
+            );
+        }
         let mut connections = vec![];
         for i in 0..out.graph.len() {
             for door in 0..6 {
-                assert_eq!(out.graph[i][door], (i, door), "Graph is not undirected");
+                let (i2, door2) = out.graph[i][door];
+                assert_eq!(out.graph[i2][door2], (i, door), "Graph is not undirected");
                 if (i, door) <= out.graph[i][door] {
                     connections.push(api::MapConnection {
                         from: api::MapConnectionEnd { room: i, door },
@@ -128,12 +147,19 @@ impl Judge for RemoteJudge {
                 }
             }
         }
-        api::guess(&api::Map {
+        let ret = api::guess(&api::Map {
             rooms: out.rooms.clone(),
             starting_room: out.start,
             connections,
         })
-        .expect("Failed to guess")
+        .expect("Failed to guess");
+        if ret {
+            eprintln!("!log status AC");
+            eprintln!("!log score {}", self.cost);
+        } else {
+            eprintln!("!log status WA");
+        }
+        ret
     }
 }
 
@@ -145,6 +171,7 @@ impl RemoteJudge {
             num_rooms: problems::get_problem(problem_name)
                 .unwrap_or_else(|| panic!("Unknown problem: {}", problem_name))
                 .size,
+            cost: 0,
         }
     }
 }

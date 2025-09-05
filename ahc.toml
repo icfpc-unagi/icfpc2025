@@ -1,0 +1,8 @@
+parallel = 1
+default_set = "localtest"
+listen = "0.0.0.0:8001"
+tester = "target/release/tester"
+default_key = "score"
+vis = "default_vis"
+vis_ext = "svg"
+show_details = 100
