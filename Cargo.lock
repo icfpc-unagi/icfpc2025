@@ -1311,6 +1311,7 @@ dependencies = [
  "num-bigint",
  "num-traits",
  "once_cell",
+ "proconio",
  "rand",
  "rand_chacha",
  "rand_core",
@@ -2165,6 +2166,12 @@ checksum = "89ae43fd86e4158d6db51ad8e2b80f313af9cc74f5c0e03ccb87de09998732de"
 dependencies = [
  "unicode-ident",
 ]
+
+[[package]]
+name = "proconio"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c10091de86d0dc939b37a115d74597cbe83af470032a1729d50c98ccee043cb0"
 
 [[package]]
 name = "quick-error"
