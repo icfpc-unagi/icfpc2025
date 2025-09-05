@@ -110,12 +110,7 @@ impl Judge for RemoteJudge {
     }
     fn explore(&mut self, plans: &[Vec<usize>]) -> Vec<Vec<usize>> {
         assert!(plans.len() <= 18 * self.num_rooms);
-        api::explore(plans)
-            .expect("Failed to explore")
-            .results
-            .iter()
-            .map(|r| r.iter().map(|&x| x as usize).collect())
-            .collect()
+        api::explore(plans).expect("Failed to explore").results
     }
     fn guess(&self, out: &Guess) -> bool {
         let mut connections = vec![];
@@ -135,7 +130,7 @@ impl Judge for RemoteJudge {
         }
         api::guess(&api::Map {
             rooms: out.rooms.clone(),
-            starting_room: out.start as usize,
+            starting_room: out.start,
             connections,
         })
         .expect("Failed to guess")
