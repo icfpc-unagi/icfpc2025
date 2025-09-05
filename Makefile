@@ -45,6 +45,11 @@ test/rust:
 	cargo test
 	cargo build --bins
 
+.PHONY: test/unagi
+test/unagi:
+	# Runs tests that require UNAGI_PASSWORD or external GCP access
+	cargo test -- --ignored
+
 ###############################################################################
 # Lint rules
 ###############################################################################
