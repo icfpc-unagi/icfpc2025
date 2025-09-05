@@ -1,3 +1,10 @@
+#![allow(
+    clippy::needless_range_loop,
+    clippy::useless_vec,
+    clippy::partialeq_to_none,
+    non_snake_case,
+    unused_variables
+)]
 use icfpc2025::judge::*;
 use rand::prelude::*;
 

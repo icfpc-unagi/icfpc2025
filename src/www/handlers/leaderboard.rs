@@ -188,7 +188,7 @@ const container = document.getElementById('chart');
 const canvas = document.createElement('canvas');
 container.appendChild(canvas);
 
-new Chart(canvas.getContext('2d'), {{
+const chart = new Chart(canvas.getContext('2d'), {{
   type: 'line',
   data: {{ labels, datasets }},
   options: {{
@@ -229,14 +229,22 @@ if (problem === 'global') {{
 }} else {{
   latest.sort((a,b) => a.score - b.score);
 }}
-const rows = latest.map((r, i) => {{
-  const name = r.team === 'Unagi' ? `<strong>${{esc(r.team)}}</strong>` : esc(r.team);
-  return `<tr>
-    <td style="padding:4px 8px; text-align:right;">${{i+1}}</td>
-    <td style="padding:4px 8px;">${{name}}</td>
-    <td style="padding:4px 8px; text-align:right;">${{r.score}}</td>
+// Compute rows with tie-aware ranks and clickable team names
+let rows = '';
+let lastScore = null;
+let lastRank = 0;
+latest.forEach((r, i) => {{
+  const rank = (lastScore === r.score) ? lastRank : (i + 1);
+  lastScore = r.score; lastRank = rank;
+  const nameHtml = r.team === 'Unagi' ? `<strong>${{esc(r.team)}}</strong>` : esc(r.team);
+  const teamAttr = String(r.team).replace(/[&<>\"']/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;','\'':'&#39;'}})[c]);
+  const nameLink = `<a href='#' data-team=\"${{teamAttr}}\">${{nameHtml}}</a>`;
+  rows += `<tr>
+    <td style=\"padding:4px 8px; text-align:right;\">${{rank}}</td>
+    <td style=\"padding:4px 8px;\">${{nameLink}}</td>
+    <td style=\"padding:4px 8px; text-align:right;\">${{r.score}}</td>
   </tr>`;
-}}).join('');
+}});
 document.getElementById('lb-table').innerHTML = `
   <table style="border-collapse:collapse; width:100%; font: 13px sans-serif;">
     <thead>
@@ -248,6 +256,34 @@ document.getElementById('lb-table').innerHTML = `
     </thead>
     <tbody>${{rows}}</tbody>
   </table>`;
+// Click-to-highlight: clicking a team name highlights its series on the chart
+let highlightedTeam = null;
+function highlightTeam(team) {{
+  highlightedTeam = (highlightedTeam === team) ? null : team;
+  chart.data.datasets.forEach(ds => {{
+    const baseColor = ds.label === 'Unagi' ? '#e53935' : colorFor(ds.label);
+    if (highlightedTeam && ds.label !== highlightedTeam) {{
+      ds.borderColor = baseColor.startsWith('hsl(')
+        ? baseColor.replace('hsl(', 'hsla(').replace(')', ', 0.2)')
+        : (baseColor.length === 7 ? baseColor + '33' : baseColor);
+      ds.borderWidth = 1;
+      ds.pointRadius = 0;
+    }} else {{
+      ds.borderColor = baseColor;
+      ds.borderWidth = (ds.label === 'Unagi') ? 3 : (highlightedTeam ? 3 : 1);
+      ds.pointRadius = (ds.label === 'Unagi') ? 3 : (highlightedTeam ? 3 : 1);
+    }}
+  }});
+  chart.update();
+}}
+
+document.getElementById('lb-table').addEventListener('click', (ev) => {{
+  const a = ev.target.closest('a[data-team]');
+  if (!a) return;
+  ev.preventDefault();
+  const team = a.getAttribute('data-team');
+  highlightTeam(team);
+}});
 </script>
 "#,
         nav = nav_html,
