@@ -78,6 +78,8 @@ pub mod problems;
 
 pub mod judge;
 
+pub mod svg;
+
 pub mod mapgen {
     pub mod random;
 }
