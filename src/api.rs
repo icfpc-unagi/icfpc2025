@@ -148,7 +148,7 @@ where
     S: AsRef<Vec<usize>>,
 {
     let client = http_client()?;
-    let url: String = format!("{}/explore", aedificium_base());
+    let url = format!("{}/explore", aedificium_base());
     let id = get_id()?;
     let plans_vec: Vec<String> = plans
         .into_iter()
