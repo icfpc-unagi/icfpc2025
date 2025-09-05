@@ -25,7 +25,7 @@ pub fn lock(ttl: Duration) -> Result<Option<String>> {
 
     // Attempt to acquire the lock only if it's expired in SQL.
     // Use DATE_ADD with INTERVAL in seconds for portability.
-    sql::exec(
+    let affected = sql::exec(
         r#"
         UPDATE locks
         SET
@@ -36,26 +36,13 @@ pub fn lock(ttl: Duration) -> Result<Option<String>> {
         "#,
         params! { "lock_user" => &user, "lock_token" => &token, "ttl" => ttl_secs },
     )?;
-
-    // Verify acquisition by checking the token and that the lock is in the future.
-    let verified: Option<String> = sql::cell(
-        r#"
-        SELECT lock_token
-        FROM locks
-        WHERE lock_id = 1
-          AND lock_token = :lock_token
-          AND lock_expired >= CURRENT_TIMESTAMP
-        "#,
-        params! { "lock_token" => &token },
-    )?;
-
-    if verified.is_some() {
+    if affected > 0 {
         eprintln!("[lock] acquired: token={} ttl_secs={}", token, ttl_secs);
+        Ok(Some(token))
     } else {
         eprintln!("[lock] busy: could not acquire");
+        Ok(None)
     }
-
-    Ok(verified)
 }
 
 /// Extend the lock if the token matches and the lock is still active.
@@ -63,7 +50,7 @@ pub fn lock(ttl: Duration) -> Result<Option<String>> {
 /// Returns true if extended, false if not (e.g., token mismatch or already expired).
 pub fn extend(lock_token: &str, ttl: Duration) -> Result<bool> {
     let ttl_secs = (ttl.as_secs().min(i64::MAX as u64)) as i64;
-    sql::exec(
+    let affected = sql::exec(
         r#"
         UPDATE locks
         SET lock_expired = DATE_ADD(CURRENT_TIMESTAMP, INTERVAL :ttl SECOND)
@@ -73,18 +60,7 @@ pub fn extend(lock_token: &str, ttl: Duration) -> Result<bool> {
         "#,
         params! { "ttl" => ttl_secs, "lock_token" => lock_token },
     )?;
-
-    let ok: Option<i64> = sql::cell(
-        r#"
-        SELECT 1
-        FROM locks
-        WHERE lock_id = 1
-          AND lock_token = :lock_token
-          AND lock_expired > CURRENT_TIMESTAMP
-        "#,
-        params! { "lock_token" => lock_token },
-    )?;
-    Ok(ok.is_some())
+    Ok(affected > 0)
 }
 
 /// Release the lock.
@@ -93,7 +69,7 @@ pub fn extend(lock_token: &str, ttl: Duration) -> Result<bool> {
 pub fn unlock(lock_token: &str, force: bool) -> Result<()> {
     if force {
         let user = current_username();
-        sql::exec(
+        let affected = sql::exec(
             r#"
             UPDATE locks
             SET
@@ -104,19 +80,7 @@ pub fn unlock(lock_token: &str, force: bool) -> Result<()> {
             "#,
             params! { "lock_user" => &user },
         )?;
-        // Verify lock is now expired
-        let unlocked: Option<i64> = sql::cell(
-            r#"
-            SELECT 1 FROM locks
-            WHERE lock_id = 1 AND lock_expired < CURRENT_TIMESTAMP
-            "#,
-            (),
-        )?;
-        let result = if unlocked.is_some() {
-            "expired"
-        } else {
-            "unknown"
-        };
+        let result = if affected > 0 { "expired" } else { "unknown" };
         eprintln!(
             "[unlock] forced=true token={} result={}",
             lock_token, result
@@ -125,7 +89,7 @@ pub fn unlock(lock_token: &str, force: bool) -> Result<()> {
     }
 
     // Non-force: expire only if token matches and it's still active (future).
-    sql::exec(
+    let affected = sql::exec(
         r#"
         UPDATE locks
         SET lock_expired = DATE_SUB(CURRENT_TIMESTAMP, INTERVAL 1 SECOND)
@@ -135,15 +99,7 @@ pub fn unlock(lock_token: &str, force: bool) -> Result<()> {
         "#,
         params! { "lock_token" => lock_token },
     )?;
-    // Check whether the lock is expired now
-    let unlocked: Option<i64> = sql::cell(
-        r#"
-        SELECT 1 FROM locks
-        WHERE lock_id = 1 AND lock_expired < CURRENT_TIMESTAMP
-        "#,
-        (),
-    )?;
-    let result = if unlocked.is_some() {
+    let result = if affected > 0 {
         "expired"
     } else {
         "still-active-or-mismatch"
