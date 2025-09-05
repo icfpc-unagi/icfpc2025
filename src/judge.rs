@@ -10,6 +10,7 @@ pub trait Judge {
     fn guess(&self, out: &Guess) -> bool;
 }
 
+#[derive(Clone, Debug)]
 pub struct Guess {
     pub rooms: Vec<usize>,
     pub start: usize,
@@ -46,6 +47,9 @@ impl Judge for LocalJudge {
             ret.push(route);
         }
         assert!(plans.len() <= 18 * self.num_rooms());
+        for r in &ret {
+            println!("{}", r.iter().join(""));
+        }
         ret
     }
     fn guess(&self, out: &Guess) -> bool {
@@ -117,7 +121,11 @@ impl Judge for RemoteJudge {
             println!("{}", plan.iter().map(|&d| d.to_string()).join(""));
         }
         assert!(plans.len() <= 18 * self.num_rooms);
-        api::explore(plans).expect("Failed to explore").results
+        let ret = api::explore(plans).expect("Failed to explore").results;
+        for r in &ret {
+            println!("{}", r.iter().join(""));
+        }
+        ret
     }
     fn guess(&self, out: &Guess) -> bool {
         println!("guess");
