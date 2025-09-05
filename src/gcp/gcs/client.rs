@@ -44,7 +44,8 @@ where
 
     loop {
         let mut url = Url::parse(&format!(
-            "https://storage.googleapis.com/storage/v1/b/{bucket}/o"
+            "https://storage.googleapis.com/storage/v1/b/{}/o",
+            bucket
         ))?;
         {
             let mut qp = url.query_pairs_mut();
@@ -59,7 +60,7 @@ where
 
         let res = client
             .get(url)
-            .header("Authorization", format!("Bearer {token}"))
+            .header("Authorization", format!("Bearer {}", token))
             .send()
             .await
             .context("Failed to call GCS list API")?;
@@ -132,7 +133,8 @@ pub async fn get_object_metadata(bucket: &str, object: &str) -> Result<ObjectIte
     let mut page_token: Option<String> = None;
     loop {
         let mut url = Url::parse(&format!(
-            "https://storage.googleapis.com/storage/v1/b/{bucket}/o"
+            "https://storage.googleapis.com/storage/v1/b/{}/o",
+            bucket
         ))?;
         {
             let mut qp = url.query_pairs_mut();
@@ -148,7 +150,7 @@ pub async fn get_object_metadata(bucket: &str, object: &str) -> Result<ObjectIte
 
         let res = client
             .get(url)
-            .header("Authorization", format!("Bearer {token}"))
+            .header("Authorization", format!("Bearer {}", token))
             .send()
             .await
             .context("Failed to call GCS get object via list API")?;

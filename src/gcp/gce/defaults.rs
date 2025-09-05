@@ -134,7 +134,10 @@ pub fn create_instance_request(
             disk_encryption_key: serde_json::json!({}),
             initialize_params: InitializeParams {
                 disk_size_gb: "50".to_string(),
-                disk_type: format!("projects/{project_id}/zones/{zone}/diskTypes/pd-balanced"),
+                disk_type: format!(
+                    "projects/{}/zones/{}/diskTypes/pd-balanced",
+                    project_id, zone
+                ),
                 labels: disk_labels,
                 source_image:
                     "projects/ubuntu-os-cloud/global/images/ubuntu-2404-noble-amd64-v20250828"
@@ -150,7 +153,10 @@ pub fn create_instance_request(
         instance_encryption_key: serde_json::json!({}),
         key_revocation_action_type: "NONE".to_string(),
         labels,
-        machine_type: format!("projects/{project_id}/zones/{zone}/machineTypes/{machine_type}"),
+        machine_type: format!(
+            "projects/{}/zones/{}/machineTypes/{}",
+            project_id, zone, machine_type
+        ),
         metadata: Metadata {
             items: metadata_items,
         },
@@ -161,7 +167,10 @@ pub fn create_instance_request(
                 network_tier: "PREMIUM".to_string(),
             }],
             stack_type: "IPV4_ONLY".to_string(),
-            subnetwork: format!("projects/{project_id}/regions/{region}/subnetworks/default"),
+            subnetwork: format!(
+                "projects/{}/regions/{}/subnetworks/default",
+                project_id, region
+            ),
         }],
         params: Params {
             resource_manager_tags: serde_json::json!({}),
@@ -185,7 +194,7 @@ pub fn create_instance_request(
             enable_vtpm: true,
         },
         tags: Tags { items: vec![] },
-        zone: format!("projects/{project_id}/zones/{zone}"),
+        zone: format!("projects/{}/zones/{}", project_id, zone),
     }
 }
 

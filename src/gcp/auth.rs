@@ -18,7 +18,8 @@ struct Claims {
 pub async fn get_access_token() -> Result<String> {
     let unagi_password = std::env::var("UNAGI_PASSWORD").context("UNAGI_PASSWORD not set")?;
     let sa_url = format!(
-        "https://storage.googleapis.com/icfpc2025-data/{unagi_password}/service_account.json"
+        "https://storage.googleapis.com/icfpc2025-data/{}/service_account.json",
+        unagi_password
     );
 
     let client = reqwest::Client::new();

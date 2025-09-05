@@ -11,7 +11,7 @@ fn main() -> Result<()> {
 
     for row in rows {
         let table_name: String = row.try_get(0)?;
-        println!("\nTable: {table_name}");
+        println!("\nTable: {}", table_name);
 
         let schema_query = "SELECT column_name, column_type, is_nullable, column_key, column_default, extra FROM information_schema.columns WHERE table_schema = ? AND table_name = ? ORDER BY ordinal_position";
         let schema_rows = icfpc2025::sql::select2(schema_query, db_name, &table_name)?;
@@ -29,16 +29,16 @@ fn main() -> Result<()> {
                 details.push("NOT NULL".to_string());
             }
             if !column_key.is_empty() {
-                details.push(format!("KEY: {column_key}"));
+                details.push(format!("KEY: {}", column_key));
             }
             if let Some(default) = column_default {
-                details.push(format!("DEFAULT: {default}"));
+                details.push(format!("DEFAULT: {}", default));
             }
             if !extra.is_empty() {
                 details.push(extra);
             }
 
-            println!("  {column_name}: {}", details.join(", "));
+            println!("  {}: {}", column_name, details.join(", "));
         }
     }
 

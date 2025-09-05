@@ -10,12 +10,13 @@ pub async fn run(project_id: &str, zone: &str) -> Result<()> {
 
     let client = reqwest::Client::new();
     let url = format!(
-        "https://compute.googleapis.com/compute/v1/projects/{project_id}/zones/{zone}/instances"
+        "https://compute.googleapis.com/compute/v1/projects/{}/zones/{}/instances",
+        project_id, zone
     );
 
     let res = client
         .get(&url)
-        .header("Authorization", format!("Bearer {token}"))
+        .header("Authorization", format!("Bearer {}", token))
         .send()
         .await
         .context("Failed to call GCE list instances API")?;

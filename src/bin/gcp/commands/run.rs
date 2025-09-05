@@ -16,7 +16,10 @@ pub async fn run(
         ))
     };
 
-    println!("Creating GCE instance '{instance_name}' in zone '{zone}' (type: {machine_type})...",);
+    println!(
+        "Creating GCE instance '{}' in zone '{}' (type: {})...",
+        instance_name, zone, machine_type
+    );
 
     let instance_request = icfpc2025::gcp::gce::create_instance_request(
         instance_name,
