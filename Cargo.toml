@@ -48,9 +48,5 @@ rayon = "1.11"
 proconio = "0.5.0"
 cadical = "0.1.16"
 
-[[bin]]
-name = "chokudai"
-path = "src/bin/chokudai/main.rs"
-
 [profile.release]
 debug = true
