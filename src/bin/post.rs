@@ -1,27 +1,49 @@
 use anyhow::{Context, Result, bail};
+use clap::{Parser, Subcommand};
 use icfpc2025::api;
 use icfpc2025::problems;
+use itertools::Itertools;
 use serde_json::Value;
-use std::env;
+
+/// Post command for interacting with the official API.
+/// "id" field is optional but if provided must match local id.json.
+///
+/// Example usage:
+///   post select '{"problemName":"foo"}'
+///   post explore '{"plans":["0123"]}'
+///   post guess '{"map":{...}}'
+#[derive(Parser, Debug)]
+#[command(name = "post")]
+struct Cli {
+    #[command(subcommand)]
+    command: Commands,
+}
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    /// Select a problem
+    Select {
+        /// JSON string argument
+        json: String,
+    },
+    /// Explore plans
+    Explore {
+        /// JSON string argument
+        json: String,
+    },
+    /// Guess the map
+    Guess {
+        /// JSON string argument
+        json: String,
+    },
+}
 
 fn main() -> Result<()> {
-    let mut args = env::args().skip(1);
-    let sub = args.next().unwrap_or_default();
-    let json_arg = args.next().unwrap_or_default();
-
-    if sub.is_empty() || json_arg.is_empty() {
-        eprintln!("Usage: post <select|explore|guess> '<json>'");
-        bail!("missing arguments");
-    }
-
-    match sub.as_str() {
-        "select" => handle_select(&json_arg),
-        "explore" => handle_explore(&json_arg),
-        "guess" => handle_guess(&json_arg),
-        _ => {
-            eprintln!("Unknown subcommand: {}", sub);
-            bail!("unknown subcommand")
-        }
+    let cli = Cli::parse();
+    match cli.command {
+        Commands::Select { json } => handle_select(&json),
+        Commands::Explore { json } => handle_explore(&json),
+        Commands::Guess { json } => handle_guess(&json),
     }
 }
 
@@ -36,7 +58,14 @@ fn handle_select(json_arg: &str) -> Result<()> {
 
     // Validate problem name using local list.
     if problems::get_problem(problem_name).is_none() {
-        bail!("unknown problemName: {}", problem_name);
+        bail!(
+            "unknown problemName: {}. Known problems: [{}]",
+            problem_name,
+            problems::all_problems()
+                .iter()
+                .map(|p| p.problem_name)
+                .join(", ")
+        );
     }
 
     // Validate optional id if provided matches fetched id.
