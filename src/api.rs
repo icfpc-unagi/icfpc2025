@@ -3,15 +3,15 @@ use anyhow::{Context, Result};
 #[cfg(feature = "reqwest")]
 use once_cell::sync::OnceCell;
 #[cfg(feature = "reqwest")]
-use reqwest::Client;
+use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
 
 /// Fetches `id.json` from the same directory as `bearer.txt`.
 ///
 /// The path is: `https://storage.googleapis.com/icfpc2025-data/{UNAGI_PASSWORD}/id.json`.
-// Fetches raw JSON bytes of id.json
+// Fetches raw JSON bytes of id.json (blocking)
 #[cfg(feature = "reqwest")]
-pub async fn get_id_json_async() -> anyhow::Result<Vec<u8>> {
+pub fn get_id_json() -> anyhow::Result<Vec<u8>> {
     let unagi_password = std::env::var("UNAGI_PASSWORD").context("UNAGI_PASSWORD not set")?;
     let client = Client::new();
     let res = client
@@ -20,10 +20,8 @@ pub async fn get_id_json_async() -> anyhow::Result<Vec<u8>> {
             unagi_password
         ))
         .send()
-        .await
         .context("Failed to get id.json")?;
     res.bytes()
-        .await
         .map(|b| b.to_vec())
         .context("Failed to read id.json body")
 }
@@ -36,7 +34,7 @@ struct IdJsonOwned {
 }
 
 #[cfg(feature = "reqwest")]
-pub async fn get_id_async() -> anyhow::Result<String> {
+pub fn get_id() -> anyhow::Result<String> {
     // Fast path: return cached value if available.
     static ID_CACHE: OnceCell<String> = OnceCell::new();
     if let Some(id) = ID_CACHE.get() {
@@ -44,7 +42,7 @@ pub async fn get_id_async() -> anyhow::Result<String> {
     }
 
     // Slow path: fetch and cache.
-    let bytes = get_id_json_async().await?;
+    let bytes = get_id_json()?;
     let parsed: IdJsonOwned = serde_json::from_slice(&bytes).context("Failed to parse id.json")?;
     let id = parsed.id;
     let _ = ID_CACHE.set(id.clone());
@@ -73,12 +71,12 @@ struct SelectResponse {
 /// POST /select to choose a problem to solve.
 /// Returns the `problemName` echoed by the service.
 #[cfg(feature = "reqwest")]
-pub async fn select_async(problem_name: &str) -> Result<String> {
+pub fn select(problem_name: &str) -> Result<String> {
     let client = Client::new();
     let url = format!("{}/select", AEDIFICIUM_BASE_URL);
 
-    // Obtain id via get_id_async (parsed from id.json)
-    let id = get_id_async().await?;
+    // Obtain id via get_id (parsed from id.json)
+    let id = get_id()?;
     let req = SelectRequest {
         id: id.as_str(),
         problem_name,
@@ -87,19 +85,15 @@ pub async fn select_async(problem_name: &str) -> Result<String> {
         .post(url)
         .json(&req)
         .send()
-        .await
         .context("Failed to POST /select")?;
 
     if !res.status().is_success() {
         let status = res.status();
-        let body = res.text().await.unwrap_or_default();
+        let body = res.text().unwrap_or_default();
         anyhow::bail!("/select returned {}: {}", status, body);
     }
 
-    let body: SelectResponse = res
-        .json()
-        .await
-        .context("Failed to parse /select response")?;
+    let body: SelectResponse = res.json().context("Failed to parse /select response")?;
     Ok(body.problem_name)
 }
 
@@ -120,7 +114,7 @@ pub struct ExploreResponse {
 
 /// POST /explore with one or more route plans. Fetches `id` internally.
 #[cfg(feature = "reqwest")]
-pub async fn explore_async<I, S>(plans: I) -> Result<ExploreResponse>
+pub fn explore<I, S>(plans: I) -> Result<ExploreResponse>
 where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
@@ -128,7 +122,7 @@ where
     let client = Client::new();
     let url = format!("{}/explore", AEDIFICIUM_BASE_URL);
 
-    let id = get_id_async().await?;
+    let id = get_id()?;
     let plans_vec: Vec<String> = plans.into_iter().map(|s| s.as_ref().to_string()).collect();
     let req = ExploreRequest {
         id: id.as_str(),
@@ -139,19 +133,15 @@ where
         .post(url)
         .json(&req)
         .send()
-        .await
         .context("Failed to POST /explore")?;
 
     if !res.status().is_success() {
         let status = res.status();
-        let body = res.text().await.unwrap_or_default();
+        let body = res.text().unwrap_or_default();
         anyhow::bail!("/explore returned {}: {}", status, body);
     }
 
-    let body: ExploreResponse = res
-        .json()
-        .await
-        .context("Failed to parse /explore response")?;
+    let body: ExploreResponse = res.json().context("Failed to parse /explore response")?;
     Ok(body)
 }
 
@@ -193,11 +183,11 @@ struct GuessResponse {
 
 /// POST /guess to submit a candidate map. Returns whether it is correct.
 #[cfg(feature = "reqwest")]
-pub async fn guess_async(map: &Map) -> Result<bool> {
+pub fn guess(map: &Map) -> Result<bool> {
     let client = Client::new();
     let url = format!("{}/guess", AEDIFICIUM_BASE_URL);
 
-    let id = get_id_async().await?;
+    let id = get_id()?;
     let req = GuessRequest {
         id: id.as_str(),
         map,
@@ -207,19 +197,15 @@ pub async fn guess_async(map: &Map) -> Result<bool> {
         .post(url)
         .json(&req)
         .send()
-        .await
         .context("Failed to POST /guess")?;
 
     if !res.status().is_success() {
         let status = res.status();
-        let body = res.text().await.unwrap_or_default();
+        let body = res.text().unwrap_or_default();
         anyhow::bail!("/guess returned {}: {}", status, body);
     }
 
-    let body: GuessResponse = res
-        .json()
-        .await
-        .context("Failed to parse /guess response")?;
+    let body: GuessResponse = res.json().context("Failed to parse /guess response")?;
     Ok(body.correct)
 }
 
@@ -231,15 +217,15 @@ mod tests {
     // Runs only when explicitly enabled (e.g., `make test/unagi`).
     // Requires `UNAGI_PASSWORD` to be set to access the remote object.
     #[ignore]
-    #[tokio::test]
-    async fn sha1_of_id_json_matches_expected() -> Result<()> {
+    #[test]
+    fn sha1_of_id_json_matches_expected() -> Result<()> {
         // If UNAGI_PASSWORD isn't set, skip gracefully.
         if std::env::var("UNAGI_PASSWORD").is_err() {
             eprintln!("UNAGI_PASSWORD not set; skipping sha1 check for id.json");
             return Ok(());
         }
 
-        let bytes = get_id_json_async().await?;
+        let bytes = get_id_json()?;
 
         use sha1::{Digest, Sha1};
         let digest = Sha1::digest(&bytes);
