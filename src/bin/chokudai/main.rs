@@ -36,7 +36,7 @@ fn main() {
     //推測を行う
     //4グループの個数を適当に分ける
     let mut nums = vec![0, 0, 0, 0];
-    let mut cnts = vec![0, 0, 0, 0];
+    let mut cnts = [0usize; 4];
     for i in 0..m.door.len() {
         //eprintln!("label: {}, door: {}", m.label[i], m.door[i]);
         cnts[m.label[i]] += 1;
@@ -149,7 +149,7 @@ fn main() {
             }
             output.push_str(room_label_num.to_string().as_str());
             if i != n - 1 {
-                output.push_str(",");
+                output.push(',');
             }
         }
         output.push_str(&format!("],\"startingRoom\":{},\"connections\":[", ans[0]));
@@ -172,7 +172,7 @@ fn main() {
     }
 }
 
-fn error_check(ans: &Vec<usize>, m: &Moves, n: usize) -> (usize, Vec<Vec<usize>>) {
+fn error_check(ans: &[usize], m: &Moves, n: usize) -> (usize, Vec<Vec<usize>>) {
     let mut to = vec![vec![0; 6]; n];
     //to_cnt[i][j][k]: 部屋iからラベルjのドアを通ったときに部屋kに行く回数
     let mut to_cnt = vec![vec![vec![0; n]; 6]; n];
