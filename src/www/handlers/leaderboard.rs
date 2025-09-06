@@ -7,10 +7,18 @@
 use crate::{api, sql, svg};
 use actix_web::{HttpResponse, Responder, web};
 use anyhow::Result;
+use cached::proc_macro::cached;
 use chrono::NaiveDateTime;
 use mysql::params;
 use serde::Deserialize;
 use std::fmt::Write;
+use tokio::time::Duration;
+
+#[derive(Deserialize)]
+pub struct LeaderboardQuery {
+    #[serde(default)]
+    nocache: bool,
+}
 
 /// A helper to wrap content in the standard HTML page template.
 fn html_page(title: &str, body: &str) -> String {
@@ -48,11 +56,14 @@ pub struct ProblemPath {
 // We now downsample timestamps before download to reduce bandwidth.
 
 /// The main handler for showing a leaderboard for a specific problem.
-pub async fn show(path: web::Path<ProblemPath>) -> impl Responder {
+pub async fn show(
+    path: web::Path<ProblemPath>,
+    query: web::Query<LeaderboardQuery>,
+) -> impl Responder {
     let problem = &path.problem;
     let bucket = "icfpc2025-data";
 
-    let result = async move { render_problem_leaderboard(bucket, problem).await };
+    let result = async move { render_problem_leaderboard(bucket, problem, query.nocache).await };
     match result.await {
         Ok(html) => HttpResponse::Ok().content_type("text/html").body(html),
         Err(e) => crate::www::handlers::template::to_error_response(&e),
@@ -60,7 +71,7 @@ pub async fn show(path: web::Path<ProblemPath>) -> impl Responder {
 }
 
 /// The core logic for fetching data and rendering the leaderboard page for a single problem.
-async fn render_problem_leaderboard(bucket: &str, problem: &str) -> Result<String> {
+async fn render_problem_leaderboard(bucket: &str, problem: &str, nocache: bool) -> Result<String> {
     // Build problem navigation links for the top of the page.
     let mut nav_links: Vec<String> = Vec::new();
     nav_links.push("[<a href=\"/leaderboard/global\">Global</a>]".to_string());
@@ -75,32 +86,11 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str) -> Result<Strin
         nav_links.join(" ")
     );
 
-    // Fetch the latest successfully solved map for this problem from our database.
-    let mut map_html = String::new();
-    if let Some(row) = sql::row(
-        "
-        SELECT JSON_EXTRACT(g.api_log_request, '$.map') AS map,
-               g.api_log_created AS ts
-        FROM api_logs g
-        JOIN api_logs s
-          ON g.api_log_select_id = s.api_log_id
-            AND g.api_log_path = '/guess'
-            AND s.api_log_path = '/select'
-        WHERE JSON_EXTRACT(s.api_log_request, '$.problemName') = :problem
-          AND g.api_log_response_code = 200
-          AND JSON_EXTRACT(g.api_log_response, '$.correct') = true",
-        params! { "problem" => problem },
-    )? {
-        let map: api::Map = serde_json::from_str(&row.at::<String>(0)?)?;
-        // Render the map as an SVG.
-        map_html = format!(
-            "<div>Latest solved map (at {ts} UTC): {svg}</div>",
-            ts = row.at::<NaiveDateTime>(1)?,
-            svg = svg::render(&map),
-        );
+    let map_html = if nocache {
+        last_correct_guess_prime_cache(problem)?
     } else {
-        write!(map_html, "<div>No successful guess submitted</div>")?;
-    }
+        last_correct_guess(problem)?
+    };
 
     // List all timestamped snapshot directories from GCS.
     let (dirs, _files) = crate::gcp::gcs::list_dir(bucket, "history").await?;
@@ -140,7 +130,10 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str) -> Result<Strin
         set.spawn(async move {
             match crate::gcp::gcs::download_object(&b, &object).await {
                 Ok(bytes) => Ok((ts_clone, bytes)),
-                Err(_e) => Err(()), // Ignore errors for missing snapshots
+                Err(e) => {
+                    eprintln!("Error downloading object {ts_clone}: {e}");
+                    Err(())
+                }
             }
         });
     }
@@ -161,20 +154,27 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str) -> Result<Strin
     snaps.sort_by(|a, b| a.0.cmp(&b.0));
     let snaps = snaps;
 
-    // Build a JSON structure to be consumed by the client-side JavaScript.
+    #[derive(serde::Deserialize, serde::Serialize)]
+    struct LeaderboardEntry {
+        #[serde(rename = "teamName")]
+        team_name: String,
+        #[serde(rename = "teamPl")]
+        team_pl: String,
+        score: i64,
+    }
+    // Build JSON structure for the client side: [{ts, data: <json>}]
     #[derive(serde::Serialize)]
     struct Snapshot<'a> {
         ts: &'a str,
-        data: serde_json::Value,
+        data: Vec<LeaderboardEntry>,
     }
     let mut series: Vec<Snapshot> = Vec::with_capacity(snaps.len());
     for (ts, bytes) in &snaps {
-        let text = String::from_utf8_lossy(bytes);
-        let data =
-            serde_json::from_str::<serde_json::Value>(&text).unwrap_or(serde_json::Value::Null);
-        series.push(Snapshot { ts, data });
+        series.push(Snapshot {
+            ts,
+            data: serde_json::from_slice::<Vec<LeaderboardEntry>>(bytes).unwrap_or_default(),
+        });
     }
-    let series_js = serde_json::to_string(&series)?;
 
     // Construct the final HTML page, embedding the data and the charting JavaScript.
     let html = format!(
@@ -356,8 +356,43 @@ document.getElementById('lb-table').addEventListener('click', (ev) => {{
         nav = nav_html,
         problem = problem,
         count = snaps.len(),
-        series = series_js,
+        series = serde_json::to_string(&series)?,
     );
 
     Ok(html_page(&format!("Leaderboard - {problem}"), &html))
+}
+
+#[cached(
+    result = true,
+    key = "String",
+    convert = "{problem.into()}",
+    time = 300
+)]
+fn last_correct_guess(problem: &str) -> Result<String> {
+    let mut map_html = String::new();
+    if let Some(row) = sql::row(
+        "
+        SELECT JSON_EXTRACT(g.api_log_request, '$.map') AS map,
+               g.api_log_created AS ts
+        FROM api_logs g
+        JOIN api_logs s
+          ON g.api_log_select_id = s.api_log_id
+            AND g.api_log_path = '/guess'
+            AND s.api_log_path = '/select'
+        WHERE JSON_EXTRACT(s.api_log_request, '$.problemName') = :problem
+          AND g.api_log_response_code = 200
+          AND JSON_EXTRACT(g.api_log_response, '$.correct') = true",
+        params! { "problem" => problem },
+    )? {
+        let map: api::Map = serde_json::from_str(&row.at::<String>(0)?)?;
+        // Render the map as an SVG.
+        map_html = format!(
+            "<div>Latest solved map (at {ts} UTC): {svg}</div>",
+            ts = row.at::<NaiveDateTime>(1)?,
+            svg = svg::render(&map),
+        );
+    } else {
+        write!(map_html, "<div>No successful guess submitted</div>")?;
+    }
+    Ok(map_html)
 }

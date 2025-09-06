@@ -14,6 +14,7 @@
 //! a problem-solving session (`select` -> `explore`* -> `guess`).
 
 use anyhow::Result;
+use cached::proc_macro::once;
 use mysql::params;
 use std::env;
 use std::time::Duration;
@@ -22,6 +23,7 @@ use crate::sql;
 
 /// Gets the current user's name from environment variables (`USER` or `USERNAME`).
 /// Used for logging who holds or last held the lock.
+#[once]
 fn current_username() -> String {
     env::var("USER")
         .or_else(|_| env::var("USERNAME"))
