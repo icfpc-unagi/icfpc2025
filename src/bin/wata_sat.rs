@@ -141,12 +141,14 @@ fn first_use_SBP(sat: &mut cadical::Solver, V: &Vec<Vec<i32>>, id: &mut Counter)
 
 fn main() {
     let mut judge = get_judge_from_stdin();
-    let mut rng = rand::rng();
     let fix_label = true;
     let use_diff = true;
+    let use_same = false;
 
     let n = judge.num_rooms();
 
+    let mut rng = rand::rng();
+    // let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(84300);
     let mut plan = vec![];
     for _ in 0..(n * 18) {
         let c: usize = rng.random_range(0..6);
@@ -265,6 +267,40 @@ fn main() {
             }
         }
     }
+
+    if use_same {
+        let mut S = mat![0; labels.len(); labels.len()];
+        for i in 0..labels.len() {
+            for j in i..labels.len() {
+                S[i][j] = id.next();
+                S[j][i] = S[i][j];
+                if diff[i][j] {
+                    sat.add_clause([-S[i][j]]);
+                }
+            }
+            sat.add_clause([S[i][i]]);
+        }
+        for i in 0..plan.len() {
+            for j in i + 1..plan.len() {
+                if diff[i][j] {
+                    continue;
+                }
+                if plan[i] == plan[j] {
+                    // S[i][j] -> S[i+1][j+1]
+                    sat.add_clause([-S[i][j], S[i + 1][j + 1]]);
+                }
+                for u in 0..n {
+                    // S[i][j] -> (V[i][u] <-> V[j][u])
+                    sat.add_clause([-S[i][j], -V[i][u], V[j][u]]);
+                    sat.add_clause([-S[i][j], V[i][u], -V[j][u]]);
+                    sat.add_clause([S[i][j], -V[i][u], -V[j][u]]);
+                }
+            }
+        }
+    }
+
+    eprintln!("num_vars = {}", sat.num_variables());
+    eprintln!("num_clauses = {}", sat.num_clauses());
 
     assert_eq!(sat.solve(), Some(true));
 
