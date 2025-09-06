@@ -123,22 +123,8 @@ mod tests {
         assert_eq!(
             names,
             vec![
-                "probatio",
-                "primus",
-                "secundus",
-                "tertius",
-                "quartus",
-                "quintus",
-                "aleph",
-                "beth",
-                "gimel",
-                "daleth",
-                "he",
-                "vau",
-                "zain",
-                "hhet",
-                "teth",
-                "iod",
+                "probatio", "primus", "secundus", "tertius", "quartus", "quintus", "aleph", "beth",
+                "gimel", "daleth", "he", "vau", "zain", "hhet", "teth", "iod",
             ]
         );
         let sizes: Vec<usize> = all.iter().map(|p| p.size).collect();
