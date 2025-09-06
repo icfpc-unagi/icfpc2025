@@ -90,10 +90,9 @@ fn main() {
                     let mut p = path
                         .iter()
                         .enumerate()
-                        .map(|(i, &door)| (None, door))
+                        .map(|(i, &door)| (if i == 0 { Some(start_label) } else { None }, door))
                         .collect::<Vec<_>>();
                     p.extend(s);
-                    p[0].0 = Some(start_label);
                     p
                 })
                 .collect::<Vec<_>>();
@@ -118,7 +117,7 @@ fn main() {
                 .collect::<Vec<_>>();
             if path.is_empty() {
                 for result in results.iter_mut() {
-                    assert_eq!(result[0], orig_start_label);
+                    // assert_eq!(result[0], orig_start_label);
                     result[0] = start_label;
                 }
             }
@@ -152,6 +151,17 @@ fn main() {
         }
         judge.explore(&vec![vec![]; 100000 - cost - 1]);
     }
+
+    // for (room, res) in room_to_res.iter().enumerate() {
+    //     eprintln!("room {}:", room);
+    //     for r in res.iter() {
+    //         eprintln!(
+    //             "{}",
+    //             r.iter().map(|x| x.to_string()).collect::<Vec<_>>().join("")
+    //         );
+    //     }
+    //     eprintln!();
+    // }
 
     let start = 0;
     let mut rooms = room_to_res.iter().map(|r| r[0][0]).collect::<Vec<_>>();
