@@ -1,3 +1,13 @@
+#![allow(
+    non_snake_case,
+    dead_code,
+    clippy::if_same_then_else,
+    clippy::ptr_arg,
+    clippy::manual_memcpy,
+    clippy::needless_range_loop,
+    clippy::cloned_ref_to_slice_refs,
+)]
+
 use crate::{
     judge::{Guess, check_explore},
     mat,
