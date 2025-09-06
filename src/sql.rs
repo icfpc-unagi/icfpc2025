@@ -226,7 +226,7 @@ mod tests {
     #[test]
     #[ignore]
     fn exec_insert_and_batch_with_temporary_table() -> Result<()> {
-        // 同一コネクションで TEMPORARY TABLE を作成し、テスト内で完결させる
+        // 同一コネクションで TEMPORARY TABLE を作成し、テスト内で完結させる
         let mut conn = CLIENT.get_conn()?;
 
         conn.exec_drop(
