@@ -2,6 +2,11 @@
     clippy::needless_range_loop,
     clippy::useless_vec,
     clippy::partialeq_to_none,
+    clippy::ptr_arg,
+    clippy::needless_return,
+    clippy::len_zero,
+    clippy::unnecessary_mut_passed,
+    clippy::cloned_ref_to_slice_refs,
     non_snake_case,
     unused_variables
 )]
