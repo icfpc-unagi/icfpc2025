@@ -169,12 +169,13 @@ fn main() {
     let n = judge.num_rooms();
 
     let rng = rand_pcg::Pcg64Mcg::seed_from_u64(84300);
-    let explores = judge.explored();
-    let first = explores
-        .first()
-        .expect("explored is empty; provide explores via JSON");
-    let plan = first.plans[0].clone();
-    let labels = first.results[0].clone();
+    let explored = judge.explored();
+    assert!(
+        !explored.plans.is_empty(),
+        "explored is empty; provide explores via JSON"
+    );
+    let plan = explored.plans[0].clone();
+    let labels = explored.results[0].clone();
 
     let mut diff = mat![false; labels.len(); labels.len()];
     loop {

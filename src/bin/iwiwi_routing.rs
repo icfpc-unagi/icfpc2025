@@ -4,7 +4,7 @@ use itertools::Itertools;
 use ordered_float::OrderedFloat;
 use rand::prelude::*;
 
-fn coverage(local_judge: &LocalJudge, plan: &Vec<usize>) -> (f32, f32) {
+fn coverage(local_judge: &LocalJudge, plan: &Vec<usize>) -> (f32, f32, f32) {
     let mut cnt = vec![[0; 6]; local_judge.num_rooms()];
     let mut u = 0;
 
@@ -38,7 +38,9 @@ fn coverage(local_judge: &LocalJudge, plan: &Vec<usize>) -> (f32, f32) {
         .sum::<f32>()
         / (local_judge.num_rooms() as f32 * 6.0f32.log2());
 
-    (ratio_covered, normalized_entropy)
+    let perfect_covered = if ratio_covered == 1.0 { 1.0 } else { 0.0 };
+
+    (ratio_covered, normalized_entropy, perfect_covered)
 }
 
 fn generate_plan(num_rooms: usize, n_seeds: usize) -> Vec<usize> {
@@ -76,8 +78,8 @@ fn generate_plan(num_rooms: usize, n_seeds: usize) -> Vec<usize> {
                 .iter()
                 .map(|lj| coverage(lj, &tmp_plans))
                 .collect_vec();
-            let tmp_coverage = evals.iter().map(|(a, _)| a).sum::<f32>() / n_seeds as f32;
-            let tmp_entropy = evals.iter().map(|(_, a)| a).sum::<f32>() / n_seeds as f32;
+            let tmp_coverage = evals.iter().map(|(a, _, _)| a).sum::<f32>() / n_seeds as f32;
+            let tmp_entropy = evals.iter().map(|(_, a, _)| a).sum::<f32>() / n_seeds as f32;
 
             best = best.max((OrderedFloat(tmp_coverage), OrderedFloat(tmp_entropy), d));
         }
@@ -129,8 +131,8 @@ fn generate_plan_v2(num_rooms: usize, n_seeds: usize) -> Vec<usize> {
                     .iter()
                     .map(|lj| coverage(lj, &tmp_plans))
                     .collect_vec();
-                let tmp_coverage = evals.iter().map(|(a, _)| a).sum::<f32>() / n_seeds as f32;
-                let tmp_entropy = evals.iter().map(|(_, a)| a).sum::<f32>() / n_seeds as f32;
+                let tmp_coverage = evals.iter().map(|(a, _, _)| a).sum::<f32>() / n_seeds as f32;
+                let tmp_entropy = evals.iter().map(|(_, a, _)| a).sum::<f32>() / n_seeds as f32;
 
                 best = best.max((OrderedFloat(tmp_coverage), OrderedFloat(tmp_entropy), d));
             }
@@ -160,15 +162,20 @@ fn evaluate_plan(num_rooms: usize, plan: &Vec<usize>, seed_begin: usize, seed_en
         .iter()
         .map(|lj| coverage(lj, plan))
         .collect_vec();
-    let coverage_avg = evals.iter().map(|(a, _)| a).sum::<f32>() / (seed_end - seed_begin) as f32;
-    let entropy_avg = evals.iter().map(|(_, a)| a).sum::<f32>() / (seed_end - seed_begin) as f32;
+    let coverage_avg =
+        evals.iter().map(|(a, _, _)| a).sum::<f32>() / (seed_end - seed_begin) as f32;
+    let entropy_avg = evals.iter().map(|(_, a, _)| a).sum::<f32>() / (seed_end - seed_begin) as f32;
+    let perfect_avg = evals.iter().map(|(_, _, a)| a).sum::<f32>() / (seed_end - seed_begin) as f32;
 
-    eprintln!("Coverage: {:.6}, Entropy: {:.6}", coverage_avg, entropy_avg);
+    eprintln!(
+        "Coverage: {:.6}, Entropy: {:.6}, Perfect: {:.6}",
+        coverage_avg, entropy_avg, perfect_avg
+    );
 }
 
 fn main() {
     let n_rooms = 30;
-    let n_seeds = 3000;
+    let n_seeds = 1000;
 
     let plan = generate_plan(n_rooms, n_seeds);
     evaluate_plan(n_rooms, &plan, 0, n_seeds);

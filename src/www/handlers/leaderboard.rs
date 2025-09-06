@@ -45,28 +45,8 @@ pub struct ProblemPath {
     problem: String,
 }
 
-/// Reduces the number of points in a time-series vector to a maximum value.
-/// This is used to avoid rendering too many points on the chart, which can be slow.
-/// It does this by taking every Nth point, while ensuring the first and last points
-/// are always included.
-fn downsample<T: Clone>(v: &[(String, T)], max_points: usize) -> Vec<(String, T)> {
-    if v.len() <= max_points {
-        return v.to_vec();
-    }
-    let n = v.len();
-    let stride = n.div_ceil(max_points);
-    let mut out = Vec::new();
-    for (i, item) in v.iter().enumerate() {
-        if i % stride == 0 {
-            out.push(item.clone());
-        }
-    }
-    // Ensure the last element is always included for a complete graph.
-    if out.last().map(|x| &x.0) != v.last().map(|x| &x.0) {
-        out.push(v.last().unwrap().clone());
-    }
-    out
-}
+// Note: Previous implementation downsampled after download.
+// We now downsample timestamps before download to reduce bandwidth.
 
 /// The main handler for showing a leaderboard for a specific problem.
 pub async fn show(path: web::Path<ProblemPath>) -> impl Responder {
@@ -131,7 +111,28 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str) -> Result<Strin
         .collect();
     stamps.sort();
 
-    // Fetch all leaderboard snapshots for this problem in parallel.
+    // Downsample timestamps BEFORE download to avoid unnecessary transfers
+    let stamps = if stamps.len() <= 100 {
+        stamps
+    } else {
+        let n = stamps.len();
+        let stride = n.div_ceil(100);
+        let mut picked: Vec<String> = Vec::new();
+        for (i, ts) in stamps.iter().enumerate() {
+            if i % stride == 0 {
+                picked.push(ts.clone());
+            }
+        }
+        // Ensure the latest timestamp is included
+        if picked.last() != stamps.last()
+            && let Some(last) = stamps.last()
+        {
+            picked.push(last.clone());
+        }
+        picked
+    };
+
+    // Fetch selected snapshots in parallel
     let mut set = tokio::task::JoinSet::new();
     for ts in stamps {
         let object = format!("history/{}/{}.json", ts, problem);
@@ -157,9 +158,9 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str) -> Result<Strin
         }
     }
 
-    // Sort by timestamp and downsample if there are too many data points.
+    // Sort by timestamp (already downsampled before download)
     snaps.sort_by(|a, b| a.0.cmp(&b.0));
-    let snaps = downsample(&snaps, 100);
+    let snaps = snaps;
 
     // Build a JSON structure to be consumed by the client-side JavaScript.
     #[derive(serde::Serialize)]

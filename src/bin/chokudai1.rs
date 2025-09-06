@@ -31,12 +31,13 @@ fn main() {
         door: vec![],
     };
     // Use pre-recorded explores instead of generating random route
-    let explores = judge.explored();
-    let first = explores
-        .first()
-        .expect("explored is empty; provide explores via JSON");
-    m.door = first.plans[0].clone();
-    m.label = first.results[0].clone();
+    let explored = judge.explored();
+    assert!(
+        !explored.plans.is_empty(),
+        "explored is empty; provide explores via JSON"
+    );
+    m.door = explored.plans[0].clone();
+    m.label = explored.results[0].clone();
 
     //推測を行う
     //4グループの個数を適当に分ける

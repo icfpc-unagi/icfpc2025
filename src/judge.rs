@@ -31,9 +31,9 @@ pub trait Judge {
     /// Submits a final map guess to the judge. Returns `true` if the guess is correct.
     fn guess(&self, out: &Guess) -> bool;
     /// Returns a log of all explorations made so far.
-    fn explored(&self) -> Vec<Explored>;
+    fn explored(&self) -> Explored;
     /// Sets the exploration log, useful for replaying or resuming a state.
-    fn set_explored(&mut self, explored: Vec<Explored>);
+    fn set_explored(&mut self, explored: Explored);
 }
 
 /// Represents a solver's guess for the map's structure.
@@ -72,7 +72,7 @@ pub struct LocalJudge {
     /// The cumulative cost of explorations.
     cost: usize,
     /// A log of all explorations performed.
-    explored_log: Vec<Explored>,
+    explored_log: Explored,
 }
 
 impl Judge for LocalJudge {
@@ -101,10 +101,8 @@ impl Judge for LocalJudge {
         for r in &ret {
             println!("{}", r.iter().join(""));
         }
-        self.explored_log.push(Explored {
-            plans: plans.to_vec(),
-            results: ret.clone(),
-        });
+        self.explored_log.plans.extend(plans.to_vec());
+        self.explored_log.results.extend(ret.clone());
         ret
     }
     fn guess(&self, out: &Guess) -> bool {
@@ -160,10 +158,10 @@ impl Judge for LocalJudge {
         eprintln!("!log score {}", self.cost);
         true
     }
-    fn explored(&self) -> Vec<Explored> {
+    fn explored(&self) -> Explored {
         self.explored_log.clone()
     }
-    fn set_explored(&mut self, explored: Vec<Explored>) {
+    fn set_explored(&mut self, explored: Explored) {
         self.explored_log = explored;
     }
 }
@@ -178,7 +176,7 @@ pub struct RemoteJudge {
     /// The cumulative cost of explorations.
     cost: usize,
     /// A log of all explorations performed.
-    explored_log: Vec<Explored>,
+    explored_log: Explored,
 }
 
 impl Judge for RemoteJudge {
@@ -197,10 +195,8 @@ impl Judge for RemoteJudge {
         }
         // Delegate the actual exploration to the API client.
         let ret = api::explore(plans).expect("Failed to explore").results;
-        self.explored_log.push(Explored {
-            plans: plans.to_vec(),
-            results: ret.clone(),
-        });
+        self.explored_log.plans.extend(plans.to_vec());
+        self.explored_log.results.extend(ret.clone());
         for r in &ret {
             println!("{}", r.iter().join(""));
         }
@@ -252,10 +248,10 @@ impl Judge for RemoteJudge {
         }
         ret
     }
-    fn explored(&self) -> Vec<Explored> {
+    fn explored(&self) -> Explored {
         self.explored_log.clone()
     }
-    fn set_explored(&mut self, explored: Vec<Explored>) {
+    fn set_explored(&mut self, explored: Explored) {
         self.explored_log = explored;
     }
 }
@@ -272,9 +268,52 @@ impl RemoteJudge {
                 .unwrap_or_else(|| panic!("Unknown problem: {}", problem_name))
                 .size,
             cost: 0,
-            explored_log: Vec::new(),
+            explored_log: Explored {
+                plans: vec![],
+                results: vec![],
+            },
         }
     }
+}
+
+pub fn generate_random_edges_v2(
+    num_rooms: usize,
+    seed: u64,
+) -> Vec<((usize, usize), (usize, usize))> {
+    let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(seed);
+    let mut list1 = vec![];
+    let mut list2 = vec![];
+    for i in 0..num_rooms {
+        for door in 0..6 {
+            list1.push((i, door));
+            list2.push((i, door));
+        }
+    }
+    list1.shuffle(&mut rng);
+    list2.shuffle(&mut rng);
+
+    let mut used = vec![[false; 6]; num_rooms];
+    let mut edges = vec![];
+
+    let mut i2 = 0;
+    for &(u1, d1) in &list1 {
+        if used[u1][d1] {
+            continue;
+        }
+        while let (u2, d2) = list2[i2]
+            && used[u2][d2]
+        {
+            i2 += 1;
+        }
+        let (u2, d2) = list2[i2];
+        i2 += 1;
+
+        edges.push(((u1, d1), (u2, d2)));
+        used[u1][d1] = true;
+        used[u2][d2] = true;
+    }
+
+    edges
 }
 
 impl LocalJudge {
@@ -306,7 +345,34 @@ impl LocalJudge {
                     rooms,
                     graph,
                     cost: 0,
-                    explored_log: Vec::new(),
+                    explored_log: Explored {
+                        plans: vec![],
+                        results: vec![],
+                    },
+                }
+            }
+            "random2" => {
+                let mut rooms = (0..num_rooms).map(|i| i % 4).collect_vec();
+                rooms.shuffle(&mut rng);
+                let edges = generate_random_edges_v2(num_rooms, seed);
+                let mut graph = vec![[!0; 6]; num_rooms];
+                for ((u1, d1), (u2, d2)) in edges {
+                    if (u1 == u2) && (d1 == d2) {
+                        eprintln!("Self-loop: {} {}", u1, d1);
+                    }
+
+                    graph[u1][d1] = u2;
+                    graph[u2][d2] = u1;
+                }
+                Self {
+                    problem_name: problem_type.to_string(),
+                    rooms,
+                    graph,
+                    cost: 0,
+                    explored_log: Explored {
+                        plans: vec![],
+                        results: vec![],
+                    },
                 }
             }
             _ => panic!("Unknown problem type: {}", problem_type),
@@ -330,7 +396,10 @@ impl LocalJudge {
             rooms: map.rooms.clone(),
             graph,
             cost: 0,
-            explored_log: Vec::new(),
+            explored_log: Explored {
+                plans: vec![],
+                results: vec![],
+            },
         }
     }
 }
@@ -353,11 +422,6 @@ pub fn get_judge_from_stdin_with(explored: bool) -> Box<dyn Judge> {
     // allowing pre-seeding of maps, exploration logs, etc.
     if s.starts_with('{') {
         #[derive(serde::Deserialize)]
-        struct ExploreIn {
-            plans: Vec<String>,
-            results: Vec<Vec<usize>>,
-        }
-        #[derive(serde::Deserialize)]
         struct JsonIn {
             #[serde(default)]
             mode: Option<String>,
@@ -369,26 +433,24 @@ pub fn get_judge_from_stdin_with(explored: bool) -> Box<dyn Judge> {
             num_rooms: Option<usize>,
             #[serde(default)]
             map: Option<crate::api::Map>,
+            // New JSON format: top-level single explore
             #[serde(default)]
-            explores: Option<Vec<ExploreIn>>,
+            plans: Option<Vec<String>>, // e.g., ["0123"]
+            #[serde(default)]
+            results: Option<Vec<Vec<usize>>>,
         }
         let parsed: JsonIn = serde_json::from_str(s).expect("invalid JSON for json mode");
 
-        // Helper to convert explores JSON into the internal `Explored` struct.
-        fn to_explored(exps: Vec<ExploreIn>) -> Vec<Explored> {
-            let mut out = Vec::with_capacity(exps.len());
-            for e in exps {
-                let plans = e
-                    .plans
-                    .into_iter()
-                    .map(|p| p.chars().map(|c| (c as u8 - b'0') as usize).collect())
-                    .collect();
-                out.push(Explored {
-                    plans,
-                    results: e.results,
-                });
+        // Helper for new single-explore format: (plans, results) at top level
+        fn single_to_explored(plans: Vec<String>, results: Vec<Vec<usize>>) -> Explored {
+            let plans_parsed = plans
+                .into_iter()
+                .map(|p| p.chars().map(|c| (c as u8 - b'0') as usize).collect())
+                .collect::<Vec<Vec<usize>>>();
+            Explored {
+                plans: plans_parsed,
+                results,
             }
-            out
         }
 
         let mut j: Box<dyn Judge> = match parsed.mode.as_deref() {
@@ -398,8 +460,10 @@ pub fn get_judge_from_stdin_with(explored: bool) -> Box<dyn Judge> {
                     .as_ref()
                     .expect("problemName is required for remote mode");
                 let mut jr = RemoteJudge::new(name);
-                if let Some(exps) = parsed.explores {
-                    jr.set_explored(to_explored(exps));
+                if let (Some(plans), Some(results)) =
+                    (parsed.plans.as_ref(), parsed.results.as_ref())
+                {
+                    jr.set_explored(single_to_explored(plans.clone(), results.clone()));
                 }
                 Box::new(jr)
             }
@@ -407,10 +471,10 @@ pub fn get_judge_from_stdin_with(explored: bool) -> Box<dyn Judge> {
                 if let Some(map) = parsed.map {
                     // Create a local judge from a complete map definition.
                     Box::new(LocalJudge::new_json(parsed.problem_name, &map))
-                } else if let Some(exps) = parsed.explores {
+                } else if let (Some(plans), Some(results)) = (parsed.plans, parsed.results) {
                     // Create a local judge from existing exploration results, without the true map.
                     // This is useful for "replaying" a remote session locally.
-                    let explored_log = to_explored(exps);
+                    let explored_log = single_to_explored(plans, results);
                     let num_rooms = if let Some(n) = parsed.num_rooms {
                         n
                     } else if let Some(ref name) = parsed.problem_name {
@@ -428,14 +492,14 @@ pub fn get_judge_from_stdin_with(explored: bool) -> Box<dyn Judge> {
                         explored_log,
                     })
                 } else {
-                    panic!("JSON must contain either 'map' or 'explores'");
+                    panic!("JSON must contain either 'map' or ('plans' & 'results')");
                 }
             }
             Some(other) => panic!("unknown JSON mode: {}", other),
         };
 
         // Optionally pre-populate with a random exploration if requested and none were provided in the JSON.
-        if explored && j.explored().is_empty() {
+        if explored && j.explored().plans.is_empty() {
             let n = j.num_rooms();
             let mut rng = rand::thread_rng();
             let mut plan = Vec::with_capacity(18 * n);
@@ -473,7 +537,7 @@ pub fn get_judge_from_stdin_with(explored: bool) -> Box<dyn Judge> {
     };
 
     // Optionally pre-populate with a random exploration if requested.
-    if explored && j.explored().is_empty() {
+    if explored && j.explored().plans.is_empty() {
         let n = j.num_rooms();
         let mut rng = rand::thread_rng();
         let mut plan = Vec::with_capacity(18 * n);
