@@ -39,7 +39,7 @@ impl LayoutEngine {
         Self {
             nodes,
             adjacency_matrix,
-            k_repel: 10.0,
+            k_repel: 100.0,
             k_attract: 0.1,
             damping: 0.9,
             dt: 0.1,
@@ -118,7 +118,7 @@ impl LayoutEngine {
             let t = ((iterations - i) as f64 / (iterations as f64)).powf(2.0) * 100.0;
             self.update_forces();
             self.update_positions(t);
-            eprintln!("Iteration {}/{}", i + 1, iterations);
+            // eprintln!("Iteration {}/{}", i + 1, iterations);
             let mut stable = true;
             for node in &self.nodes {
                 if node.velocity.0.abs() > EPSILON
@@ -128,15 +128,15 @@ impl LayoutEngine {
                 {
                     stable = false;
                 }
-                eprintln!(
-                    "p=({:.2},{:.2}) v=({:.2},{:.2}) f=({:.2},{:.2})",
-                    node.position.0,
-                    node.position.1,
-                    node.velocity.0,
-                    node.velocity.1,
-                    node.force.0,
-                    node.force.1,
-                );
+                // eprintln!(
+                //     "p=({:.2},{:.2}) v=({:.2},{:.2}) f=({:.2},{:.2})",
+                //     node.position.0,
+                //     node.position.1,
+                //     node.velocity.0,
+                //     node.velocity.1,
+                //     node.force.0,
+                //     node.force.1,
+                // );
             }
             if stable {
                 break;

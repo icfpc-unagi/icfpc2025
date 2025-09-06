@@ -354,7 +354,10 @@ document.getElementById('lb-table').addEventListener('click', (ev) => {{
   highlightTeam(team);
 }});
 </script>
-{map_html}
+<div style="margin-top:32px;">
+  <h3>Latest successful map</h3>
+  {map_html}
+</div>
 "#,
         nav = nav_html,
         problem = problem,
