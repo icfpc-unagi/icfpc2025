@@ -368,7 +368,7 @@ document.getElementById('lb-table').addEventListener('click', (ev) => {{
     convert = "{problem.into()}",
     time = 300
 )]
-fn last_correct_guess(problem: &str) -> Result<String, anyhow::Error> {
+fn last_correct_guess(problem: &str) -> Result<String> {
     let mut map_html = String::new();
     if let Some(row) = sql::row(
         "
