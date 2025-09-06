@@ -3,8 +3,13 @@
     clippy::needless_range_loop,
     clippy::useless_vec,
     clippy::partialeq_to_none,
+    clippy::if_same_then_else,
+    clippy::ptr_arg,
+    clippy::manual_memcpy,
+    clippy::cloned_ref_to_slice_refs,
     non_snake_case,
-    unused_variables
+    unused_variables,
+    dead_code
 )]
 use icfpc2025::{judge::*, *};
 use rand::prelude::*;

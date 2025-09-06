@@ -1,3 +1,16 @@
+#![allow(
+    unused_variables,
+    unused_mut,
+    unused_imports,
+    dead_code,
+    clippy::needless_range_loop,
+    clippy::useless_vec,
+    clippy::ptr_arg,
+    clippy::needless_return,
+    clippy::len_zero,
+    clippy::cloned_ref_to_slice_refs,
+    non_snake_case
+)]
 use std::collections::{HashMap, VecDeque};
 
 use icfpc2025::judge::*;
