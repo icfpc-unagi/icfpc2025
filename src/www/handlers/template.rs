@@ -26,13 +26,6 @@ pub fn new_engine() -> Handlebars<'static> {
 <a href="/"></a>
 <ul>
 <li><a href="/leaderboard/global">リーダーボード</a></li>
-<li><a href="/my_submissions">提出一覧</a></li>
-<li><a href="/visualizer">可視化</a></li>
-<li><a href="/comm?q=get+index">index</a> <a href="/comm?q=get+scoreboard">📊</a></li>
-<li><a href="/comm?q=get+lambdaman">lambdaman</a> <a href="/comm?q=get+scoreboard+lambdaman">📊</a></li>
-<li><a href="/comm?q=get+spaceship">spaceship</a> <a href="/comm?q=get+scoreboard+spaceship">📊</a></li>
-<li><a href="/comm?q=get+3d">3d</a> <a href="/comm?q=get+scoreboard+3d">📊</a> <a href="/3d/web/www/index.html">⏯</a></li>
-<li><a href="/comm?q=get+efficiency">efficiency</a> <a href="/comm?q=get+scoreboard+efficiency">📊</a></li>
 </ul>
 </nav>
 <main>

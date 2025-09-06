@@ -36,23 +36,8 @@ pub struct ProblemPath {
     problem: String,
 }
 
-fn downsample<T: Clone>(v: &[(String, T)], max_points: usize) -> Vec<(String, T)> {
-    if v.len() <= max_points {
-        return v.to_vec();
-    }
-    let n = v.len();
-    let stride = n.div_ceil(max_points);
-    let mut out = Vec::new();
-    for (i, item) in v.iter().enumerate() {
-        if i % stride == 0 {
-            out.push(item.clone());
-        }
-    }
-    if out.last().map(|x| &x.0) != v.last().map(|x| &x.0) {
-        out.push(v.last().unwrap().clone());
-    }
-    out
-}
+// Note: Previous implementation downsampled after download.
+// We now downsample timestamps before download to reduce bandwidth.
 
 pub async fn show(path: web::Path<ProblemPath>) -> impl Responder {
     let problem = &path.problem;
@@ -154,7 +139,28 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str) -> Result<Strin
         .collect();
     stamps.sort();
 
-    // Fetch all snapshots in parallel
+    // Downsample timestamps BEFORE download to avoid unnecessary transfers
+    let stamps = if stamps.len() <= 100 {
+        stamps
+    } else {
+        let n = stamps.len();
+        let stride = n.div_ceil(100);
+        let mut picked: Vec<String> = Vec::new();
+        for (i, ts) in stamps.iter().enumerate() {
+            if i % stride == 0 {
+                picked.push(ts.clone());
+            }
+        }
+        // Ensure the latest timestamp is included
+        if picked.last() != stamps.last()
+            && let Some(last) = stamps.last()
+        {
+            picked.push(last.clone());
+        }
+        picked
+    };
+
+    // Fetch selected snapshots in parallel
     let mut set = tokio::task::JoinSet::new();
     for ts in stamps {
         let object = format!("history/{}/{}.json", ts, problem);
@@ -180,9 +186,9 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str) -> Result<Strin
         }
     }
 
-    // Sort by timestamp and downsample if needed
+    // Sort by timestamp (already downsampled before download)
     snaps.sort_by(|a, b| a.0.cmp(&b.0));
-    let snaps = downsample(&snaps, 100);
+    let snaps = snaps;
 
     // Build JSON structure for the client side: [{ts, data: <json>}]
     #[derive(serde::Serialize)]
