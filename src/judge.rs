@@ -64,6 +64,7 @@ fn parse_plan(plan: &str) -> Vec<Step> {
                     assert!(c < '6');
                     let door = (c as u8 - b'0') as usize;
                     res.push((newlabel, door));
+                    newlabel = None;
                 }
                 1 => {
                     assert!(c < '4');
@@ -161,7 +162,7 @@ impl Judge for LocalJudge {
                 route.push(self.rooms[u]);
             }
             ret.push(route);
-            assert!(plan.len() <= 18 * self.num_rooms());
+            assert!(plan.len() <= 6 * self.num_rooms());
         }
         for r in &ret {
             println!("{}", r.iter().join(""));
@@ -619,8 +620,8 @@ pub fn get_judge_from_stdin_with(explored: bool) -> Box<dyn Judge> {
         if explored && j.explored().plans.is_empty() {
             let n = j.num_rooms();
             let mut rng = rand::rng();
-            let mut plan = Vec::with_capacity(18 * n);
-            for _ in 0..(18 * n) {
+            let mut plan = Vec::with_capacity(6 * n);
+            for _ in 0..(6 * n) {
                 plan.push((None, rng.random_range(0..6)));
             }
             let _ = j.explore(&[plan]);
@@ -657,8 +658,8 @@ pub fn get_judge_from_stdin_with(explored: bool) -> Box<dyn Judge> {
     if explored && j.explored().plans.is_empty() {
         let n = j.num_rooms();
         let mut rng = rand::rng();
-        let mut plan = Vec::with_capacity(18 * n);
-        for _ in 0..(18 * n) {
+        let mut plan = Vec::with_capacity(6 * n);
+        for _ in 0..(6 * n) {
             plan.push((None, rng.random_range(0..6)));
         }
         let _ = j.explore(&[plan]);
