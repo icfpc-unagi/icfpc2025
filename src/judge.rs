@@ -261,7 +261,8 @@ pub fn get_judge_from_stdin() -> Box<dyn Judge> {
     input! { from &mut src, mode: String }
     match mode.as_str() {
         "local" => {
-            input! { from &mut src,
+            input! {
+                from &mut src,
                 problem_type: String,
                 num_rooms: usize,
                 seed: u64,
@@ -269,7 +270,8 @@ pub fn get_judge_from_stdin() -> Box<dyn Judge> {
             Box::new(LocalJudge::new(&problem_type, num_rooms, seed))
         }
         "remote" => {
-            input! { from &mut src,
+            input! {
+                from &mut src,
                 problem_name: String,
             }
             Box::new(RemoteJudge::new(&problem_name))
