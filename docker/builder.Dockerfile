@@ -6,6 +6,7 @@ RUN apt-get update \
         build-essential \
         pkg-config \
         libssl-dev \
+        cmake \
     && rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /work/src
 WORKDIR /work
