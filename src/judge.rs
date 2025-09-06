@@ -214,6 +214,47 @@ impl RemoteJudge {
     }
 }
 
+pub fn generate_random_edges_v2(
+    num_rooms: usize,
+    seed: u64,
+) -> Vec<((usize, usize), (usize, usize))> {
+    let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(seed);
+    let mut list1 = vec![];
+    let mut list2 = vec![];
+    for i in 0..num_rooms {
+        for door in 0..6 {
+            list1.push((i, door));
+            list2.push((i, door));
+        }
+    }
+    list1.shuffle(&mut rng);
+    list2.shuffle(&mut rng);
+
+    let mut used = vec![[false; 6]; num_rooms];
+    let mut edges = vec![];
+
+    let mut i2 = 0;
+    for i1 in 0..list1.len() {
+        let (u1, d1) = list1[i1];
+        if used[u1][d1] {
+            continue;
+        }
+        while let (u2, d2) = list2[i2]
+            && used[u2][d2]
+        {
+            i2 += 1;
+        }
+        let (u2, d2) = list2[i2];
+        i2 += 1;
+
+        edges.push(((u1, d1), (u2, d2)));
+        used[u1][d1] = true;
+        used[u2][d2] = true;
+    }
+
+    edges
+}
+
 impl LocalJudge {
     pub fn new(problem_type: &str, num_rooms: usize, seed: u64) -> Self {
         let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(seed);
@@ -244,6 +285,27 @@ impl LocalJudge {
                         plans: vec![],
                         results: vec![],
                     },
+                }
+            }
+            "random2" => {
+                let mut rooms = (0..num_rooms).map(|i| i % 4).collect_vec();
+                rooms.shuffle(&mut rng);
+                let edges = generate_random_edges_v2(num_rooms, seed);
+                let mut graph = vec![[!0; 6]; num_rooms];
+                for ((u1, d1), (u2, d2)) in edges {
+                    if (u1 == u2) && (d1 == d2) {
+                        eprintln!("Self-loop: {} {}", u1, d1);
+                    }
+
+                    graph[u1][d1] = u2;
+                    graph[u2][d2] = u1;
+                }
+                Self {
+                    problem_name: problem_type.to_string(),
+                    rooms,
+                    graph,
+                    cost: 0,
+                    explored_log: Vec::new(),
                 }
             }
             _ => panic!("Unknown problem type: {}", problem_type),

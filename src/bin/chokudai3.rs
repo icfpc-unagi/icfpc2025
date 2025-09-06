@@ -140,7 +140,7 @@ fn dfs(list: &Vec<usize>, m: &Moves, step: usize) -> usize {
 }
 
 fn dfs2(list: &Vec<usize>, m: &Moves, step: usize, need: usize, st: &mut SameTable) {
-    if step == 1 {
+    if need == 1 {
         for a in 0..list.len() {
             for b in a + 1..list.len() {
                 st.set_same(list[a], list[b]);
@@ -322,23 +322,64 @@ fn main() {
         loop {
             loop_cnt += 1;
             let mut new_edges = edges.clone();
-            let c = rng.random_range(0..(n * 6));
 
-            //2つの辺をランダムに選んで繋ぎ変える
-            let u1 = c / 6;
-            let d1 = c % 6;
-            let c2 = rng.random_range(0..(n * 6));
-            let u2 = c2 / 6;
-            let d2 = c2 % 6;
-            if u1 == u2 || new_edges[u1][d1] == (u2, d2) || new_edges[u2][d2] == (u1, d1) {
-                continue;
+            let r = rnd.random_range(0..2);
+
+            if r == 0 {
+                //2つの辺をランダムに選んで繋ぎ変える
+                let c = rng.random_range(0..(n * 6));
+                let u1 = c / 6;
+                let d1 = c % 6;
+                let c2 = rng.random_range(0..(n * 6));
+                let u2 = c2 / 6;
+                let d2 = c2 % 6;
+                if u1 == u2 || new_edges[u1][d1] == (u2, d2) || new_edges[u2][d2] == (u1, d1) {
+                    continue;
+                }
+                let v1 = new_edges[u1][d1];
+                let v2 = new_edges[u2][d2];
+                new_edges[u1][d1] = v2;
+                new_edges[u2][d2] = v1;
+                new_edges[v1.0][v1.1] = (u2, d2);
+                new_edges[v2.0][v2.1] = (u1, d1);
+            } else if r == 1 {
+                //3つの辺をランダムに選んで繋ぎ変える
+                let c = rng.random_range(0..(n * 6));
+                let u1 = c / 6;
+                let d1 = c % 6;
+
+                let c2 = rng.random_range(0..(n * 6));
+                let u2 = c2 / 6;
+                let d2 = c2 % 6;
+
+                let c3 = rng.random_range(0..(n * 6));
+                let u3 = c3 / 6;
+                let d3 = c3 % 6;
+
+                //1-2
+                if u1 == u2 || new_edges[u1][d1] == (u2, d2) || new_edges[u2][d2] == (u1, d1) {
+                    continue;
+                }
+                //1-3
+                if u1 == u3 || new_edges[u1][d1] == (u3, d3) || new_edges[u3][d3] == (u1, d1) {
+                    continue;
+                }
+                //2-3
+                if u2 == u3 || new_edges[u2][d2] == (u3, d3) || new_edges[u3][d3] == (u2, d2) {
+                    continue;
+                }
+
+                let v1 = new_edges[u1][d1];
+                let v2 = new_edges[u2][d2];
+                let v3 = new_edges[u3][d3];
+
+                new_edges[u1][d1] = v2;
+                new_edges[u2][d2] = v3;
+                new_edges[u3][d3] = v1;
+                new_edges[v1.0][v1.1] = (u3, d3);
+                new_edges[v2.0][v2.1] = (u1, d1);
+                new_edges[v3.0][v3.1] = (u2, d2);
             }
-            let v1 = new_edges[u1][d1];
-            let v2 = new_edges[u2][d2];
-            new_edges[u1][d1] = v2;
-            new_edges[u2][d2] = v1;
-            new_edges[v1.0][v1.1] = (u2, d2);
-            new_edges[v2.0][v2.1] = (u1, d1);
 
             let new_wrong = error_check(&new_edges, &m, n, &label_id);
             if new_wrong <= wrong || rnd.random_bool(0.03) {
