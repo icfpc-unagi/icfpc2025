@@ -53,6 +53,7 @@ pub trait Judge {
     fn explored(&self) -> Explored;
     /// Sets the exploration log, useful for replaying or resuming a state.
     fn set_explored(&mut self, explored: Explored);
+    fn restart(&mut self);
 }
 
 /// Represents a solver's guess for the map's structure.
@@ -183,6 +184,13 @@ impl Judge for LocalJudge {
     fn set_explored(&mut self, explored: Explored) {
         self.explored_log = explored;
     }
+    fn restart(&mut self) {
+        self.cost = 0;
+        self.explored_log = Explored {
+            plans: vec![],
+            results: vec![],
+        };
+    }
 }
 
 /// A judge that interacts with the remote contest server.
@@ -272,6 +280,20 @@ impl Judge for RemoteJudge {
     }
     fn set_explored(&mut self, explored: Explored) {
         self.explored_log = explored;
+    }
+    fn restart(&mut self) {
+        api::select(&self.problem_name).expect("Failed to select problem");
+        *self = Self {
+            problem_name: self.problem_name.to_string(),
+            num_rooms: problems::get_problem(&self.problem_name)
+                .unwrap_or_else(|| panic!("Unknown problem: {}", &self.problem_name))
+                .size,
+            cost: 0,
+            explored_log: Explored {
+                plans: vec![],
+                results: vec![],
+            },
+        }
     }
 }
 

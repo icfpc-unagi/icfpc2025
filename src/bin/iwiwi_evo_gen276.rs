@@ -579,9 +579,61 @@ fn extract_guess(
 
 // ------------------------------ Main solve -------------------------------
 
-fn solve(judge: &mut dyn icfpc2025::judge::Judge) {
+fn solve(judge: &mut dyn icfpc2025::judge::Judge) -> bool {
     // 1) Acquire single explore trace with a balanced, shuffled plan
     let info = acquire_plan_and_labels(judge);
+    let mut diff_count = 0;
+    for i in 0..info.labels.len() {
+        for j in 0..i {
+            if info.diff[i][j] {
+                diff_count += 1;
+            }
+        }
+    }
+    eprintln!("diff_count = {}", diff_count);
+    // if diff_count < 113800 {
+    //     return false;
+    // }
+    let mut aib = mat![false; 4; 6; 4];
+    for k in 0..info.plan.len() {
+        let a = info.labels[k];
+        let i = info.plan[k];
+        let b = info.labels[k + 1];
+        aib[a][i][b] = true;
+    }
+    let mut cnt = 0;
+    for a in 0..4 {
+        for i in 0..6 {
+            for b in 0..4 {
+                if !aib[a][i][b] {
+                    cnt += 1;
+                }
+            }
+        }
+    }
+    eprintln!("aib_missing = {}", cnt);
+    let mut label_door = mat![0; 4; 6];
+    for i in 0..info.plan.len() {
+        let door = info.plan[i];
+        let label = info.labels[i];
+        label_door[label][door] += 1;
+    }
+    let mut sum = 0.0;
+    let mut num = vec![0; 4];
+    for i in 0..info.n {
+        num[i % 4] += 1;
+    }
+    for i in 0..4 {
+        for j in 0..6 {
+            let expected = num[i] as f64 / info.n as f64 * info.plan.len() as f64 / 6.0;
+            sum += (expected - label_door[i][j] as f64).powi(2);
+        }
+    }
+    eprintln!("label-door-chi2 = {}", sum);
+    if sum > 200.0 {
+        return false;
+    }
+    eprintln!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
 
     // 2) Build buckets and candidates
     let buckets = build_buckets(&info);
@@ -607,11 +659,13 @@ fn solve(judge: &mut dyn icfpc2025::judge::Judge) {
         &[info.plan.clone()],
         &[info.labels.clone()]
     ));
-    judge.guess(&guess);
+    judge.guess(&guess)
 }
 // EVOLVE-BLOCK-END
 
 fn main() {
     let mut judge = icfpc2025::judge::get_judge_from_stdin();
-    solve(judge.as_mut());
+    while !solve(judge.as_mut()) {
+        judge.restart();
+    }
 }
