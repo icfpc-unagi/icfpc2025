@@ -12,5 +12,5 @@ TARGET_DIR="${CARGO_TARGET_DIR:-target}"
 #   [ -x "$p" ] && exec "$p" "$@"
 # done
 
-cargo build --manifest-path "$REPO_DIR/Cargo.toml" --bin "$name"
-exec "$TARGET_DIR/debug/$name" "$@"
+cargo build --manifest-path "$REPO_DIR/Cargo.toml" --release --bin "$name"
+exec "$TARGET_DIR/release/$name" "$@"

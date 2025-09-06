@@ -16,6 +16,25 @@ use itertools::Itertools;
 use proconio::*;
 use rand::prelude::*;
 
+#[derive(serde::Deserialize, Clone, Debug)]
+pub struct JsonIn {
+    #[serde(default)]
+    pub mode: Option<String>,
+    #[serde(rename = "problemName")]
+    #[serde(default)]
+    pub problem_name: Option<String>,
+    #[serde(rename = "numRooms")]
+    #[serde(default)]
+    pub num_rooms: Option<usize>,
+    #[serde(default)]
+    pub map: Option<crate::api::Map>,
+    // Top-level single explore format
+    #[serde(default)]
+    pub plans: Option<Vec<String>>, // e.g., ["0123"]
+    #[serde(default)]
+    pub results: Option<Vec<Vec<usize>>>,
+}
+
 /// A trait abstracting the problem environment.
 ///
 /// This allows solver logic to be written once and used against both a local
@@ -383,12 +402,41 @@ impl LocalJudge {
     pub fn new_json(problem_name: Option<String>, map: &crate::api::Map) -> Self {
         let n = map.rooms.len();
         let mut graph = vec![[0usize; 6]; n];
+
+        // Initialize RNG from env var SEED (fallback to 0)
+        let seed: u64 = std::env::var("SEED")
+            .ok()
+            .and_then(|s| {
+                let t = s.trim();
+                if t.is_empty() {
+                    None
+                } else {
+                    t.parse::<u64>().ok()
+                }
+            })
+            .unwrap_or(0);
+        let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(seed);
+
+        // Build per-room door remapping (0..5 -> shuffled 0..5)
+        let mut door_maps: Vec<[usize; 6]> = Vec::with_capacity(n);
+        for _ in 0..n {
+            let mut m = [0usize; 6];
+            for (d, slot) in m.iter_mut().enumerate() {
+                *slot = d;
+            }
+            m.shuffle(&mut rng);
+            door_maps.push(m);
+        }
+
+        // Apply remapping when constructing the graph
         for c in &map.connections {
             let fr = &c.from;
             let to = &c.to;
             if fr.room < n && fr.door < 6 && to.room < n && to.door < 6 {
-                graph[fr.room][fr.door] = to.room;
-                graph[to.room][to.door] = fr.room;
+                let new_fd = door_maps[fr.room][fr.door];
+                let new_td = door_maps[to.room][to.door];
+                graph[fr.room][new_fd] = to.room;
+                graph[to.room][new_td] = fr.room;
             }
         }
         Self {
@@ -421,24 +469,6 @@ pub fn get_judge_from_stdin_with(explored: bool) -> Box<dyn Judge> {
     // This provides a flexible way to configure the judge for local testing,
     // allowing pre-seeding of maps, exploration logs, etc.
     if s.starts_with('{') {
-        #[derive(serde::Deserialize)]
-        struct JsonIn {
-            #[serde(default)]
-            mode: Option<String>,
-            #[serde(rename = "problemName")]
-            #[serde(default)]
-            problem_name: Option<String>,
-            #[serde(rename = "numRooms")]
-            #[serde(default)]
-            num_rooms: Option<usize>,
-            #[serde(default)]
-            map: Option<crate::api::Map>,
-            // New JSON format: top-level single explore
-            #[serde(default)]
-            plans: Option<Vec<String>>, // e.g., ["0123"]
-            #[serde(default)]
-            results: Option<Vec<Vec<usize>>>,
-        }
         let parsed: JsonIn = serde_json::from_str(s).expect("invalid JSON for json mode");
 
         // Helper for new single-explore format: (plans, results) at top level
