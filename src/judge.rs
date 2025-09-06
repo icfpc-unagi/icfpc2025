@@ -3,6 +3,25 @@ use itertools::Itertools;
 use proconio::*;
 use rand::prelude::*;
 
+#[derive(serde::Deserialize, Clone, Debug)]
+pub struct JsonIn {
+    #[serde(default)]
+    pub mode: Option<String>,
+    #[serde(rename = "problemName")]
+    #[serde(default)]
+    pub problem_name: Option<String>,
+    #[serde(rename = "numRooms")]
+    #[serde(default)]
+    pub num_rooms: Option<usize>,
+    #[serde(default)]
+    pub map: Option<crate::api::Map>,
+    // Top-level single explore format
+    #[serde(default)]
+    pub plans: Option<Vec<String>>, // e.g., ["0123"]
+    #[serde(default)]
+    pub results: Option<Vec<Vec<usize>>>,
+}
+
 pub trait Judge {
     fn num_rooms(&self) -> usize;
     fn problem_name(&self) -> &str;
@@ -379,24 +398,6 @@ pub fn get_judge_from_stdin_with(explored: bool) -> Box<dyn Judge> {
     let s = input.trim_start();
     // If input begins with '{', treat entire input as JSON
     if s.starts_with('{') {
-        #[derive(serde::Deserialize)]
-        struct JsonIn {
-            #[serde(default)]
-            mode: Option<String>,
-            #[serde(rename = "problemName")]
-            #[serde(default)]
-            problem_name: Option<String>,
-            #[serde(rename = "numRooms")]
-            #[serde(default)]
-            num_rooms: Option<usize>,
-            #[serde(default)]
-            map: Option<crate::api::Map>,
-            // New JSON format: top-level single explore
-            #[serde(default)]
-            plans: Option<Vec<String>>, // e.g., ["0123"]
-            #[serde(default)]
-            results: Option<Vec<Vec<usize>>>,
-        }
         let parsed: JsonIn = serde_json::from_str(s).expect("invalid JSON for json mode");
 
         // Helper for new single-explore format: (plans, results) at top level

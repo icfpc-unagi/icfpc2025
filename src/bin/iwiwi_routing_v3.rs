@@ -1,12 +1,15 @@
-#![allow(
-    clippy::type_complexity,
-    clippy::ptr_arg,
-    clippy::overly_complex_bool_expr
-)]
-use icfpc2025::judge::*;
+// #![allow(
+//     clippy::type_complexity,
+//     clippy::ptr_arg,
+//     clippy::overly_complex_bool_expr
+// )]
+use icfpc2025::judge::{JsonIn, *};
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
 use rand::prelude::*;
+use rand_chacha::ChaCha20Rng;
+use std::env;
+use std::io::Read;
 
 struct Instance {
     num_rooms: usize,
@@ -88,15 +91,58 @@ fn coverage(inst: &Instance, plan: &Vec<usize>) -> (f32, f32, f32) {
     )
 }
 
-fn generate_plan(num_rooms: usize, n_seeds: usize) -> Vec<usize> {
+type Edge = ((usize, usize), (usize, usize));
+
+fn shuffled_instances(
+    num_rooms: usize,
+    n_seeds: usize,
+    base_seed: u64,
+    base_edges: &Vec<Edge>,
+) -> Vec<Instance> {
+    let mut instances = Vec::with_capacity(n_seeds);
+    for i in 0..n_seeds {
+        let edges: Vec<Edge> = base_edges.clone();
+        // Per-room door shuffle seeded from base_seed + i
+        let mut rng = ChaCha20Rng::seed_from_u64(base_seed.wrapping_add(i as u64));
+        let mut door_maps: Vec<[usize; 6]> = Vec::with_capacity(num_rooms);
+        for _ in 0..num_rooms {
+            let mut m = [0usize; 6];
+            for (d, slot) in m.iter_mut().enumerate() {
+                *slot = d;
+            }
+            m.shuffle(&mut rng);
+            door_maps.push(m);
+        }
+        let mut remapped = Vec::with_capacity(edges.len());
+        for &((u1, d1), (u2, d2)) in &edges {
+            let nd1 = door_maps[u1][d1];
+            let nd2 = door_maps[u2][d2];
+            remapped.push(((u1, nd1), (u2, nd2)));
+        }
+        instances.push(build_instance(num_rooms, &remapped));
+    }
+    instances
+}
+
+fn read_seed_from_env() -> u64 {
+    env::var("SEED")
+        .ok()
+        .and_then(|s| {
+            let t = s.trim();
+            if t.is_empty() {
+                None
+            } else {
+                t.parse::<u64>().ok()
+            }
+        })
+        .unwrap_or(0)
+}
+
+fn generate_plan(num_rooms: usize, n_seeds: usize, base_edges: &Vec<Edge>) -> Vec<usize> {
     let mut rng = rand::rng();
 
-    let instances = (0..n_seeds)
-        .map(|i| {
-            let edges = generate_random_edges_v2(num_rooms, i as u64);
-            build_instance(num_rooms, &edges)
-        })
-        .collect_vec();
+    let base_seed = read_seed_from_env();
+    let instances = shuffled_instances(num_rooms, n_seeds, base_seed, base_edges);
 
     /*
         let mut vis = vec![vec![[0; 6]; num_rooms]; n_seeds];
@@ -157,15 +203,11 @@ fn generate_plan(num_rooms: usize, n_seeds: usize) -> Vec<usize> {
     plans
 }
 
-fn generate_plan_v2(num_rooms: usize, n_seeds: usize) -> Vec<usize> {
+fn generate_plan_v2(num_rooms: usize, n_seeds: usize, base_edges: &Vec<Edge>) -> Vec<usize> {
     let mut rng = rand::rng();
 
-    let instances = (0..n_seeds)
-        .map(|i| {
-            let edges = generate_random_edges_v2(num_rooms, i as u64);
-            build_instance(num_rooms, &edges)
-        })
-        .collect_vec();
+    let base_seed = read_seed_from_env();
+    let instances = shuffled_instances(num_rooms, n_seeds, base_seed, base_edges);
 
     /*
         let mut vis = vec![vec![[0; 6]; num_rooms]; n_seeds];
@@ -247,14 +289,38 @@ fn evaluate_plan(num_rooms: usize, plan: &Vec<usize>, seed_begin: usize, seed_en
 }
 
 fn main() {
-    let n_rooms = 30;
-    let n_seeds = 10000;
+    // Accept same JSON format: may contain map, plans/results, numRooms
+    let mut stdin_buf = String::new();
+    let _ = std::io::stdin().read_to_string(&mut stdin_buf);
+    let stdin_trim = stdin_buf.trim();
 
-    let plan = generate_plan(n_rooms, n_seeds);
+    let (n_rooms, base_edges): (usize, Vec<Edge>) = if stdin_trim.starts_with('{') {
+        let parsed: JsonIn = serde_json::from_str(stdin_trim).expect("invalid JSON for v3");
+        if let Some(map) = parsed.map {
+            let n = map.rooms.len();
+            let mut edges: Vec<Edge> = Vec::with_capacity(n * 3);
+            for c in map.connections.iter() {
+                let fr = &c.from;
+                let to = &c.to;
+                if fr.room < n && fr.door < 6 && to.room < n && to.door < 6 {
+                    edges.push(((fr.room, fr.door), (to.room, to.door)));
+                }
+            }
+            (n, edges)
+        } else {
+            panic!("JSON must contain 'map' for v3 routing instances");
+        }
+    } else {
+        panic!("Expected JSON input with 'map' for v3 routing instances");
+    };
+
+    let n_seeds = 10_000;
+
+    let plan = generate_plan(n_rooms, n_seeds, &base_edges);
     evaluate_plan(n_rooms, &plan, 0, n_seeds);
     evaluate_plan(n_rooms, &plan, n_seeds, n_seeds * 2);
 
-    let plan = generate_plan_v2(n_rooms, n_seeds);
+    let plan = generate_plan_v2(n_rooms, n_seeds, &base_edges);
     evaluate_plan(n_rooms, &plan, 0, n_seeds);
     evaluate_plan(n_rooms, &plan, n_seeds, n_seeds * 2);
 
