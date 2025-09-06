@@ -119,8 +119,8 @@ impl Judge for RemoteJudge {
         self.cost += plans.len() + 1;
         for plan in plans {
             println!("{}", plan.iter().map(|&d| d.to_string()).join(""));
+            assert!(plan.len() <= 18 * self.num_rooms());
         }
-        assert!(plans.len() <= 18 * self.num_rooms);
         let ret = api::explore(plans).expect("Failed to explore").results;
         for r in &ret {
             println!("{}", r.iter().join(""));
