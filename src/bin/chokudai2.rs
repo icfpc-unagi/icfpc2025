@@ -208,12 +208,13 @@ fn main() {
     };
     let mut rnd = rand::rng();
     // 事前に与えられた explore ログを使用
-    let explores = judge.explored();
-    let first = explores
-        .first()
-        .expect("explored is empty; provide explores via JSON");
-    m.door = first.plans[0].clone();
-    m.label = first.results[0].clone();
+    let explored = judge.explored();
+    assert!(
+        !explored.plans.is_empty(),
+        "explored is empty; provide explores via JSON"
+    );
+    m.door = explored.plans[0].clone();
+    m.label = explored.results[0].clone();
 
     //numがちゃんと検出できるか調べる
     let mut lists = vec![vec![]; 4];
