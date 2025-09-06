@@ -140,7 +140,7 @@ fn dfs(list: &Vec<usize>, m: &Moves, step: usize) -> usize {
 }
 
 fn dfs2(list: &Vec<usize>, m: &Moves, step: usize, need: usize, st: &mut SameTable) {
-    if step == 1 {
+    if need == 1 {
         for a in 0..list.len() {
             for b in a + 1..list.len() {
                 st.set_same(list[a], list[b]);
