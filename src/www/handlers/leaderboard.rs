@@ -270,7 +270,7 @@ const chart = new Chart(canvas.getContext('2d'), {{
     }},
     scales: {{
       x: {{ type: 'time', time: {{ unit: 'minute' }} }},
-      y: {{ beginAtZero: true }},
+      y: ((problem === 'global') ? {{ beginAtZero: true }} : {{ type: 'logarithmic' }}),
     }},
     adapters: {{
       date: {{ zone: 'Asia/Tokyo' }},
