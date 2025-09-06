@@ -12,6 +12,7 @@
 
 use anyhow::{Context, Result};
 
+use cached::proc_macro::once;
 #[cfg(feature = "reqwest")]
 use once_cell::sync::{Lazy, OnceCell};
 #[cfg(feature = "reqwest")]
@@ -32,6 +33,7 @@ const API_REQUEST_TIMEOUT_SECS: u64 = 120;
 
 /// Creates a new reqwest HTTP client with a default timeout.
 #[cfg(feature = "reqwest")]
+#[once(result = true)]
 fn http_client() -> Result<Client> {
     Client::builder()
         .timeout(Duration::from_secs(API_REQUEST_TIMEOUT_SECS))
@@ -47,6 +49,7 @@ fn http_client() -> Result<Client> {
 /// This function performs a blocking HTTP GET request and returns the raw
 /// response body as bytes.
 #[cfg(feature = "reqwest")]
+#[once(result = true)]
 pub fn get_id_json() -> anyhow::Result<Vec<u8>> {
     let unagi_password = std::env::var("UNAGI_PASSWORD").context("UNAGI_PASSWORD not set")?;
     let client = http_client()?;
@@ -95,6 +98,7 @@ pub fn get_id() -> anyhow::Result<String> {
 /// It uses the `AEDIFICIUM_ENDPOINT` environment variable if set, otherwise
 /// defaults to `https://icfpc.sx9.jp/api`.
 #[cfg(feature = "reqwest")]
+#[once]
 fn aedificium_base() -> String {
     std::env::var("AEDIFICIUM_ENDPOINT")
         .ok()

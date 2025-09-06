@@ -5,6 +5,7 @@
 //! temporary access token that can be used to authorize API requests.
 
 use anyhow::{Context, Result};
+use cached::proc_macro::once;
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use serde::{Deserialize, Serialize};
 
@@ -42,6 +43,8 @@ struct Claims {
 ///
 /// # Returns
 /// A `Result` containing the access token string if successful.
+// #[cached(result = true)]
+#[once(result = true)]
 pub async fn get_access_token() -> Result<String> {
     // 1. Download the service account key file.
     let unagi_password = std::env::var("UNAGI_PASSWORD").context("UNAGI_PASSWORD not set")?;
