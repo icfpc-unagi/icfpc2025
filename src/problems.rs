@@ -1,22 +1,12 @@
-//! # Contest Problem Definitions
-//!
-//! This module contains the static definitions for the official contest problems,
-//! including their names and sizes (number of rooms). It provides convenient
-//! functions for accessing this data.
-
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 
-/// Represents a single contest problem.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Problem {
-    /// The official name of the problem, e.g., "probatio".
     pub problem_name: &'static str,
-    /// The number of rooms in the problem's map.
     pub size: usize,
 }
 
-/// A static array containing the data for all known contest problems.
 const PROBLEMS_DATA: &[Problem] = &[
     Problem {
         problem_name: "probatio",
@@ -44,13 +34,11 @@ const PROBLEMS_DATA: &[Problem] = &[
     },
 ];
 
-/// Returns a slice containing all defined contest problems.
 pub fn all_problems() -> &'static [Problem] {
     PROBLEMS_DATA
 }
 
-/// A lazily-initialized HashMap for efficient lookup of problems by name.
-/// This avoids iterating through the `PROBLEMS_DATA` slice on every lookup.
+// Build a name -> problem map once for O(1) lookup.
 static PROBLEM_MAP: Lazy<HashMap<&'static str, &'static Problem>> = Lazy::new(|| {
     let mut m = HashMap::new();
     for p in PROBLEMS_DATA.iter() {
@@ -59,14 +47,6 @@ static PROBLEM_MAP: Lazy<HashMap<&'static str, &'static Problem>> = Lazy::new(||
     m
 });
 
-/// Looks up a problem by its name.
-///
-/// # Arguments
-/// * `name` - The name of the problem to find.
-///
-/// # Returns
-/// An `Option<&'static Problem>` which is `Some` if a problem with the
-/// given name exists, and `None` otherwise.
 pub fn get_problem(name: &str) -> Option<&'static Problem> {
     PROBLEM_MAP.get(name).copied()
 }

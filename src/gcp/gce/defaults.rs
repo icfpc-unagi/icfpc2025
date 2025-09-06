@@ -1,20 +1,7 @@
-//! # GCE Instance Default Configurations
-//!
-//! This module provides helper functions to construct `InstanceRequest` objects
-//! with sensible, project-specific default values. This simplifies the process
-//! of creating new GCE VM instances by pre-filling many of the required fields.
-
 use std::collections::HashMap;
 
 use crate::gcp::gce::types::*;
 
-/// Creates an `InstanceRequest` with a set of hardcoded default values.
-///
-/// This function is useful for creating a standard instance type with minimal input.
-/// Most configuration, like machine type and disk image, is fixed.
-///
-/// # Arguments
-/// * `name` - The name for the new instance.
 pub fn create_default_instance_request(name: &str) -> InstanceRequest {
     let mut labels = HashMap::new();
     labels.insert(
@@ -42,7 +29,6 @@ pub fn create_default_instance_request(name: &str) -> InstanceRequest {
                 disk_type: "projects/icfpc-primary/zones/asia-northeast1-c/diskTypes/pd-balanced"
                     .to_string(),
                 labels: disk_labels,
-                // Pinned to a specific Ubuntu 24.04 image version for reproducibility.
                 source_image:
                     "projects/ubuntu-os-cloud/global/images/ubuntu-2404-noble-amd64-v20250828"
                         .to_string(),
@@ -84,7 +70,6 @@ pub fn create_default_instance_request(name: &str) -> InstanceRequest {
         scheduling: Scheduling {
             automatic_restart: false,
             instance_termination_action: "STOP".to_string(),
-            // Use SPOT VMs for cost savings. They can be preempted.
             on_host_maintenance: "TERMINATE".to_string(),
             provisioning_model: "SPOT".to_string(),
         },
@@ -102,18 +87,6 @@ pub fn create_default_instance_request(name: &str) -> InstanceRequest {
     }
 }
 
-/// Creates a more configurable `InstanceRequest`.
-///
-/// This function allows specifying key parameters like project, zone, machine type,
-/// and an optional startup script, while still providing sensible defaults for
-/// other fields.
-///
-/// # Arguments
-/// * `name` - The name for the new instance.
-/// * `project_id` - The GCP project ID.
-/// * `zone` - The GCP zone for the instance (e.g., "us-central1-a").
-/// * `machine_type` - The machine type (e.g., "e2-medium").
-/// * `startup_script` - An optional shell script to run on instance startup.
 pub fn create_instance_request(
     name: &str,
     project_id: &str,
@@ -121,7 +94,6 @@ pub fn create_instance_request(
     machine_type: &str,
     startup_script: Option<&str>,
 ) -> InstanceRequest {
-    // Infer the region from the zone.
     let region = zone
         .rsplit_once('-')
         .map(|(prefix, _)| prefix)
@@ -141,7 +113,6 @@ pub fn create_instance_request(
         value: "TRUE".to_string(),
     }];
 
-    // If a startup script is provided, add it to the instance metadata.
     if let Some(script) = startup_script {
         metadata_items.push(MetadataItem {
             key: "startup-script".to_string(),
@@ -168,7 +139,6 @@ pub fn create_instance_request(
                     project_id, zone
                 ),
                 labels: disk_labels,
-                // Pinned to a specific Ubuntu 24.04 image version for reproducibility.
                 source_image:
                     "projects/ubuntu-os-cloud/global/images/ubuntu-2404-noble-amd64-v20250828"
                         .to_string(),
@@ -211,7 +181,6 @@ pub fn create_instance_request(
         scheduling: Scheduling {
             automatic_restart: false,
             instance_termination_action: "STOP".to_string(),
-            // Use SPOT VMs for cost savings. They can be preempted.
             on_host_maintenance: "TERMINATE".to_string(),
             provisioning_model: "SPOT".to_string(),
         },
