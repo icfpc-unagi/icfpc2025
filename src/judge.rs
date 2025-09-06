@@ -324,7 +324,12 @@ pub fn get_judge_from_stdin_with(explored: bool) -> Box<dyn Judge> {
                     .problem_name
                     .as_ref()
                     .expect("problemName is required for remote mode");
-                let jr = RemoteJudge::new(name);
+                let mut jr = RemoteJudge::new(name);
+                if let (Some(plans), Some(results)) =
+                    (parsed.plans.as_ref(), parsed.results.as_ref())
+                {
+                    jr.set_explored(single_to_explored(plans.clone(), results.clone()));
+                }
                 Box::new(jr)
             }
             Some("local") | None => {
