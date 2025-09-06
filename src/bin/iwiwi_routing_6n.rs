@@ -1,7 +1,9 @@
 #![allow(
     clippy::type_complexity,
     clippy::ptr_arg,
-    clippy::overly_complex_bool_expr
+    clippy::overly_complex_bool_expr,
+    unused_variables,
+    dead_code
 )]
 use icfpc2025::judge::*;
 use itertools::Itertools;

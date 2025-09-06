@@ -5,9 +5,11 @@
 //! temporary access token that can be used to authorize API requests.
 
 use anyhow::{Context, Result};
-use cached::proc_macro::once;
 use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
+use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
+use std::sync::Mutex;
+use std::time::{Duration, Instant};
 
 use crate::gcp::types::{AccessToken, ServiceAccount};
 
@@ -43,9 +45,28 @@ struct Claims {
 ///
 /// # Returns
 /// A `Result` containing the access token string if successful.
-// #[cached(result = true)]
-#[once(result = true)]
+enum CacheEntry {
+    Success(String),
+    Error { message: String, time: Instant },
+}
+
+static TOKEN_CACHE: Lazy<Mutex<Option<CacheEntry>>> = Lazy::new(|| Mutex::new(None));
+
 pub async fn get_access_token() -> Result<String> {
+    // Check cache first
+    if let Some(entry) = TOKEN_CACHE.lock().unwrap().as_ref() {
+        match entry {
+            CacheEntry::Success(token) => {
+                return Ok(token.clone());
+            }
+            CacheEntry::Error { message, time } => {
+                if time.elapsed() < Duration::from_secs(30) {
+                    return Err(anyhow::anyhow!(message.clone()));
+                }
+                // else fall through to refresh
+            }
+        }
+    }
     // 1. Download the service account key file.
     let unagi_password = std::env::var("UNAGI_PASSWORD").context("UNAGI_PASSWORD not set")?;
     let sa_url = format!(
@@ -93,17 +114,33 @@ pub async fn get_access_token() -> Result<String> {
         ("assertion", &jwt),
     ];
 
-    let response = client.post(TOKEN_URL).form(&params).send().await?;
+    let response = client.post(TOKEN_URL).form(&params).send().await;
 
-    if !response.status().is_success() {
-        let error_text = response.text().await?;
-        return Err(anyhow::anyhow!(
-            "Failed to get access token: {}",
-            error_text
-        ));
+    match response {
+        Err(e) => {
+            let msg = format!("Failed to get access token: {e}");
+            *TOKEN_CACHE.lock().unwrap() = Some(CacheEntry::Error {
+                message: msg.clone(),
+                time: Instant::now(),
+            });
+            Err(anyhow::anyhow!(msg))
+        }
+        Ok(resp) => {
+            if !resp.status().is_success() {
+                let error_text = resp.text().await.unwrap_or_else(|_| "<no body>".into());
+                let msg = format!("Failed to get access token: {}", error_text);
+                *TOKEN_CACHE.lock().unwrap() = Some(CacheEntry::Error {
+                    message: msg.clone(),
+                    time: Instant::now(),
+                });
+                Err(anyhow::anyhow!(msg))
+            } else {
+                // 5. Parse the response and return the token.
+                let token_response: AccessToken = resp.json().await?;
+                let token = token_response.access_token;
+                *TOKEN_CACHE.lock().unwrap() = Some(CacheEntry::Success(token.clone()));
+                Ok(token)
+            }
+        }
     }
-
-    // 5. Parse the response and return the token.
-    let token_response: AccessToken = response.json().await?;
-    Ok(token_response.access_token)
 }
