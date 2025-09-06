@@ -130,7 +130,7 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str, nocache: bool) 
         set.spawn(async move {
             match crate::gcp::gcs::download_object(&b, &object).await {
                 Ok(bytes) => Ok((ts_clone, bytes)),
-                Err(e) => {
+                Err(_e) => {
                     // eprintln!("Error downloading object {ts_clone}: {e}");
                     Err(())
                 }
