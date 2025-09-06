@@ -53,6 +53,7 @@ rustsat-cadical = "0.7.3"
 rustsat-kissat = "0.7.3"
 rustsat-minisat = "0.7.3"
 rustsat-glucose = "0.7.3"
+ordered-float = "5.0.0"
 
 [profile.release]
 debug = true

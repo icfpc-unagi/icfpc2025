@@ -20,7 +20,7 @@ pub struct Guess {
 pub struct LocalJudge {
     problem_name: String,
     rooms: Vec<usize>,
-    graph: Vec<[usize; 6]>,
+    pub graph: Vec<[usize; 6]>,
     cost: usize,
 }
 
