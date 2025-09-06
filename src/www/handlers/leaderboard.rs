@@ -131,7 +131,7 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str, nocache: bool) 
             match crate::gcp::gcs::download_object(&b, &object).await {
                 Ok(bytes) => Ok((ts_clone, bytes)),
                 Err(e) => {
-                    eprintln!("Error downloading object {ts_clone}: {e}");
+                    // eprintln!("Error downloading object {ts_clone}: {e}");
                     Err(())
                 }
             }
@@ -160,7 +160,7 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str, nocache: bool) 
         team_name: String,
         #[serde(rename = "teamPl")]
         team_pl: String,
-        score: i64,
+        score: Option<i64>,
     }
     // Build JSON structure for the client side: [{ts, data: <json>}]
     #[derive(serde::Serialize)]
