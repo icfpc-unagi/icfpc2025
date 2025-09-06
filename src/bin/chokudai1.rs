@@ -339,8 +339,8 @@ fn error_check(ans: &[usize], m: &Moves, n: usize) -> (usize, Vec<Vec<usize>>) {
         for j in 0..n {
             sum += door_cnt[j][i];
         }
-        let diff = (sum - 6).abs();
-        wrong += 50000 * diff * diff;
+        let diff = (sum - 6) * (sum - 6);
+        wrong += 50000 * diff;
     }
 
     (wrong, to)
