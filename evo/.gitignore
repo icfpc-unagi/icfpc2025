@@ -1,0 +1,62 @@
+# Vendored library (copied from shinka)
+/shinka/
+/shinka.egg-info/
+
+# Vendored top-level content from shinka
+/configs/
+/examples/
+/docs/
+/tests/
+/pyproject.toml
+/README*
+/LICENSE*
+/CHANGELOG*
+/.github/
+
+# Generated results and artifacts
+/results*/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Environment & secrets
+.env
+.env.*
+.envrc
+
+# Packaging / build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Test & coverage
+.pytest_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+.cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Editors / OS files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local Python version file (pyenv/uv)
+.python-version
+
+# Logs
+*.log
