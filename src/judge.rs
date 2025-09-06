@@ -237,25 +237,13 @@ impl LocalJudge {
 }
 
 pub fn get_judge_from_stdin() -> Box<dyn Judge> {
-    input! {
-        local_remote: String,
-    }
-    if local_remote == "local" {
-        input! {
-            problem_type: String,
-            num_rooms: usize,
-            seed: u64,
-        }
-        Box::new(LocalJudge::new(&problem_type, num_rooms, seed))
-    } else if local_remote == "remote" {
-        input! {
-            problem_name: String,
-        }
-        Box::new(RemoteJudge::new(&problem_name))
-    } else if local_remote == "json" {
-        use std::io::Read;
-        let mut buf = String::new();
-        std::io::stdin().read_to_string(&mut buf).unwrap();
+    use std::io::Read;
+    let mut input = String::new();
+    std::io::stdin().read_to_string(&mut input).unwrap();
+
+    let s = input.trim_start();
+    // If input begins with '{', treat entire input as JSON
+    if s.starts_with('{') {
         #[derive(serde::Deserialize)]
         struct JsonIn {
             #[serde(rename = "problemName")]
@@ -263,10 +251,30 @@ pub fn get_judge_from_stdin() -> Box<dyn Judge> {
             problem_name: Option<String>,
             map: crate::api::Map,
         }
-        let parsed: JsonIn = serde_json::from_str(&buf).expect("invalid JSON for json mode");
-        Box::new(LocalJudge::new_json(parsed.problem_name, &parsed.map))
-    } else {
-        panic!("local_remote must be 'local' or 'remote'");
+        let parsed: JsonIn = serde_json::from_str(s).expect("invalid JSON for json mode");
+        return Box::new(LocalJudge::new_json(parsed.problem_name, &parsed.map));
+    }
+
+    // Otherwise, parse tokens via proconio from OnceSource
+    use proconio::source::once::OnceSource;
+    let mut src = OnceSource::from(s);
+    input! { from &mut src, mode: String }
+    match mode.as_str() {
+        "local" => {
+            input! { from &mut src,
+                problem_type: String,
+                num_rooms: usize,
+                seed: u64,
+            }
+            Box::new(LocalJudge::new(&problem_type, num_rooms, seed))
+        }
+        "remote" => {
+            input! { from &mut src,
+                problem_name: String,
+            }
+            Box::new(RemoteJudge::new(&problem_name))
+        }
+        _ => panic!("local_remote must be 'local' or 'remote'"),
     }
 }
 
