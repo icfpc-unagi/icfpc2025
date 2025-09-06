@@ -207,13 +207,13 @@ fn main() {
     };
     let mut rnd = rand::rng();
     // 事前に与えられた explore ログを使用
-    let exp = judge.explored();
+    let explored = judge.explored();
     assert!(
-        !exp.plans.is_empty(),
+        !explored.plans.is_empty(),
         "explored is empty; provide explores via JSON"
     );
-    m.door = exp.plans[0].clone();
-    m.label = exp.results[0].clone();
+    m.door = explored.plans[0].clone();
+    m.label = explored.results[0].clone();
 
     //推測を行う
     //4グループの個数を適当に分ける

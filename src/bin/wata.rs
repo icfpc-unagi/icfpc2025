@@ -14,13 +14,13 @@ fn main() {
     let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(849328);
     let judge = get_judge_from_stdin_with(true);
     let n = judge.num_rooms();
-    let exp = judge.explored();
+    let explored = judge.explored();
     assert!(
-        !exp.plans.is_empty(),
+        !explored.plans.is_empty(),
         "explored is empty; provide explores via JSON"
     );
-    let doors = exp.plans[0].clone();
-    let labels = exp.results[0].clone();
+    let doors = explored.plans[0].clone();
+    let labels = explored.results[0].clone();
     let mut guess = Guess {
         rooms: vec![!0; n],
         start: 0,

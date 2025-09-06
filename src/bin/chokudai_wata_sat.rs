@@ -366,13 +366,13 @@ fn main() {
 
     let n = judge.num_rooms();
     // 事前に与えられた explore ログを使用
-    let exp = judge.explored();
+    let explored = judge.explored();
     assert!(
-        !exp.plans.is_empty(),
+        !explored.plans.is_empty(),
         "explored is empty; provide explores via JSON"
     );
-    let plan = exp.plans[0].clone();
-    let labels = exp.results[0].clone();
+    let plan = explored.plans[0].clone();
+    let labels = explored.results[0].clone();
     let mut m = Moves {
         label: vec![],
         door: vec![],
