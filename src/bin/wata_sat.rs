@@ -2,6 +2,9 @@
     clippy::needless_range_loop,
     clippy::useless_vec,
     clippy::partialeq_to_none,
+    clippy::ptr_arg,
+    clippy::if_same_then_else,
+    clippy::cloned_ref_to_slice_refs,
     non_snake_case,
     unused_variables
 )]
