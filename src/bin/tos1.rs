@@ -50,6 +50,9 @@ fn main() {
 
     let mut rng = rand::rng();
 
+    let orig_start_label = judge.explore(&vec![vec![]])[0][0];
+    let start_label = (orig_start_label + 1) % 4;
+
     let suffixes: Vec<Vec<Step>> = (0..36)
         .map(|i| {
             let mut s = vec![];
@@ -84,8 +87,13 @@ fn main() {
             let plans = suffixes
                 .iter()
                 .map(|s| {
-                    let mut p = path.iter().map(|&door| (None, door)).collect::<Vec<_>>();
+                    let mut p = path
+                        .iter()
+                        .enumerate()
+                        .map(|(i, &door)| (None, door))
+                        .collect::<Vec<_>>();
                     p.extend(s);
+                    p[0].0 = Some(start_label);
                     p
                 })
                 .collect::<Vec<_>>();
@@ -104,10 +112,16 @@ fn main() {
             // let results = &batched_results[start_index..stop_index];
             // let plans = &batched_plans[start_index..stop_index];
             // cost += plans.len() + 1;
-            let results = results
+            let mut results = results
                 .iter()
                 .map(|r| r[path.len()..].to_vec())
                 .collect::<Vec<_>>();
+            if path.is_empty() {
+                for result in results.iter_mut() {
+                    assert_eq!(result[0], orig_start_label);
+                    result[0] = start_label;
+                }
+            }
             let room = *res_to_room.entry(results.clone()).or_insert_with(|| {
                 let r = room_to_res.len();
                 room_to_res.push(results.clone());
@@ -140,7 +154,9 @@ fn main() {
     }
 
     let start = 0;
-    let rooms = room_to_res.iter().map(|r| r[0][0]).collect::<Vec<_>>();
+    let mut rooms = room_to_res.iter().map(|r| r[0][0]).collect::<Vec<_>>();
+    rooms[0] = orig_start_label;
+    eprintln!("rooms: {:?}", rooms);
     let graph: Vec<Vec<usize>> = room_to_a_path
         .iter()
         .map(|path| {
@@ -153,6 +169,7 @@ fn main() {
                 .collect::<Vec<_>>()
         })
         .collect();
+    eprintln!("graph: {:?}", graph);
     let graph = fill_doors(&graph);
     judge.guess(&Guess {
         start,
