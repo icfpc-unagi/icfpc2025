@@ -7,7 +7,7 @@ use crate::{
 
 // ----------------------------- CNF utilities -----------------------------
 
-struct Counter {
+pub struct Counter {
     cnt: i32,
 }
 impl Counter {
@@ -23,8 +23,7 @@ impl Counter {
 
 const AMO_PAIRWISE_THRESHOLD: usize = 6;
 
-#[inline]
-fn amo_pairwise(sat: &mut cadical::Solver, xs: &[i32]) {
+pub fn amo_pairwise(sat: &mut cadical::Solver, xs: &[i32]) {
     for i in 0..xs.len() {
         for j in i + 1..xs.len() {
             sat.add_clause([-xs[i], -xs[j]]);
@@ -32,8 +31,7 @@ fn amo_pairwise(sat: &mut cadical::Solver, xs: &[i32]) {
     }
 }
 
-#[inline]
-fn amo_sequential(sat: &mut cadical::Solver, xs: &[i32], id: &mut Counter) {
+pub fn amo_sequential(sat: &mut cadical::Solver, xs: &[i32], id: &mut Counter) {
     let k = xs.len();
     if k <= 1 {
         return;
@@ -54,8 +52,7 @@ fn amo_sequential(sat: &mut cadical::Solver, xs: &[i32], id: &mut Counter) {
     }
 }
 
-#[inline]
-fn choose_one(sat: &mut cadical::Solver, xs: &[i32], id: &mut Counter) {
+pub fn choose_one(sat: &mut cadical::Solver, xs: &[i32], id: &mut Counter) {
     sat.add_clause(xs.iter().copied());
     if xs.len() <= AMO_PAIRWISE_THRESHOLD {
         amo_pairwise(sat, xs);
@@ -64,13 +61,14 @@ fn choose_one(sat: &mut cadical::Solver, xs: &[i32], id: &mut Counter) {
     }
 }
 
-struct Cnf {
-    sat: cadical::Solver,
+pub struct Cnf {
+    pub sat: cadical::Solver,
     id: Counter,
     buf: Vec<i32>,
 }
+
 impl Cnf {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             sat: cadical::Solver::with_config("sat").unwrap(),
             id: Counter::new(),
@@ -78,15 +76,15 @@ impl Cnf {
         }
     }
     #[inline]
-    fn var(&mut self) -> i32 {
+    pub fn var(&mut self) -> i32 {
         self.id.next()
     }
     #[inline]
-    fn clause<I: IntoIterator<Item = i32>>(&mut self, lits: I) {
+    pub fn clause<I: IntoIterator<Item = i32>>(&mut self, lits: I) {
         self.sat.add_clause(lits);
     }
     #[inline]
-    fn choose_one(&mut self, xs: &[i32]) {
+    pub fn choose_one(&mut self, xs: &[i32]) {
         choose_one(&mut self.sat, xs, &mut self.id);
     }
 }
@@ -193,8 +191,6 @@ fn build_buckets(info: &PlanInfo) -> Buckets {
 struct Candidates {
     // V_map[i][u] = Some(var) if room u allowed at time i (label match).
     V_map: Vec<Vec<Option<i32>>>,
-    // V_rows[i] = list of variables for time i.
-    V_rows: Vec<Vec<i32>>,
 }
 fn build_candidates(cnf: &mut Cnf, info: &PlanInfo, buckets: &Buckets) -> Candidates {
     let mut V_map = vec![vec![None; info.n]; info.m];
@@ -210,7 +206,7 @@ fn build_candidates(cnf: &mut Cnf, info: &PlanInfo, buckets: &Buckets) -> Candid
         }
         cnf.choose_one(&V_rows[i]);
     }
-    Candidates { V_map, V_rows }
+    Candidates { V_map }
 }
 
 // -------------------------- Symmetry breaking ----------------------------
