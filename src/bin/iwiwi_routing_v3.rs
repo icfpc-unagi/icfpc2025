@@ -1,8 +1,3 @@
-// #![allow(
-//     clippy::type_complexity,
-//     clippy::ptr_arg,
-//     clippy::overly_complex_bool_expr
-// )]
 use icfpc2025::judge::{JsonIn, *};
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
@@ -10,6 +5,8 @@ use rand::prelude::*;
 use rand_chacha::ChaCha20Rng;
 use std::env;
 use std::io::Read;
+
+type Edge = ((usize, usize), (usize, usize));
 
 struct Instance {
     num_rooms: usize,
@@ -20,7 +17,7 @@ struct Instance {
     edge_count: usize,
 }
 
-fn build_instance(num_rooms: usize, edges: &Vec<((usize, usize), (usize, usize))>) -> Instance {
+fn build_instance(num_rooms: usize, edges: &[Edge]) -> Instance {
     let mut graph = vec![[!0usize; 6]; num_rooms];
     let mut port_to_edge = vec![[!0usize; 6]; num_rooms];
     for (eid, &((u1, d1), (u2, d2))) in edges.iter().enumerate() {
@@ -38,7 +35,7 @@ fn build_instance(num_rooms: usize, edges: &Vec<((usize, usize), (usize, usize))
 }
 
 // Returns: (ratio_covered_undirected, ratio_covered_directed, normalized_entropy)
-fn coverage(inst: &Instance, plan: &Vec<usize>) -> (f32, f32, f32) {
+fn coverage(inst: &Instance, plan: &[usize]) -> (f32, f32, f32) {
     let n = inst.num_rooms;
     let mut cnt = vec![[0usize; 6]; n];
     let mut edge_covered = vec![false; inst.edge_count];
@@ -91,17 +88,15 @@ fn coverage(inst: &Instance, plan: &Vec<usize>) -> (f32, f32, f32) {
     )
 }
 
-type Edge = ((usize, usize), (usize, usize));
-
 fn shuffled_instances(
     num_rooms: usize,
     n_seeds: usize,
     base_seed: u64,
-    base_edges: &Vec<Edge>,
+    base_edges: &[Edge],
 ) -> Vec<Instance> {
     let mut instances = Vec::with_capacity(n_seeds);
     for i in 0..n_seeds {
-        let edges: Vec<Edge> = base_edges.clone();
+        let edges: Vec<Edge> = base_edges.to_vec();
         // Per-room door shuffle seeded from base_seed + i
         let mut rng = ChaCha20Rng::seed_from_u64(base_seed.wrapping_add(i as u64));
         let mut door_maps: Vec<[usize; 6]> = Vec::with_capacity(num_rooms);
@@ -138,7 +133,7 @@ fn read_seed_from_env() -> u64 {
         .unwrap_or(0)
 }
 
-fn generate_plan(num_rooms: usize, n_seeds: usize, base_edges: &Vec<Edge>) -> Vec<usize> {
+fn generate_plan(num_rooms: usize, n_seeds: usize, base_edges: &[Edge]) -> Vec<usize> {
     let mut rng = rand::rng();
 
     let base_seed = read_seed_from_env();
@@ -152,11 +147,6 @@ fn generate_plan(num_rooms: usize, n_seeds: usize, base_edges: &Vec<Edge>) -> Ve
     let mut plans = vec![];
     let plan_len = 18 * num_rooms;
     for i in 0..plan_len {
-        if false && rng.random_range(0..20) == 0 {
-            plans.push(rng.random_range(0..6));
-            continue;
-        }
-
         let mut best = (OrderedFloat(0.0), OrderedFloat(0.0), OrderedFloat(0.0), !0);
         let mut order = (0..6).collect_vec();
         order.shuffle(&mut rng);
@@ -203,7 +193,7 @@ fn generate_plan(num_rooms: usize, n_seeds: usize, base_edges: &Vec<Edge>) -> Ve
     plans
 }
 
-fn generate_plan_v2(num_rooms: usize, n_seeds: usize, base_edges: &Vec<Edge>) -> Vec<usize> {
+fn generate_plan_v2(num_rooms: usize, n_seeds: usize, base_edges: &[Edge]) -> Vec<usize> {
     let mut rng = rand::rng();
 
     let base_seed = read_seed_from_env();
@@ -217,11 +207,6 @@ fn generate_plan_v2(num_rooms: usize, n_seeds: usize, base_edges: &Vec<Edge>) ->
     let mut plans = vec![];
     let plan_len = 18 * num_rooms;
     for i in 0..plan_len {
-        if false && rng.random_range(0..20) == 0 {
-            plans.push(rng.random_range(0..6));
-            continue;
-        }
-
         let mut best = (OrderedFloat(0.0), OrderedFloat(0.0), OrderedFloat(0.0), !0);
         let mut order = (0..6).collect_vec();
         order.shuffle(&mut rng);
@@ -265,7 +250,7 @@ fn generate_plan_v2(num_rooms: usize, n_seeds: usize, base_edges: &Vec<Edge>) ->
     plans
 }
 
-fn evaluate_plan(num_rooms: usize, plan: &Vec<usize>, seed_begin: usize, seed_end: usize) {
+fn evaluate_plan(num_rooms: usize, plan: &[usize], seed_begin: usize, seed_end: usize) {
     let instances = (seed_begin..seed_end)
         .map(|i| {
             let edges = generate_random_edges_v2(num_rooms, i as u64);
@@ -333,6 +318,6 @@ fn main() {
     }
     evaluate_plan(n_rooms, &plan, n_seeds, n_seeds * 2);
 
-    let plan = "413022551403315200442351124530532105441250342013450431221500235401332245541100524301142035531432234405215311350240015425104334025123304521120534103522445503114230032542135431452051002415012340523321554433021451132041025533014400351220440115324321342250451305502315412031045522433500142534115203442231104350310540221435132441500553020145133425523012412033443004231254411023052214500135410325345320121545042102113352405514315340154304422003355523411201445331322002514054225105033004323315550112134421441352532400511024124025405311304432221235".chars().map(|c| c.to_digit(10).unwrap() as usize).collect();
+    let plan: Vec<usize> = "413022551403315200442351124530532105441250342013450431221500235401332245541100524301142035531432234405215311350240015425104334025123304521120534103522445503114230032542135431452051002415012340523321554433021451132041025533014400351220440115324321342250451305502315412031045522433500142534115203442231104350310540221435132441500553020145133425523012412033443004231254411023052214500135410325345320121545042102113352405514315340154304422003355523411201445331322002514054225105033004323315550112134421441352532400511024124025405311304432221235".chars().map(|c| c.to_digit(10).unwrap() as usize).collect();
     evaluate_plan(n_rooms, &plan, n_seeds, n_seeds * 2);
 }
