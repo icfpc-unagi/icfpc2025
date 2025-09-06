@@ -39,7 +39,7 @@ fn main() {
     let suffixes = (0..36)
         .map(|i| {
             let mut s = vec![i / 6, i % 6];
-            for _ in 0..(16 * n - 2) {
+            for _ in 0..(137.min(18 * n) - 2) {
                 s.push(rng.random_range(0..6));
             }
             s
@@ -58,8 +58,8 @@ fn main() {
 
     let mut cnt = 0;
     while !queue.is_empty() {
-        let paths = queue;
-        queue = VecDeque::new();
+        let paths = queue.drain(..queue.len().min(20)).collect::<Vec<_>>();
+        // queue = VecDeque::new();
         assert!(cnt < 7 * n);
         cnt += 1;
         let mut batched_plans = vec![];
