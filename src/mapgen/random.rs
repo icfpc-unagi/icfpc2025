@@ -1,15 +1,35 @@
+//! # Random Map Generation
+//!
+//! This module provides functions for generating random valid Aedificium maps.
+//! The generation algorithm ensures that the resulting map corresponds to a
+//! 6-regular graph by creating a random perfect matching on the set of all
+//! doors across all rooms.
+
 use crate::api;
 use rand::seq::SliceRandom;
 use rand::{Rng, SeedableRng};
 
-/// Generates a random map of n rooms: room index -> (door -> connected room index, room hash)
+/// Generates a random map as a simple vector-based adjacency list.
+///
+/// This format is likely used for internal testing or solvers that prefer a
+/// direct graph representation over the `api::Map` struct.
+///
+/// # Arguments
+/// * `n_rooms` - The number of rooms in the map.
+/// * `seed` - An optional seed for the random number generator for reproducibility.
+///
+/// # Returns
+/// A vector where each element is a tuple `(doors, hash)`. `doors` is an array
+/// of 6 `usize`s, where `doors[d]` is the index of the room connected to door `d`.
+/// `hash` is a simple hash value for the room (signature).
 pub fn generate_as_vec(n_rooms: usize, seed: Option<u64>) -> Vec<([usize; 6], u8)> {
     let mut rng = match seed {
         Some(s) => rand::rngs::StdRng::seed_from_u64(s),
         None => rand::rngs::StdRng::from_os_rng(),
     };
 
-    // List all 6 doors (unnumberred) in all rooms, and connect in random pairs.
+    // Create a flat list of all doors, identify them by their room index,
+    // shuffle them, and then pair them up to create connections.
     let mut doors: Vec<usize> = (0..n_rooms)
         .flat_map(|i| std::iter::repeat_n(i, 6))
         .collect();
@@ -19,17 +39,17 @@ pub fn generate_as_vec(n_rooms: usize, seed: Option<u64>) -> Vec<([usize; 6], u8
         .map(|chunk| (chunk[0], chunk[1]))
         .collect();
 
-    // Build adjacency list.
+    // Build an adjacency list from the connection pairs.
     let mut adj = vec![vec![]; n_rooms];
     for &(a, b) in &conns {
         adj[a].push(b);
         adj[b].push(a);
     }
 
-    // Construct the output with room hash.
+    // Construct the final output format.
     let mut map: Vec<([usize; 6], u8)> = Vec::with_capacity(n_rooms);
     for (i, neighbors) in adj.iter().enumerate() {
-        let hash = (i % 4) as u8;
+        let hash = (i % 4) as u8; // Simple hash based on room index.
         let mut doors = [0; 6];
         doors.copy_from_slice(&neighbors[..6]);
         map.push((doors, hash));
@@ -37,23 +57,36 @@ pub fn generate_as_vec(n_rooms: usize, seed: Option<u64>) -> Vec<([usize; 6], u8
     map
 }
 
+/// Generates a random map in the `api::Map` format.
+///
+/// This format is the one required for submitting a guess to the contest API.
+/// The generation logic ensures a valid 6-regular graph by creating a random
+/// perfect matching of all doors.
+///
+/// # Arguments
+/// * `n_rooms` - The number of rooms in the map.
+/// * `seed` - An optional seed for the random number generator for reproducibility.
+///
+/// # Returns
+/// An `api::Map` struct representing the generated map.
 pub fn generate_as_api_map(n_rooms: usize, seed: Option<u64>) -> api::Map {
     let mut rng = match seed {
         Some(s) => rand::rngs::StdRng::seed_from_u64(s),
         None => rand::rngs::StdRng::from_os_rng(),
     };
 
-    // Create a list of all doors for all rooms.
+    // Create a list of all doors, identified by a (room, door) tuple.
     let mut all_doors = (0..n_rooms)
         .flat_map(|r| (0..6).map(move |d| (r, d)))
         .collect::<Vec<_>>();
     all_doors.shuffle(&mut rng);
 
-    // Create connections by pairing up the doors.
+    // Create connections by pairing up the shuffled doors.
     let mut connections = Vec::with_capacity(n_rooms * 6);
     for chunk in all_doors.chunks_exact(2) {
         let (r1, d1) = chunk[0];
         let (r2, d2) = chunk[1];
+        // For the API format, we need to represent the undirected edge as two directed edges.
         connections.push(api::MapConnection {
             from: api::MapConnectionEnd { room: r1, door: d1 },
             to: api::MapConnectionEnd { room: r2, door: d2 },
@@ -64,11 +97,14 @@ pub fn generate_as_api_map(n_rooms: usize, seed: Option<u64>) -> api::Map {
         });
     }
 
+    // The spec defines room signatures as the number of passages, which is always 6
+    // in this generator. However, the problem seems to use a 2-bit integer (0-3) as
+    // the observable "signature" or "label". This generator assigns it based on index.
     let rooms = (0..n_rooms).map(|i| i % 4).collect::<Vec<_>>();
 
     api::Map {
         rooms,
-        starting_room: rng.random_range(0..n_rooms),
+        starting_room: rng.gen_range(0..n_rooms),
         connections,
     }
 }
