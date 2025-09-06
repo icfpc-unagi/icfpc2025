@@ -129,6 +129,8 @@ pub struct LocalJudge {
     problem_name: String,
     /// The signature of each room.
     rooms: Vec<usize>,
+    /// The index of the starting room.
+    starting_room: usize,
     /// The true graph of the map. `graph[i][d]` is the index of the room
     /// connected to door `d` of room `i`.
     pub graph: Vec<[usize; 6]>,
@@ -152,7 +154,7 @@ impl Judge for LocalJudge {
         for plan in plans {
             let mut labels = self.rooms.clone();
             println!("{}", plan.iter().map(|&step| format_step(step)).join(""));
-            let mut u = 0; // Start at room 0 (the fixed starting room in the problem spec)
+            let mut u = self.starting_room;
             let mut route = vec![labels[u]];
             for &(newlabel, door) in plan {
                 if let Some(newlabel) = newlabel {
@@ -215,7 +217,7 @@ impl Judge for LocalJudge {
         }
 
         let n = self.rooms.len();
-        let ids = get_ids(&self.graph, 0);
+        let ids = get_ids(&self.graph, self.starting_room);
         let out_ids = get_ids(
             &out.graph.iter().map(|a| a.map(|(r, _d)| r)).collect_vec(),
             out.start,
@@ -473,6 +475,7 @@ impl LocalJudge {
                 Self {
                     problem_name: problem_type.to_string(),
                     rooms,
+                    starting_room: 0, // Start at room 0 (the fixed starting room in the problem spec)
                     graph,
                     cost: 0,
                     explored_log: Explored {
@@ -497,6 +500,7 @@ impl LocalJudge {
                 Self {
                     problem_name: problem_type.to_string(),
                     rooms,
+                    starting_room: 0, // Start at room 0 (the fixed starting room in the problem spec)
                     graph,
                     cost: 0,
                     explored_log: Explored {
@@ -552,6 +556,7 @@ impl LocalJudge {
         }
         Self {
             problem_name: problem_name.unwrap_or_else(|| "json".to_string()),
+            starting_room: map.starting_room,
             rooms: map.rooms.clone(),
             graph,
             cost: 0,
@@ -625,6 +630,7 @@ pub fn get_judge_from_stdin_with(explored: bool) -> Box<dyn Judge> {
                     Box::new(LocalJudge {
                         problem_name: parsed.problem_name.unwrap_or_else(|| "json".to_string()),
                         rooms: vec![0; num_rooms], // True room signatures are unknown
+                        starting_room: 0, // Start at room 0 (the fixed starting room in the problem spec)
                         graph: vec![[0; 6]; num_rooms], // True graph is unknown
                         cost: 0,
                         explored_log,
