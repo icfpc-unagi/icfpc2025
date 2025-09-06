@@ -14,6 +14,8 @@ use serde::Deserialize;
 use std::fmt::Write;
 use tokio::time::Duration;
 
+const BUCKET: &str = "icfpc2025-data";
+
 #[derive(Deserialize)]
 pub struct LeaderboardQuery {
     #[serde(default)]
@@ -21,12 +23,12 @@ pub struct LeaderboardQuery {
 }
 
 /// A helper to wrap content in the standard HTML page template.
-fn html_page(title: &str, body: &str) -> String {
+fn html_page(title: &str, body: &str, banner: &str) -> String {
     // Auto-refresh leaderboard pages every 5 minutes
     let auto_refresh = "<script>setTimeout(() => location.reload(), 5*60*1000);</script>";
     crate::www::handlers::template::render(&format!(
-        "<h1>{}</h1>\n{}\n{}",
-        title, auto_refresh, body
+        "{}<h1>{}</h1>\n{}\n{}",
+        banner, title, auto_refresh, body
     ))
 }
 
@@ -42,7 +44,7 @@ pub async fn index() -> impl Responder {
         })
         .collect::<Vec<_>>()
         .join("\n");
-    let page = html_page("Leaderboards", &format!("<ul>{}</ul>", list));
+    let page = html_page("Leaderboards", &format!("<ul>{}</ul>", list), "");
     HttpResponse::Ok().content_type("text/html").body(page)
 }
 
@@ -61,9 +63,8 @@ pub async fn show(
     query: web::Query<LeaderboardQuery>,
 ) -> impl Responder {
     let problem = &path.problem;
-    let bucket = "icfpc2025-data";
 
-    let result = async move { render_problem_leaderboard(bucket, problem, query.nocache).await };
+    let result = async move { render_problem_leaderboard(problem, query.nocache).await };
     match result.await {
         Ok(html) => HttpResponse::Ok().content_type("text/html").body(html),
         Err(e) => crate::www::handlers::template::to_error_response(&e),
@@ -71,7 +72,32 @@ pub async fn show(
 }
 
 /// The core logic for fetching data and rendering the leaderboard page for a single problem.
-async fn render_problem_leaderboard(bucket: &str, problem: &str, nocache: bool) -> Result<String> {
+async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<String> {
+    // Fetch active lock
+    // Build notification banner if active_lock_user exists
+    let banner_html = if let Some(user) = sql::cell::<String>(
+        r"
+          SELECT lock_user
+          FROM locks
+          WHERE lock_id = 1
+          AND lock_expired > CURRENT_TIMESTAMP
+          LIMIT 1
+          ",
+        params::Params::Empty,
+    )?
+    .or(Some("test".to_string()))
+    {
+        format!(
+            r#"<div style="width:100vw;position:relative;left:50%;right:50%;margin-left:-50vw;margin-right:-50vw;background-color:#66bb6a;color:white;font-weight:bold;padding:4px 0;text-align:center;font-size:1.2em;box-shadow:0 2px 8px rgba(0,0,0,0.08);z-index:1000;">
+      <a href="/unlock"><img style="height:1em;vertical-align:text-bottom;" src="/static/sansho.png" alt="Lock icon">
+      {user}
+      🔒️</a>
+      </div>"#
+        )
+    } else {
+        String::new()
+    };
+
     // Build problem navigation links for the top of the page.
     let mut nav_links: Vec<String> = Vec::new();
     nav_links.push("[<a href=\"/leaderboard/global\">Global</a>]".to_string());
@@ -86,95 +112,16 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str, nocache: bool) 
         nav_links.join(" ")
     );
 
-    let map_html = if nocache {
+    // Fetch the latest correct guess for the problem, optionally bypassing the cache.
+    let map_html = if problem == "global" {
+        String::new()
+    } else if nocache {
         last_correct_guess_prime_cache(problem)?
     } else {
         last_correct_guess(problem)?
     };
 
-    // List all timestamped snapshot directories from GCS.
-    let (dirs, _files) = crate::gcp::gcs::list_dir(bucket, "history").await?;
-    let mut stamps: Vec<String> = dirs
-        .into_iter()
-        .map(|d| d.trim_end_matches('/').to_string())
-        .collect();
-    stamps.sort();
-
-    // Downsample timestamps BEFORE download to avoid unnecessary transfers
-    let stamps = if stamps.len() <= 100 {
-        stamps
-    } else {
-        let n = stamps.len();
-        let stride = n.div_ceil(100);
-        let mut picked: Vec<String> = Vec::new();
-        for (i, ts) in stamps.iter().enumerate() {
-            if i % stride == 0 {
-                picked.push(ts.clone());
-            }
-        }
-        // Ensure the latest timestamp is included
-        if picked.last() != stamps.last()
-            && let Some(last) = stamps.last()
-        {
-            picked.push(last.clone());
-        }
-        picked
-    };
-
-    // Fetch selected snapshots in parallel
-    let mut set = tokio::task::JoinSet::new();
-    for ts in stamps {
-        let object = format!("history/{}/{}.json", ts, problem);
-        let b = bucket.to_string();
-        let ts_clone = object.clone();
-        set.spawn(async move {
-            match crate::gcp::gcs::download_object(&b, &object).await {
-                Ok(bytes) => Ok((ts_clone, bytes)),
-                Err(_e) => {
-                    // eprintln!("Error downloading object {ts_clone}: {e}");
-                    Err(())
-                }
-            }
-        });
-    }
-    let mut snaps: Vec<(String, Vec<u8>)> = Vec::new();
-    while let Some(res) = set.join_next().await {
-        if let Ok(Ok((object_path, bytes))) = res {
-            // extract timestamp from path: "history/{ts}/..." -> "ts"
-            let ts = object_path
-                .strip_prefix("history/")
-                .and_then(|s| s.split('/').next())
-                .unwrap_or("")
-                .to_string();
-            snaps.push((ts, bytes));
-        }
-    }
-
-    // Sort by timestamp (already downsampled before download)
-    snaps.sort_by(|a, b| a.0.cmp(&b.0));
-    let snaps = snaps;
-
-    #[derive(serde::Deserialize, serde::Serialize)]
-    struct LeaderboardEntry {
-        #[serde(rename = "teamName")]
-        team_name: String,
-        #[serde(rename = "teamPl")]
-        team_pl: String,
-        score: Option<i64>,
-    }
-    // Build JSON structure for the client side: [{ts, data: <json>}]
-    #[derive(serde::Serialize)]
-    struct Snapshot<'a> {
-        ts: &'a str,
-        data: Vec<LeaderboardEntry>,
-    }
-    let mut series: Vec<Snapshot> = Vec::with_capacity(snaps.len());
-    for (ts, bytes) in &snaps {
-        series.push(Snapshot {
-            ts,
-            data: serde_json::from_slice::<Vec<LeaderboardEntry>>(bytes).unwrap_or_default(),
-        });
-    }
+    let snapshots = fetch_snapshots(problem).await?;
 
     // Construct the final HTML page, embedding the data and the charting JavaScript.
     let html = format!(
@@ -190,7 +137,7 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str, nocache: bool) 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon"></script>
 <script>
-const snapshots = {series};
+const snapshots = {snapshots};
 const problem = "{problem}";
 
 // === Chart.js Data Preparation ===
@@ -355,18 +302,108 @@ document.getElementById('lb-table').addEventListener('click', (ev) => {{
 "#,
         nav = nav_html,
         problem = problem,
-        count = snaps.len(),
-        series = serde_json::to_string(&series)?,
+        count = snapshots.len(),
+        snapshots = serde_json::to_string(&snapshots)?,
     );
 
-    Ok(html_page(&format!("Leaderboard - {problem}"), &html))
+    Ok(html_page(
+        &format!("Leaderboard - {problem}"),
+        &html,
+        &banner_html,
+    ))
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Clone)]
+struct LeaderboardEntry {
+    #[serde(rename = "teamName")]
+    team_name: String,
+    #[serde(rename = "teamPl")]
+    team_pl: String,
+    score: i64,
+}
+// Build JSON structure for the client side: [{ts, data: <json>}]
+#[derive(serde::Serialize, Clone)]
+struct Snapshot {
+    ts: String,
+    data: Vec<LeaderboardEntry>,
+}
+
+/// Fetches and downsamples leaderboard snapshots from GCS for a given problem.
+#[cached(
+    result = true,
+    time = 60,
+    key = "String",
+    convert = "{problem.to_string()}",
+    sync_writes = "by_key"
+)]
+async fn fetch_snapshots(problem: &str) -> Result<Vec<Snapshot>> {
+    let (dirs, _files) = crate::gcp::gcs::list_dir(BUCKET, "history").await?;
+    let mut stamps: Vec<String> = dirs
+        .into_iter()
+        .map(|d| d.trim_end_matches('/').to_string())
+        .collect();
+    stamps.sort();
+    let stamps = if stamps.len() <= 100 {
+        stamps
+    } else {
+        let n = stamps.len();
+        let stride = n.div_ceil(100);
+        let mut picked: Vec<String> = Vec::new();
+        for (i, ts) in stamps.iter().enumerate() {
+            if i % stride == 0 {
+                picked.push(ts.clone());
+            }
+        }
+        // Ensure the latest timestamp is included
+        if picked.last() != stamps.last()
+            && let Some(last) = stamps.last()
+        {
+            picked.push(last.clone());
+        }
+        picked
+    };
+    let mut set = tokio::task::JoinSet::new();
+    for ts in stamps {
+        let object = format!("history/{}/{}.json", ts, problem);
+        let ts_clone = object.clone();
+        set.spawn(async move {
+            match crate::gcp::gcs::download_object(BUCKET, &object).await {
+                Ok(bytes) => Ok((ts_clone, bytes)),
+                Err(_e) => {
+                    // eprintln!("Error downloading object {ts_clone}: {e}");
+                    Err(())
+                }
+            }
+        });
+    }
+    let mut snaps: Vec<(String, Vec<u8>)> = Vec::new();
+    while let Some(res) = set.join_next().await {
+        if let Ok(Ok((object_path, bytes))) = res {
+            // extract timestamp from path: "history/{ts}/..." -> "ts"
+            let ts = object_path
+                .strip_prefix("history/")
+                .and_then(|s| s.split('/').next())
+                .unwrap_or("")
+                .to_string();
+            snaps.push((ts, bytes));
+        }
+    }
+    snaps.sort_by(|a, b| a.0.cmp(&b.0));
+    Ok(snaps
+        .into_iter()
+        .map(|(ts, bytes)| Snapshot {
+            ts,
+            data: serde_json::from_slice::<Vec<LeaderboardEntry>>(&bytes).unwrap_or_default(),
+        })
+        .collect())
 }
 
 #[cached(
     result = true,
     key = "String",
-    convert = "{problem.into()}",
-    time = 300
+    convert = "{problem.to_string()}",
+    time = 300,
+    sync_writes = "by_key"
 )]
 fn last_correct_guess(problem: &str) -> Result<String> {
     let mut map_html = String::new();

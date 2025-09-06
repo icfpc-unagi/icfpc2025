@@ -15,6 +15,7 @@ pub mod template;
 // pub mod visualize;
 pub mod api;
 pub mod leaderboard;
+pub mod unlock;
 
 use actix_web::{HttpResponse, Responder, web};
 use serde::Deserialize;
