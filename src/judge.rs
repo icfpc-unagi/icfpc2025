@@ -317,12 +317,41 @@ impl LocalJudge {
     pub fn new_json(problem_name: Option<String>, map: &crate::api::Map) -> Self {
         let n = map.rooms.len();
         let mut graph = vec![[0usize; 6]; n];
+
+        // Initialize RNG from env var SEED (fallback to 0)
+        let seed: u64 = std::env::var("SEED")
+            .ok()
+            .and_then(|s| {
+                let t = s.trim();
+                if t.is_empty() {
+                    None
+                } else {
+                    t.parse::<u64>().ok()
+                }
+            })
+            .unwrap_or(0);
+        let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(seed);
+
+        // Build per-room door remapping (0..5 -> shuffled 0..5)
+        let mut door_maps: Vec<[usize; 6]> = Vec::with_capacity(n);
+        for _ in 0..n {
+            let mut m = [0usize; 6];
+            for (d, slot) in m.iter_mut().enumerate() {
+                *slot = d;
+            }
+            m.shuffle(&mut rng);
+            door_maps.push(m);
+        }
+
+        // Apply remapping when constructing the graph
         for c in &map.connections {
             let fr = &c.from;
             let to = &c.to;
             if fr.room < n && fr.door < 6 && to.room < n && to.door < 6 {
-                graph[fr.room][fr.door] = to.room;
-                graph[to.room][to.door] = fr.room;
+                let new_fd = door_maps[fr.room][fr.door];
+                let new_td = door_maps[to.room][to.door];
+                graph[fr.room][new_fd] = to.room;
+                graph[to.room][new_td] = fr.room;
             }
         }
         Self {
