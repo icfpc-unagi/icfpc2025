@@ -406,7 +406,7 @@ async fn fetch_snapshots(problem: &str) -> Result<Vec<Snapshot>> {
 
 /// 最近の提出（guess）を取得してHTMLとして返す関数
 async fn recent_guesses(problem: &str) -> Result<String> {
-    // 直近10件の正解・不正解のguessを取得
+    // 直近の提出（guess）を取得
     let rows = if problem != "global" {
         sql::select(
             "
@@ -457,7 +457,8 @@ async fn recent_guesses(problem: &str) -> Result<String> {
         let correct = row.at::<bool>(3)?;
         let map = row.at::<String>(4)?;
         // compact
-        let map = serde_json::to_string(&serde_json::from_str::<api::Map>(&map)?)?;
+        let map_value: serde_json::Value = serde_json::from_str(&map)?;
+        let map = serde_json::to_string(&map_value)?;
         let map_leading_part = &map[..100.min(map.len())];
         write!(
             w,
