@@ -5,8 +5,9 @@ use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::{Child, ChildStderr, ChildStdout, Command, ExitStatus, Stdio};
 use std::sync::{
+    Arc, Mutex,
     atomic::{AtomicBool, Ordering},
-    mpsc, Arc, Mutex,
+    mpsc,
 };
 use std::time::{Duration, Instant};
 
@@ -106,10 +107,10 @@ fn spawn_stdout_thread(
                 break;
             }
             write_jsonl(&mut stdout_file, &line)?;
-            if let Some(json) = parse_unagi_line(&line) {
-                if let Ok(mut slot) = last_json.lock() {
-                    *slot = Some(json);
-                }
+            if let Some(json) = parse_unagi_line(&line)
+                && let Ok(mut slot) = last_json.lock()
+            {
+                *slot = Some(json);
             }
         }
         Ok(())

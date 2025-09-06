@@ -1,10 +1,10 @@
 use anyhow::{Context, Result};
 use mysql::params;
 use std::fs::create_dir_all;
-use std::path::PathBuf;
-use std::time::{Duration, Instant};
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
+use std::path::PathBuf;
+use std::time::{Duration, Instant};
 
 use crate::sql;
 
@@ -235,7 +235,8 @@ pub fn run_task(task: &Task) -> Result<(Option<i64>, u128)> {
             #[cfg(not(unix))]
             {
                 let status = std::process::Command::new("cmd")
-                    .args(["/C", "exit", "1"]).status()
+                    .args(["/C", "exit", "1"])
+                    .status()
                     .unwrap_or_else(|_| std::process::ExitStatus::from_raw(1));
                 (None, status)
             }
