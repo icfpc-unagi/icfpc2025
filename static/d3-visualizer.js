@@ -1,0 +1,165 @@
+import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
+
+const chart = (guess_json) => {
+  // Specify the dimensions of the chart.
+  const width = 928;
+  const height = 680;
+
+  // Specify the color scale.
+  const color = d3.scaleOrdinal(d3.schemeCategory10);
+
+  const nodes = [];
+  const links = [];
+  const fnodes = [];
+  const flinks = [];
+
+  for (const [id, room] of guess_json.map.rooms.entries()) {
+    const node = { id: `${id}`, color: color(room), r: 5 };
+    nodes.push(node);
+    fnodes.push(node);
+    for (const door of Array(6).keys()) {
+      fnodes.push({ id: `${id}door${door}`, color: "#999", r: 2 });
+      flinks.push({ source: `${id}`, target: `${id}door${door}`, distance: 0.1 });
+    }
+  }
+  for (const conn of guess_json.map.connections) {
+    const link = {
+      sourceRoom: conn.from.room,
+      source: `${conn.from.room}door${conn.from.door}`,
+      target: `${conn.to.room}door${conn.to.door}`,
+      targetRoom: conn.to.room,
+      distance: 10
+    };
+    // links.push({source: `${conn.from.room}`, target: `${conn.to.room}`});
+    // links.push({source: conn.from, target: conn.to});
+    // links.push({source: nodes[conn.from.room], target: nodes[conn.to.room]});
+    // flinks.push({source: `${conn.from.room}door${conn.from.door}`, target: `${conn.to.room}door${conn.to.door}`, distance: 10});
+    // links.push({source: `${conn.from.room}door${conn.from.door}`, target: `${conn.to.room}door${conn.to.door}`, distance: 10});
+    links.push(link);
+    flinks.push(link);
+  }
+
+  //   const data = {
+  //     nodes: quintus3.map.rooms.flatMap((group, i) => [
+  //         {id: i.toString(), color: color(group), r: 5},
+  //         ...Array.from({length: 6}, (_, j) => ({id: `${i}door${j}`, color: "#999", r: 2}))
+  //     ]),
+  //     links: [
+  //         ...quintus3.map.rooms.flatMap((group, i) => [
+  //             ...Array.from({length: 6}, (_, j) => ({source: i.toString(), target: `${i}door${j}`, distance: 0.1}))
+  //         ]),
+  //         ...quintus3.map.connections.map(({from, to}) => {
+  //             return {source: `${from.room}door${from.door}`, target: `${to.room}door${to.door}`, distance: 10};
+  //         })
+  //     ]
+  //   };
+
+  // The force simulation mutates links and nodes, so create a copy
+  // so that re-evaluating this cell produces the same result.
+  //   const links = data.links.map(d => ({...d}));
+  //   const nodes = data.nodes.map(d => ({...d}));
+
+  // Create a simulation with several forces.
+  const simulation = d3.forceSimulation(fnodes)
+    .force("link", d3.forceLink(flinks).id(d => d.id).distance(d => d.distance))
+    .force("charge", d3.forceManyBody())
+    .force("x", d3.forceX())
+    .force("y", d3.forceY());
+
+  // Create the SVG container.
+  const svg = d3.create("svg")
+    .attr("width", width)
+    .attr("height", height)
+    .attr("viewBox", [-width / 2, -height / 2, width, height])
+    .attr("style", "max-width: 100%; height: auto;");
+
+  // Add a line for each link, and a circle for each node.
+  const link = svg.append("g")
+    .attr("stroke", "#999")
+    .attr("stroke-opacity", 0.6)
+    .attr("fill", "none")
+    .selectAll("path")
+    .data(() => { console.log(links); return links; })
+    // .join("line")
+    //   .attr("stroke-width", d => 1);
+    .join("path")
+    .attr("stroke-width", d => 1);
+  // .join("path")
+  //   .attr("stroke-width", 1)
+  //   .attr("d", d => `M${d.source.x},${d.source.y}L${d.target.x},${d.target.y}`);
+
+  const node = svg.append("g")
+    .attr("stroke", "#fff")
+    .attr("stroke-width", 1.5)
+    .selectAll("circle")
+    .data(nodes)
+    .join("circle")
+    .attr("r", d => d.r)
+    .attr("fill", d => d.color);
+
+  node.append("title")
+    .text(d => d.id);
+
+  // Add a drag behavior.
+  node.call(d3.drag()
+    .on("start", dragstarted)
+    .on("drag", dragged)
+    .on("end", dragended));
+
+  // Set the position attributes of links and nodes each time the simulation ticks.
+  simulation.on("tick", () => {
+    link
+      .attr("d", d => {
+        // const {room: room1, door: door1} = d.source;
+        // const {room: room2, door: door2} = d.target;
+        // return `M${nodes[room1].x},${nodes[room1].y}L${nodes[room2].x},${nodes[room2].y}`;
+        const { x: x0, y: y0 } = nodes[d.sourceRoom];
+        let { x: x1, y: y1 } = d.source;
+        let { x: x2, y: y2 } = d.target;
+        const { x: x3, y: y3 } = nodes[d.targetRoom];
+        x1 += (x1 - x0) * .5;
+        y1 += (y1 - y0) * .5;
+        x2 += (x2 - x3) * .5;
+        y2 += (y2 - y3) * .5;
+        return `M${x0} ${y0} C${x1} ${y1}, ${x2} ${y2}, ${x3} ${y3}`;
+      });
+    // .attr("x1", d => d.source.x)
+    // .attr("y1", d => d.source.y)
+    // .attr("x2", d => d.target.x)
+    // .attr("y2", d => d.target.y);
+
+    node
+      .attr("cx", d => d.x)
+      .attr("cy", d => d.y);
+  });
+
+  // Reheat the simulation when drag starts, and fix the subject position.
+  function dragstarted(event) {
+    if (!event.active) simulation.alphaTarget(0.3).restart();
+    event.subject.fx = event.subject.x;
+    event.subject.fy = event.subject.y;
+  }
+
+  // Update the subject (dragged node) position during drag.
+  function dragged(event) {
+    event.subject.fx = event.x;
+    event.subject.fy = event.y;
+  }
+
+  // Restore the target alpha so the simulation cools after dragging ends.
+  // Unfix the subject position now that it’s no longer being dragged.
+  function dragended(event) {
+    if (!event.active) simulation.alphaTarget(0);
+    event.subject.fx = null;
+    event.subject.fy = null;
+  }
+
+  // When this cell is re-run, stop the previous simulation. (This doesn’t
+  // really matter since the target alpha is zero and the simulation will
+  // stop naturally, but it’s a good practice.)
+  //   invalidation.then(() => simulation.stop());
+
+  return svg.node();
+}
+
+export default chart;

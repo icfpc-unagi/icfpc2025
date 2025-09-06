@@ -404,7 +404,7 @@ async fn fetch_snapshots(problem: &str) -> Result<Vec<Snapshot>> {
     sync_writes = "by_key"
 )]
 fn last_correct_guess(problem: &str) -> Result<String> {
-    let mut map_html = String::new();
+    let mut w = String::new();
     if let Some(row) = sql::row(
         "
         SELECT JSON_EXTRACT(g.api_log_request, '$.map') AS map,
@@ -420,14 +420,67 @@ fn last_correct_guess(problem: &str) -> Result<String> {
         params! { "problem" => problem },
     )? {
         let map: api::Map = serde_json::from_str(&row.at::<String>(0)?)?;
-        // Render the map as an SVG.
-        map_html = format!(
-            "<div>Latest solved map (at {ts} UTC): {svg}</div>",
+        let n = map.rooms.len();
+        write!(
+            w,
+            "<h4>Latest solved map (at {ts} UTC):</h4>",
             ts = row.at::<NaiveDateTime>(1)?,
-            svg = svg::render(&map),
-        );
+        )?;
+
+        // Data tables
+        let mut doors = vec![[usize::MAX; 6]; n];
+        let mut adj = vec![vec![0; n]; n];
+        for api::MapConnection { from, to } in &map.connections {
+            doors[from.room][from.door] = to.room;
+            doors[to.room][to.door] = from.room;
+            adj[from.room][to.room] += 1;
+            adj[to.room][from.room] += 1;
+        }
+        write!(w, "<table><tr><th>d\\r")?;
+        for j in 0..n {
+            write!(w, "<th style=\"width:24px; text-align:center;\">{j}")?;
+        }
+        for i in 0..6 {
+            write!(w, "<tr><td>{i}")?;
+            for d in doors.iter() {
+                write!(
+                    w,
+                    "<td style=\"background:#afa; text-align:center;\">{}",
+                    d[i]
+                )?;
+            }
+        }
+        write!(w, "</table><table><tr><th>r\\r")?;
+        for i in 0..n {
+            write!(w, "<th style=\"width:24px; text-align:center;\">{i}")?;
+        }
+        for (i, row) in adj.iter().enumerate() {
+            write!(w, "<tr><td style=\"width:24px; text-align:center;\">{i}")?;
+            for &val in row.iter() {
+                write!(
+                    w,
+                    "<td style=\"background:#aaf; text-align:center;\">{}",
+                    val
+                )?;
+            }
+        }
+
+        // Render d3 visualizer.
+        let mut problem = serde_json::value::Map::new();
+        problem.insert("map".to_string(), serde_json::to_value(&map)?);
+        write!(
+            w,
+            r#"</table><div id="container"></div><script type="module">
+              import chart from '/static/d3-visualizer.js';
+              document.getElementById('container').append(chart({}));
+            </script>"#,
+            serde_json::to_string(&problem)?,
+        )?;
+
+        // Render the map as an SVG.
+        write!(w, "{}", &svg::render(&map))?;
     } else {
-        write!(map_html, "<div>No successful guess submitted</div>")?;
+        write!(w, "<div>No successful guess submitted</div>")?;
     }
-    Ok(map_html)
+    Ok(w)
 }
