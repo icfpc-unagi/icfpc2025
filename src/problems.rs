@@ -42,17 +42,6 @@ const PROBLEMS_DATA: &[Problem] = &[
         problem_name: "quintus",
         size: 30,
     },
-    // added data
-    // aleph	12	-
-    // beth	24	-
-    // gimel	36	-
-    // daleth	48	-
-    // he	60	-
-    // vau	18	-
-    // zain	36	-
-    // hhet	54	-
-    // teth	72	-
-    // iod	90	-
     Problem {
         problem_name: "aleph",
         size: 12,
@@ -134,22 +123,8 @@ mod tests {
         assert_eq!(
             names,
             vec![
-                "probatio",
-                "primus",
-                "secundus",
-                "tertius",
-                "quartus",
-                "quintus",
-                "aleph",
-                "beth",
-                "gimel",
-                "daleth",
-                "he",
-                "vau",
-                "zain",
-                "hhet",
-                "teth",
-                "iod",
+                "probatio", "primus", "secundus", "tertius", "quartus", "quintus", "aleph", "beth",
+                "gimel", "daleth", "he", "vau", "zain", "hhet", "teth", "iod",
             ]
         );
         let sizes: Vec<usize> = all.iter().map(|p| p.size).collect();
