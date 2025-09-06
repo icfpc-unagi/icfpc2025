@@ -215,6 +215,25 @@ impl LocalJudge {
             _ => panic!("Unknown problem type: {}", problem_type),
         }
     }
+
+    pub fn new_json(problem_name: Option<String>, map: &crate::api::Map) -> Self {
+        let n = map.rooms.len();
+        let mut graph = vec![[0usize; 6]; n];
+        for c in &map.connections {
+            let fr = &c.from;
+            let to = &c.to;
+            if fr.room < n && fr.door < 6 && to.room < n && to.door < 6 {
+                graph[fr.room][fr.door] = to.room;
+                graph[to.room][to.door] = fr.room;
+            }
+        }
+        Self {
+            problem_name: problem_name.unwrap_or_else(|| "json".to_string()),
+            rooms: map.rooms.clone(),
+            graph,
+            cost: 0,
+        }
+    }
 }
 
 pub fn get_judge_from_stdin() -> Box<dyn Judge> {
@@ -233,6 +252,19 @@ pub fn get_judge_from_stdin() -> Box<dyn Judge> {
             problem_name: String,
         }
         Box::new(RemoteJudge::new(&problem_name))
+    } else if local_remote == "json" {
+        use std::io::Read;
+        let mut buf = String::new();
+        std::io::stdin().read_to_string(&mut buf).unwrap();
+        #[derive(serde::Deserialize)]
+        struct JsonIn {
+            #[serde(rename = "problemName")]
+            #[serde(default)]
+            problem_name: Option<String>,
+            map: crate::api::Map,
+        }
+        let parsed: JsonIn = serde_json::from_str(&buf).expect("invalid JSON for json mode");
+        Box::new(LocalJudge::new_json(parsed.problem_name, &parsed.map))
     } else {
         panic!("local_remote must be 'local' or 'remote'");
     }
