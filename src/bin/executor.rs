@@ -26,8 +26,8 @@ fn run() -> Result<()> {
         match exec::acquire_task()? {
             Some(task) => {
                 // Optionally heartbeat could be added with a separate thread calling extend_lock.
-                let (score, duration_ms) = exec::run_task(&task)?;
-                exec::update_task(&task, score, duration_ms)?;
+                let (score, exit_code, duration_ms) = exec::run_task(&task)?;
+                exec::update_task(&task, score, exit_code, duration_ms)?;
             }
             None => {
                 thread::sleep(Duration::from_millis(args.sleep_ms));
