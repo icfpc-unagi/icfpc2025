@@ -54,10 +54,10 @@ fn main() {
     // let prefixes = vec![prefix_a, prefix_b];
 
     let prefix_len = pairs.len();
-    let suffix_len = 42.min(4 * n - prefix_len);
+    let suffix_len = 60.min(4 * n - prefix_len);
     // assert_eq!(prefix_len, 12);
 
-    let suffixes: Vec<Vec<Step>> = (0..24) // TODO: tune
+    let suffixes: Vec<Vec<Step>> = (0..36) // TODO: tune
         .map(|i| {
             let mut s = vec![];
             for door in [i % 6, (i % 6 + i / 6 + 1) % 6] {
@@ -88,7 +88,7 @@ fn main() {
     let mut cost = 0usize;
 
     let mut cnt = 0;
-    let max_batch_size = 20; // 1 to debug locally
+    let max_batch_size = 10; // 1 to debug locally
     while !queue.is_empty() {
         let paths = queue
             .drain(..queue.len().min(max_batch_size))
