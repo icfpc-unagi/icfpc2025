@@ -341,7 +341,7 @@ struct ExploreRequest<'a> {
 #[derive(Debug, Clone, Deserialize)]
 pub struct ExploreResponse {
     /// A list of results, where each result corresponds to a plan and contains
-    /// a vector of room signatures (i.e., number of doors) visited.
+    /// a vector of room signatures including steps after rewrite-label actions.
     pub results: Vec<Vec<usize>>,
     /// The total number of queries consumed by this request.
     #[serde(rename = "queryCount")]
@@ -364,21 +364,13 @@ pub struct ExploreResponse {
 pub fn explore<I, S>(plans: I) -> Result<ExploreResponse>
 where
     I: IntoIterator<Item = S>,
-    S: AsRef<Vec<usize>>,
+    S: AsRef<str>,
 {
     let client = http_client()?;
     let url = format!("{}/explore", aedificium_base());
     let id = get_id()?;
     // Convert the plans from Vec<usize> to strings of digits for the JSON request.
-    let plans_vec: Vec<String> = plans
-        .into_iter()
-        .map(|s| {
-            s.as_ref()
-                .iter()
-                .map(|&x| (b'0' + (x as u8)) as char)
-                .collect()
-        })
-        .collect();
+    let plans_vec: Vec<String> = plans.into_iter().map(|s| s.as_ref().to_string()).collect();
     let req = ExploreRequest {
         id: id.as_str(),
         plans: &plans_vec,

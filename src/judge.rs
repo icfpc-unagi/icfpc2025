@@ -35,6 +35,48 @@ pub struct JsonIn {
     pub results: Option<Vec<Vec<usize>>>,
 }
 
+type Step = (Option<usize>, usize); // (newlabel, door)
+
+fn format_step(step: Step) -> String {
+    match step.0 {
+        Some(newlabel) => format!("[{}]{}", newlabel, step.1),
+        None => format!("{}", step.1),
+    }
+}
+
+fn parse_plan(plan: &str) -> Vec<Step> {
+    let mut res = vec![];
+    // p.chars().map(|c| (c as u8 - b'0') as usize).collect()
+    let mut state = 0;
+    let mut newlabel = None;
+    for c in plan.chars() {
+        match c {
+            '[' => {
+                assert_eq!(state, 0);
+                state = 1;
+            }
+            ']' => {
+                assert_eq!(state, 2);
+                state = 0;
+            }
+            _ => match state {
+                0 => {
+                    assert!(c < '6');
+                    let door = (c as u8 - b'0') as usize;
+                    res.push((newlabel, door));
+                }
+                1 => {
+                    assert!(c < '4');
+                    newlabel = Some((c as u8 - b'0') as usize);
+                    state = 2;
+                }
+                _ => panic!("Unexpected character in plan: {}", c),
+            },
+        }
+    }
+    res
+}
+
 /// A trait abstracting the problem environment.
 ///
 /// This allows solver logic to be written once and used against both a local
@@ -46,7 +88,7 @@ pub trait Judge {
     fn problem_name(&self) -> &str;
     /// Submits exploration plans to the judge and returns the results.
     /// The results are sequences of room signatures observed during traversal.
-    fn explore(&mut self, plans: &[Vec<usize>]) -> Vec<Vec<usize>>;
+    fn explore(&mut self, plans: &[Vec<Step>]) -> Vec<Vec<usize>>;
     /// Submits a final map guess to the judge. Returns `true` if the guess is correct.
     fn guess(&self, out: &Guess) -> bool;
     /// Returns a log of all explorations made so far.
@@ -73,7 +115,7 @@ pub struct Guess {
 #[derive(Clone, Debug)]
 pub struct Explored {
     /// The list of plans (sequences of door choices) sent in the query.
-    pub plans: Vec<Vec<usize>>,
+    pub plans: Vec<Vec<Step>>,
     /// The list of results (sequences of room signatures) returned by the judge.
     pub results: Vec<Vec<usize>>,
 }
@@ -102,15 +144,18 @@ impl Judge for LocalJudge {
     fn problem_name(&self) -> &str {
         &self.problem_name
     }
-    fn explore(&mut self, plans: &[Vec<usize>]) -> Vec<Vec<usize>> {
+    fn explore(&mut self, plans: &[Vec<Step>]) -> Vec<Vec<usize>> {
         println!("explore {}", plans.len());
         self.cost += plans.len() + 1;
         let mut ret = vec![];
         for plan in plans {
-            println!("{}", plan.iter().map(|&d| d.to_string()).join(""));
+            println!("{}", plan.iter().map(|&step| format_step(step)).join(""));
             let mut u = 0; // Start at room 0 (the fixed starting room in the problem spec)
             let mut route = vec![self.rooms[u]];
-            for &door in plan {
+            for &(newlabel, door) in plan {
+                if newlabel.is_some() {
+                    panic!("TODO: implement rewrite-label action!")
+                }
                 assert!(door < 6);
                 u = self.graph[u][door];
                 route.push(self.rooms[u]);
@@ -213,21 +258,44 @@ impl Judge for RemoteJudge {
     fn problem_name(&self) -> &str {
         &self.problem_name
     }
-    fn explore(&mut self, plans: &[Vec<usize>]) -> Vec<Vec<usize>> {
+    fn explore(&mut self, plans: &[Vec<Step>]) -> Vec<Vec<usize>> {
         println!("explore {}", plans.len());
         self.cost += plans.len() + 1;
         for plan in plans {
-            println!("{}", plan.iter().map(|&d| d.to_string()).join(""));
-            assert!(plan.len() <= 18 * self.num_rooms());
+            println!("{}", plan.iter().map(|&step| format_step(step)).join(""));
+            assert!(plan.len() <= 6 * self.num_rooms());
         }
+        let str_plans: Vec<String> = plans
+            .iter()
+            .map(|p| p.iter().map(|&step| format_step(step)).join(""))
+            .collect();
         // Delegate the actual exploration to the API client.
-        let ret = api::explore(plans).expect("Failed to explore").results;
+        let raw_response = api::explore(&str_plans).expect("Failed to explore");
+        assert_eq!(raw_response.results.len(), plans.len());
+        let results = plans
+            .iter()
+            .zip(raw_response.results.iter())
+            .map(|(plan, response)| {
+                let mut filtered_response = vec![response[0]];
+                let mut ix = 1;
+                for &(rewrite, _door) in plan.iter() {
+                    if let Some(rewrite) = rewrite {
+                        assert_eq!(response[ix], rewrite);
+                        ix += 1;
+                    }
+                    filtered_response.push(response[ix]);
+                    ix += 1;
+                }
+                assert_eq!(ix, response.len());
+                filtered_response
+            })
+            .collect_vec();
         self.explored_log.plans.extend(plans.to_vec());
-        self.explored_log.results.extend(ret.clone());
-        for r in &ret {
+        self.explored_log.results.extend(results.clone());
+        for r in &results {
             println!("{}", r.iter().join(""));
         }
-        ret
+        results
     }
     fn guess(&self, out: &Guess) -> bool {
         println!("guess");
@@ -495,10 +563,7 @@ pub fn get_judge_from_stdin_with(explored: bool) -> Box<dyn Judge> {
 
         // Helper for new single-explore format: (plans, results) at top level
         fn single_to_explored(plans: Vec<String>, results: Vec<Vec<usize>>) -> Explored {
-            let plans_parsed = plans
-                .into_iter()
-                .map(|p| p.chars().map(|c| (c as u8 - b'0') as usize).collect())
-                .collect::<Vec<Vec<usize>>>();
+            let plans_parsed = plans.iter().map(|p| parse_plan(p)).collect::<Vec<_>>();
             Explored {
                 plans: plans_parsed,
                 results,
@@ -556,7 +621,7 @@ pub fn get_judge_from_stdin_with(explored: bool) -> Box<dyn Judge> {
             let mut rng = rand::rng();
             let mut plan = Vec::with_capacity(18 * n);
             for _ in 0..(18 * n) {
-                plan.push(rng.random_range(0..6));
+                plan.push((None, rng.random_range(0..6)));
             }
             let _ = j.explore(&[plan]);
         }
@@ -594,7 +659,7 @@ pub fn get_judge_from_stdin_with(explored: bool) -> Box<dyn Judge> {
         let mut rng = rand::rng();
         let mut plan = Vec::with_capacity(18 * n);
         for _ in 0..(18 * n) {
-            plan.push(rng.random_range(0..6));
+            plan.push((None, rng.random_range(0..6)));
         }
         let _ = j.explore(&[plan]);
     }

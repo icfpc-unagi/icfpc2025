@@ -46,7 +46,7 @@ fn main() {
         !explored.plans.is_empty(),
         "explored is empty; provide explores via JSON"
     );
-    let plan = explored.plans[0].clone();
+    let plan: Vec<usize> = explored.plans[0].iter().map(|&(_, d)| d).collect();
     let r = vec![explored.results[0].clone()];
 
     assert_eq!(r.len(), 1);

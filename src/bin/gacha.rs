@@ -4,8 +4,6 @@ struct PlanInfo {
     n: usize,
     plan: Vec<usize>,
     labels: Vec<usize>,
-    t: usize,
-    m: usize,
     diff: Vec<Vec<bool>>,
 }
 
@@ -15,9 +13,9 @@ fn compute_diff(plan: &[usize], labels: &[usize]) -> Vec<Vec<bool>> {
     let mut diff = mat![false; m; m];
     for i in (0..m).rev() {
         for j in (0..m).rev() {
-            if labels[i] != labels[j] {
-                diff[i][j] = true;
-            } else if i < t && j < t && plan[i] == plan[j] && diff[i + 1][j + 1] {
+            if labels[i] != labels[j]
+                || (i < t && j < t && plan[i] == plan[j] && diff[i + 1][j + 1])
+            {
                 diff[i][j] = true;
             }
         }
@@ -49,7 +47,8 @@ fn acquire_plan_and_labels(judge: &mut dyn icfpc2025::judge::Judge) -> PlanInfo 
         .map(|c| c.to_digit(10).unwrap() as usize)
         .collect::<Vec<_>>();
 
-    let labels = judge.explore(&vec![plan.clone()])[0].clone();
+    let steps: Vec<(Option<usize>, usize)> = plan.iter().copied().map(|d| (None, d)).collect();
+    let labels = judge.explore(&[steps])[0].clone();
     let m = labels.len();
     let t = plan.len();
     debug_assert_eq!(m, t + 1);
@@ -58,8 +57,6 @@ fn acquire_plan_and_labels(judge: &mut dyn icfpc2025::judge::Judge) -> PlanInfo 
         n,
         plan,
         labels,
-        t,
-        m,
         diff,
     }
 }
@@ -88,10 +85,10 @@ fn main() {
             aib[a][i][b] = true;
         }
         let mut cnt = 0;
-        for a in 0..4 {
-            for i in 0..6 {
-                for b in 0..4 {
-                    if !aib[a][i][b] {
+        for a in aib.iter() {
+            for i in a.iter() {
+                for b in i.iter() {
+                    if !*b {
                         cnt += 1;
                     }
                 }
@@ -106,7 +103,7 @@ fn main() {
             label_door[label][door] += 1;
         }
         let mut sum = 0.0;
-        let mut num = vec![0; 4];
+        let mut num = [0; 4];
         for i in 0..info.n {
             num[i % 4] += 1;
         }

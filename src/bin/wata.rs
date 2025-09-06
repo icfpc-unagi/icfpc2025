@@ -19,7 +19,7 @@ fn main() {
         !explored.plans.is_empty(),
         "explored is empty; provide explores via JSON"
     );
-    let doors = explored.plans[0].clone();
+    let doors: Vec<usize> = explored.plans[0].iter().map(|&(_, d)| d).collect();
     let labels = explored.results[0].clone();
     let mut guess = Guess {
         rooms: vec![!0; n],
