@@ -13,6 +13,7 @@ RUN apt-get update \
         build-essential \
         pkg-config \
         libssl-dev \
+        cmake \
     && rm -rf /var/lib/apt/lists/*
 RUN rustup target add x86_64-unknown-linux-musl
 RUN rustup target add wasm32-unknown-unknown
