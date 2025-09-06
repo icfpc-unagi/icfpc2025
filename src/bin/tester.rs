@@ -1,21 +1,15 @@
 use clap::Parser;
 
 /// Tester tool for running a command with input/output redirection.
-///
-/// Example usage:
-///   tester --cmd "./solution" --input in.txt --output out.txt --vis vis.html
 #[derive(Parser, Debug)]
 struct Cli {
     /// The shell command to run (e.g., the solution binary)
     cmd: String,
     /// Path to the input file
-    #[arg(short = 'i', long = "input")]
     input: String,
     /// Path to the output file (will be created)
-    #[arg(short = 'o', long = "output")]
     output: String,
     /// Path to the visualization file (unused)
-    #[arg(short = 'v', long = "vis")]
     vis: String,
 }
 

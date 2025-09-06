@@ -150,16 +150,17 @@ impl Judge for LocalJudge {
         self.cost += plans.len() + 1;
         let mut ret = vec![];
         for plan in plans {
+            let mut labels = self.rooms.clone();
             println!("{}", plan.iter().map(|&step| format_step(step)).join(""));
             let mut u = 0; // Start at room 0 (the fixed starting room in the problem spec)
-            let mut route = vec![self.rooms[u]];
+            let mut route = vec![labels[u]];
             for &(newlabel, door) in plan {
-                if newlabel.is_some() {
-                    panic!("TODO: implement rewrite-label action!")
+                if let Some(newlabel) = newlabel {
+                    labels[u] = newlabel;
                 }
                 assert!(door < 6);
                 u = self.graph[u][door];
-                route.push(self.rooms[u]);
+                route.push(labels[u]);
             }
             ret.push(route);
             assert!(plan.len() <= 6 * self.num_rooms());
@@ -194,30 +195,44 @@ impl Judge for LocalJudge {
                 assert_eq!(out.graph[i2][door2], (i, door), "Graph is not undirected");
             }
         }
-
-        // Check for isomorphism between the true map and the guessed map.
-        // This is done via a graph traversal (BFS-like) starting from the known
-        // starting points (room 0 in the true map, `out.start` in the guess).
-        let n = self.rooms.len();
-        let mut dp = mat![false; n; n];
-        if self.rooms[0] != out.rooms[out.start] {
-            eprintln!("!log status WA (starting room signature mismatch)");
-            return false;
+        fn get_ids(graph: &Vec<[usize; 6]>, s: usize) -> Vec<usize> {
+            let n = graph.len();
+            let mut ids = vec![!0; n];
+            let mut stack = vec![];
+            ids[s] = 0;
+            stack.push(s);
+            let mut id = 1;
+            while let Some(u) = stack.pop() {
+                for &v in &graph[u] {
+                    if ids[v] == !0 {
+                        ids[v] = id;
+                        id += 1;
+                        stack.push(v);
+                    }
+                }
+            }
+            ids
         }
-        dp[0][out.start] = true;
-        let mut stack = vec![(0, out.start)];
-        while let Some((u, v)) = stack.pop() {
-            for door in 0..6 {
-                let u2 = self.graph[u][door];
-                let v2 = out.graph[v][door].0;
-                // The room signatures must match for corresponding rooms.
-                if self.rooms[u2] != out.rooms[v2] {
-                    eprintln!("!log status WA (room signature mismatch during traversal)");
-                    return false;
+
+        let n = self.rooms.len();
+        let ids = get_ids(&self.graph, 0);
+        let out_ids = get_ids(
+            &out.graph.iter().map(|a| a.map(|(r, _d)| r)).collect_vec(),
+            out.start,
+        );
+        for i in 0..n {
+            assert!(ids[i] != !0);
+            if let Some(j) = out_ids.iter().position(|&x| x == ids[i]) {
+                // Find corresponding room in guess
+                for d in 0..6 {
+                    if ids[self.graph[i][d]] != out_ids[out.graph[j][d].0] {
+                        eprintln!("!log status WA (edge mismatch)");
+                        return false;
+                    }
                 }
-                if dp[u2][v2].setmax(true) {
-                    stack.push((u2, v2));
-                }
+            } else {
+                eprintln!("!log status WA (disconnected room in guess)");
+                return false;
             }
         }
         eprintln!("!log status AC");
