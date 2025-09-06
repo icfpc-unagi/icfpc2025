@@ -6,7 +6,6 @@
     unused_variables
 )]
 use icfpc2025::judge::*;
-use rand::prelude::*;
 
 fn V(n: usize, q: usize, i: usize, u: usize) -> i32 {
     // i番目の頂点が頂点u
@@ -25,18 +24,16 @@ fn E(n: usize, q: usize, u: usize, e: usize, v: usize, f: usize) -> i32 {
 }
 
 fn main() {
-    let mut judge = get_judge_from_stdin();
-    let mut rnd = rand::rng();
-
+    let judge = get_judge_from_stdin_with(true);
     let n = judge.num_rooms();
 
-    //"0"~"5"の長さqのランダムな文字列Sを生成
-    let mut plan = vec![];
-    for _ in 0..(n * 18) {
-        let c: usize = rnd.random_range(0..6);
-        plan.push(c);
-    }
-    let r = judge.explore(&vec![plan.clone()]);
+    // Use pre-recorded explores instead of generating random route
+    let explores = judge.explored();
+    let first = explores
+        .first()
+        .expect("explored is empty; provide explores via JSON");
+    let plan = first.plans[0].clone();
+    let r = vec![first.results[0].clone()];
 
     assert_eq!(r.len(), 1);
     let seq = &r[0];

@@ -19,25 +19,19 @@ struct Args {
 }
 
 fn main() {
-    let mut judge = get_judge_from_stdin();
+    let judge = get_judge_from_stdin_with(true);
     let n = judge.num_rooms();
-    let q = n * 18;
     let mut m = Moves {
         label: vec![],
         door: vec![],
     };
-    let mut rnd = rand::rng();
-
-    //"0"~"5"の長さqのランダムな文字列Sを生成
-    let mut plan = vec![];
-    for _ in 0..q {
-        let c: usize = rnd.random_range(0..6);
-        plan.push(c);
-        m.door.push(c);
-    }
-    let plans = vec![plan];
-    let r = judge.explore(&plans);
-    m.label = r[0].clone();
+    // Use pre-recorded explores instead of generating random route
+    let explores = judge.explored();
+    let first = explores
+        .first()
+        .expect("explored is empty; provide explores via JSON");
+    m.door = first.plans[0].clone();
+    m.label = first.results[0].clone();
 
     //推測を行う
     //4グループの個数を適当に分ける
@@ -79,9 +73,9 @@ fn main() {
     loop {
         //ランダムにlabelを割り当てる
         let mut ans = vec![0; m.label.len()];
-        let mut rng = rand::rng();
+        let mut rnd = rand::rng();
         for i in 0..m.door.len() {
-            ans[i] = label_start[m.label[i]] + rng.random_range(0..nums[m.label[i]]);
+            ans[i] = label_start[m.label[i]] + rnd.random_range(0..nums[m.label[i]]);
         }
 
         let mut loop_cnt = 0;

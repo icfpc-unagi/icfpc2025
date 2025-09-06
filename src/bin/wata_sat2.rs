@@ -161,20 +161,20 @@ fn lit_is_true(model: &Assignment, l: Lit) -> bool {
 }
 
 fn main() {
-    let mut judge = get_judge_from_stdin();
+    let judge = get_judge_from_stdin_with(true);
     let fix_label = true;
     let use_diff = true;
     let use_same = false;
 
     let n = judge.num_rooms();
 
-    let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(84300);
-    let mut plan = vec![];
-    for _ in 0..(n * 18) {
-        let c: usize = rng.random_range(0..6);
-        plan.push(c);
-    }
-    let labels = judge.explore(&vec![plan.clone()])[0].clone();
+    let rng = rand_pcg::Pcg64Mcg::seed_from_u64(84300);
+    let explores = judge.explored();
+    let first = explores
+        .first()
+        .expect("explored is empty; provide explores via JSON");
+    let plan = first.plans[0].clone();
+    let labels = first.results[0].clone();
 
     let mut diff = mat![false; labels.len(); labels.len()];
     loop {

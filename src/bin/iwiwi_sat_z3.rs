@@ -4,7 +4,7 @@ use rand::prelude::*;
 use z3::{ast::Bool, ast::Int, SatResult, Solver};
 
 fn main() {
-    let mut judge = get_judge_from_stdin();
+    let mut judge = get_judge_from_stdin_with(true);
     let mut rnd = rand::rng();
 
     let n = judge.num_rooms();
