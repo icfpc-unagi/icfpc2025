@@ -247,6 +247,8 @@ pub fn check_explore(guess: &Guess, plans: &[Vec<usize>], results: &[Vec<usize>]
             route.push(guess.rooms[u]);
         }
         if &route != result {
+            eprintln!("expected: {}", result.iter().join(""));
+            eprintln!("actual  : {}", route.iter().join(""));
             return false;
         }
     }
