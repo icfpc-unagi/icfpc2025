@@ -57,43 +57,58 @@ fn main() {
     let mut cost = 0usize;
 
     let mut cnt = 0;
-    while let Some(path) = queue.pop_front() {
+    while !queue.is_empty() {
+        let paths = queue;
+        queue = VecDeque::new();
         assert!(cnt < 7 * n);
         cnt += 1;
-        let plans = suffixes
-            .iter()
-            .map(|s| {
-                let mut p = path.clone();
-                p.extend(s);
-                p
-            })
-            .collect::<Vec<_>>();
-        let results = judge.explore(&plans);
-        cost += plans.len() + 1;
-        let results = results
-            .into_iter()
-            .map(|r| r[path.len()..].to_vec())
-            .collect::<Vec<_>>();
-        let room = *res_to_room.entry(results.clone()).or_insert_with(|| {
-            let r = room_to_res.len();
-            room_to_res.push(results.clone());
-            room_to_a_path.push(path.clone());
-            for door in 0..6 {
-                let mut p = path.clone();
-                p.push(door);
-                queue.push_back(p);
-            }
-            r
-        });
-        path_to_room.insert(path.clone(), room);
-        eprintln!(
-            "{} {}",
-            path.iter()
-                .map(|x| x.to_string())
-                .collect::<Vec<_>>()
-                .join(""),
-            room
-        );
+        let mut batched_plans = vec![];
+        for path in paths.iter() {
+            let plans = suffixes
+                .iter()
+                .map(|s| {
+                    let mut p = path.clone();
+                    p.extend(s);
+                    p
+                })
+                .collect::<Vec<_>>();
+            batched_plans.extend(plans);
+        }
+        let batched_results = judge.explore(&batched_plans);
+        cost += batched_plans.len() + 1;
+        // for (i, path) in paths.into_iter().enumerate() {}
+        for (path, results) in paths.into_iter().zip(batched_results.chunks_exact(36)) {
+            // let results = judge.explore(&plans);
+            // let start_index = 36 * i;
+            // let stop_index = 36 * (i + 1);
+            // let results = &batched_results[start_index..stop_index];
+            // let plans = &batched_plans[start_index..stop_index];
+            // cost += plans.len() + 1;
+            let results = results
+                .iter()
+                .map(|r| r[path.len()..].to_vec())
+                .collect::<Vec<_>>();
+            let room = *res_to_room.entry(results.clone()).or_insert_with(|| {
+                let r = room_to_res.len();
+                room_to_res.push(results.clone());
+                room_to_a_path.push(path.clone());
+                for door in 0..6 {
+                    let mut p = path.clone();
+                    p.push(door);
+                    queue.push_back(p);
+                }
+                r
+            });
+            path_to_room.insert(path.clone(), room);
+            eprintln!(
+                "{} {}",
+                path.iter()
+                    .map(|x| x.to_string())
+                    .collect::<Vec<_>>()
+                    .join(""),
+                room
+            );
+        }
     }
 
     // senpuku
