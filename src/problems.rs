@@ -129,16 +129,34 @@ mod tests {
     #[test]
     fn all_problems_contains_expected_entries() {
         let all = all_problems();
-        assert_eq!(all.len(), 6);
+        assert_eq!(all.len(), 16);
         let names: Vec<&str> = all.iter().map(|p| p.problem_name).collect();
         assert_eq!(
             names,
             vec![
-                "probatio", "primus", "secundus", "tertius", "quartus", "quintus"
+                "probatio",
+                "primus",
+                "secundus",
+                "tertius",
+                "quartus",
+                "quintus",
+                "aleph",
+                "beth",
+                "gimel",
+                "daleth",
+                "he",
+                "vau",
+                "zain",
+                "hhet",
+                "teth",
+                "iod",
             ]
         );
         let sizes: Vec<usize> = all.iter().map(|p| p.size).collect();
-        assert_eq!(sizes, vec![3, 6, 12, 18, 24, 30]);
+        assert_eq!(
+            sizes,
+            vec![3, 6, 12, 18, 24, 30, 12, 24, 36, 48, 60, 18, 36, 54, 72, 90]
+        );
     }
 
     #[test]
