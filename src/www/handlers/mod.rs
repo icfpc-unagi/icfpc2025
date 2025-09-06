@@ -1,3 +1,8 @@
+//! # Web Request Handlers
+//!
+//! This module aggregates all the Axum request handlers for the web server.
+//! Each submodule corresponds to a specific area of functionality or API endpoint.
+
 use crate::*;
 // pub mod api_proxy;
 pub mod cron;
@@ -11,8 +16,12 @@ pub mod template;
 pub mod api;
 pub mod leaderboard;
 
-use actix_web::{HttpResponse, Responder, web};
+use actix_web::{web, HttpResponse, Responder};
+use serde::Deserialize;
 
+/// Handler for the root path (`/`).
+///
+/// Responds with a simple "Hello, world!" page.
 pub async fn index() -> impl Responder {
     HttpResponse::Ok()
         .content_type("text/html")
@@ -20,20 +29,29 @@ pub async fn index() -> impl Responder {
             "Hello, world!<br><a href='/comm'>communicate</a>",
         ))
 }
-use serde::Deserialize;
 
+/// Query parameters for the `/comm` endpoint.
 #[derive(Deserialize)]
 pub struct CommQuery {
+    /// The query string.
     #[serde(default)]
     _q: String,
+    /// A flag for raw mode.
     #[serde(default)]
     _raw: bool,
 }
 
+/// Handler for the `/comm` endpoint.
+///
+/// Note: The current implementation of this handler is a stub and
+/// its main logic is commented out. It currently returns an empty `Ok` response.
 pub async fn comm(_query: web::Query<CommQuery>) -> impl Responder {
     HttpResponse::Ok()
 }
 
+// NOTE: The original implementation of the `comm` handler is preserved below
+// in a commented-out block for historical reference.
+//
 // pub async fn comm(query: web::Query<CommQuery>) -> impl Responder {
 //     let mut value_str = String::new();
 //     let mut response = String::new();

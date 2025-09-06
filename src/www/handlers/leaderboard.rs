@@ -1,12 +1,19 @@
-use crate::{api, svg};
-use crate::{api::MapConnection, sql};
-use actix_web::{HttpResponse, Responder, web};
+//! # Leaderboard Page Handlers
+//!
+//! This module contains the handlers for rendering the leaderboard pages.
+//! It fetches historical leaderboard data, visualizes it using Chart.js,
+//! and displays the latest solved map for a given problem.
+
+use crate::{api, sql, svg};
+use crate::{api::MapConnection};
+use actix_web::{web, HttpResponse, Responder};
 use anyhow::Result;
 use chrono::NaiveDateTime;
 use mysql::params;
 use serde::Deserialize;
 use std::fmt::Write;
 
+/// A helper to wrap content in the standard HTML page template.
 fn html_page(title: &str, body: &str) -> String {
     // Auto-refresh leaderboard pages every 5 minutes
     let auto_refresh = "<script>setTimeout(() => location.reload(), 5*60*1000);</script>";
@@ -16,6 +23,7 @@ fn html_page(title: &str, body: &str) -> String {
     ))
 }
 
+/// Renders the main leaderboard index page, which lists all available problems.
 pub async fn index() -> impl Responder {
     let list = crate::problems::all_problems()
         .iter()
@@ -31,6 +39,7 @@ pub async fn index() -> impl Responder {
     HttpResponse::Ok().content_type("text/html").body(page)
 }
 
+/// The path parameter for the `show` handler, capturing the problem name.
 #[derive(Deserialize)]
 pub struct ProblemPath {
     problem: String,
@@ -39,6 +48,7 @@ pub struct ProblemPath {
 // Note: Previous implementation downsampled after download.
 // We now downsample timestamps before download to reduce bandwidth.
 
+/// The main handler for showing a leaderboard for a specific problem.
 pub async fn show(path: web::Path<ProblemPath>) -> impl Responder {
     let problem = &path.problem;
     let bucket = "icfpc2025-data";
@@ -50,8 +60,9 @@ pub async fn show(path: web::Path<ProblemPath>) -> impl Responder {
     }
 }
 
+/// The core logic for fetching data and rendering the leaderboard page for a single problem.
 async fn render_problem_leaderboard(bucket: &str, problem: &str) -> Result<String> {
-    // Build problem navigation links
+    // Build problem navigation links for the top of the page.
     let mut nav_links: Vec<String> = Vec::new();
     nav_links.push("[<a href=\"/leaderboard/global\">Global</a>]".to_string());
     for p in crate::problems::all_problems() {
@@ -65,7 +76,7 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str) -> Result<Strin
         nav_links.join(" ")
     );
 
-    // Fetch latest successful map for this problem
+    // Fetch the latest successfully solved map for this problem from our database.
     let mut map_html = String::new();
     if let Some(row) = sql::row(
         "
@@ -82,57 +93,18 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str) -> Result<Strin
         params! { "problem" => problem },
     )? {
         let map: api::Map = serde_json::from_str(&row.at::<String>(0)?)?;
-        let n = map.rooms.len();
-        let mut doors = vec![[usize::MAX; 6]; n];
-        let mut adj = vec![vec![0; n]; n];
-        for MapConnection { from, to } in &map.connections {
-            doors[from.room][from.door] = to.room;
-            doors[to.room][to.door] = from.room;
-            adj[from.room][to.room] += 1;
-            adj[to.room][from.room] += 1;
-        }
-        let w = &mut map_html;
-        write!(w, "<table><tr><th>d\\r")?;
-        for j in 0..n {
-            write!(w, "<th style=\"width:24px; text-align:center;\">{j}")?;
-        }
-        for i in 0..6 {
-            write!(w, "<tr><td>{i}")?;
-            for d in doors.iter() {
-                write!(
-                    w,
-                    "<td style=\"background:#afa; text-align:center;\">{}",
-                    d[i]
-                )?;
-            }
-        }
-        write!(w, "</table><table><tr><th>r\\r")?;
-        for i in 0..n {
-            write!(w, "<th style=\"width:24px; text-align:center;\">{i}")?;
-        }
-        for (i, row) in adj.iter().enumerate() {
-            write!(w, "<tr><td style=\"width:24px; text-align:center;\">{i}")?;
-            for &val in row.iter() {
-                write!(
-                    w,
-                    "<td style=\"background:#aaf; text-align:center;\">{}",
-                    val
-                )?;
-            }
-        }
-        write!(
-            w,
-            "</table><div>Latest solved map (at {ts} UTC): {svg}</div>",
+        // Render the map as an SVG.
+        map_html = format!(
+            "<div>Latest solved map (at {ts} UTC): {svg}</div>",
             ts = row.at::<NaiveDateTime>(1)?,
             svg = svg::render(&map),
-        )?;
+        );
     } else {
         write!(map_html, "<div>No successful guess submitted</div>")?;
     }
 
-    // List timestamps under history/
+    // List all timestamped snapshot directories from GCS.
     let (dirs, _files) = crate::gcp::gcs::list_dir(bucket, "history").await?;
-    // dirs like "YYYYMMDD-hhmmss/"; normalize and sort
     let mut stamps: Vec<String> = dirs
         .into_iter()
         .map(|d| d.trim_end_matches('/').to_string())
@@ -169,14 +141,14 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str) -> Result<Strin
         set.spawn(async move {
             match crate::gcp::gcs::download_object(&b, &object).await {
                 Ok(bytes) => Ok((ts_clone, bytes)),
-                Err(_e) => Err(()),
+                Err(_e) => Err(()), // Ignore errors for missing snapshots
             }
         });
     }
     let mut snaps: Vec<(String, Vec<u8>)> = Vec::new();
     while let Some(res) = set.join_next().await {
         if let Ok(Ok((object_path, bytes))) = res {
-            // extract timestamp from path history/{ts}/... -> ts
+            // extract timestamp from path: "history/{ts}/..." -> "ts"
             let ts = object_path
                 .strip_prefix("history/")
                 .and_then(|s| s.split('/').next())
@@ -190,7 +162,7 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str) -> Result<Strin
     snaps.sort_by(|a, b| a.0.cmp(&b.0));
     let snaps = snaps;
 
-    // Build JSON structure for the client side: [{ts, data: <json>}]
+    // Build a JSON structure to be consumed by the client-side JavaScript.
     #[derive(serde::Serialize)]
     struct Snapshot<'a> {
         ts: &'a str,
@@ -205,6 +177,7 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str) -> Result<Strin
     }
     let series_js = serde_json::to_string(&series)?;
 
+    // Construct the final HTML page, embedding the data and the charting JavaScript.
     let html = format!(
         r#"
 {nav}
@@ -221,16 +194,19 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str) -> Result<Strin
 const snapshots = {series};
 const problem = "{problem}";
 
-// Labels (timestamps) as Date objects
+// === Chart.js Data Preparation ===
+
+// Parse our "YYYYMMDD-HHMMSS" timestamp strings into Date objects for Chart.js.
 function parseTs(ts) {{
   const y = +ts.slice(0,4), mo = +ts.slice(4,6)-1, d = +ts.slice(6,8);
   const h = +ts.slice(9,11), mi = +ts.slice(11,13), s = +ts.slice(13,15);
-  // Interpret original timestamp as UTC, then Chart.js formats in Asia/Tokyo
+  // Interpret original timestamp as UTC, then Chart.js adapter formats it in client's timezone.
   return new Date(Date.UTC(y, mo, d, h, mi, s));
 }}
 const labels = snapshots.map(s => parseTs(s.ts));
 
-// Build datasets per team (null when no value at a label)
+// Transform the snapshot data into a format Chart.js understands: one dataset per team.
+// Each dataset is an array of scores, with `null` for timestamps where the team had no score.
 const teamToData = new Map();
 snapshots.forEach((snap, idx) => {{
   const arr = Array.isArray(snap.data) ? snap.data : [];
@@ -243,11 +219,13 @@ snapshots.forEach((snap, idx) => {{
   }}
 }});
 
+// Generate a consistent color for each team based on its name hash.
 function colorFor(name) {{
   let h=0; for (let i=0;i<name.length;i++) h=(h*31+name.charCodeAt(i))>>>0;
   const hue=h%360; return `hsl(${{hue}} 70% 45%)`;
 }}
 
+// Create the dataset objects for Chart.js.
 const datasets = Array.from(teamToData.entries()).map(([team, data]) => ({{
   label: team,
   data,
@@ -258,6 +236,8 @@ const datasets = Array.from(teamToData.entries()).map(([team, data]) => ({{
   pointRadius: team === 'Unagi' ? 3 : 1,
   borderWidth: team === 'Unagi' ? 3 : 1,
 }}));
+
+// === Chart.js Rendering ===
 
 const container = document.getElementById('chart');
 const canvas = document.createElement('canvas');
@@ -272,19 +252,21 @@ const chart = new Chart(canvas.getContext('2d'), {{
     interaction: {{ mode: 'nearest', intersect: false }},
     plugins: {{
       tooltip: {{ enabled: true }},
-      legend: {{ display: false }},
+      legend: {{ display: false }}, // Legend is too crowded, use table instead.
     }},
     scales: {{
       x: {{ type: 'time', time: {{ unit: 'minute' }} }},
+      // Use a logarithmic scale for scores, except for the global board.
       y: ((problem === 'global') ? {{ beginAtZero: true }} : {{ type: 'logarithmic' }}),
     }},
     adapters: {{
-      date: {{ zone: 'Asia/Tokyo' }},
+      date: {{ zone: 'Asia/Tokyo' }}, // Display times in JST.
     }},
   }},
 }});
 
-// Build latest-score table
+// === Leaderboard Table Generation ===
+
 function esc(s) {{
   return String(s).replace(/[&<>"']/g, c => ({{
     '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;','\'':'&#39;'
@@ -299,12 +281,13 @@ for (const [team, data] of teamToData.entries()) {{
   if (last == null) continue;
   latest.push({{ team, score: last }});
 }}
+// Sort by score (ascending for problems, descending for global).
 if (problem === 'global') {{
   latest.sort((a,b) => b.score - a.score);
 }} else {{
   latest.sort((a,b) => a.score - b.score);
 }}
-// Compute rows with tie-aware ranks and clickable team names
+// Compute rows with tie-aware ranks.
 let rows = '';
 let lastScore = null;
 let lastRank = 0;
@@ -312,7 +295,7 @@ latest.forEach((r, i) => {{
   const rank = (lastScore === r.score) ? lastRank : (i + 1);
   lastScore = r.score; lastRank = rank;
   const nameHtml = r.team === 'Unagi' ? `<strong>${{esc(r.team)}}</strong>` : esc(r.team);
-  const teamAttr = String(r.team).replace(/[&<>\"']/g, c => ({{'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;','\'':'&#39;'}})[c]);
+  const teamAttr = esc(r.team);
   const nameLink = `<a href='#' data-team=\"${{teamAttr}}\">${{nameHtml}}</a>`;
   rows += `<tr>
     <td style=\"padding:4px 8px; text-align:right;\">${{rank}}</td>
@@ -331,27 +314,33 @@ document.getElementById('lb-table').innerHTML = `
     </thead>
     <tbody>${{rows}}</tbody>
   </table>`;
-// Click-to-highlight: clicking a team name highlights its series on the chart
+
+// === Table/Chart Interactivity ===
+
 let highlightedTeam = null;
+// Toggles the highlighting of a team's series on the chart.
 function highlightTeam(team) {{
   highlightedTeam = (highlightedTeam === team) ? null : team;
   chart.data.datasets.forEach(ds => {{
     const baseColor = ds.label === 'Unagi' ? '#e53935' : colorFor(ds.label);
     if (highlightedTeam && ds.label !== highlightedTeam) {{
+      // Fade out non-highlighted teams.
       ds.borderColor = baseColor.startsWith('hsl(')
         ? baseColor.replace('hsl(', 'hsla(').replace(')', ', 0.2)')
         : (baseColor.length === 7 ? baseColor + '33' : baseColor);
       ds.borderWidth = 1;
       ds.pointRadius = 0;
     }} else {{
+      // Emphasize the highlighted team (or all teams if none is highlighted).
       ds.borderColor = baseColor;
-      ds.borderWidth = (ds.label === 'Unagi') ? 3 : (highlightedTeam ? 3 : 1);
-      ds.pointRadius = (ds.label === 'Unagi') ? 3 : (highlightedTeam ? 3 : 1);
+      ds.borderWidth = (ds.label === 'Unagi' || ds.label === highlightedTeam) ? 3 : 1;
+      ds.pointRadius = (ds.label === 'Unagi' || ds.label === highlightedTeam) ? 3 : 1;
     }}
   }});
   chart.update();
 }}
 
+// Add a click listener to the table to handle highlighting.
 document.getElementById('lb-table').addEventListener('click', (ev) => {{
   const a = ev.target.closest('a[data-team]');
   if (!a) return;
