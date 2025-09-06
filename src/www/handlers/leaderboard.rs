@@ -106,18 +106,18 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str) -> Result<Strin
             adj[from.room][to.room] += 1;
             adj[to.room][from.room] += 1;
         }
-        let mut w = &mut map_html;
+        let w = &mut map_html;
         write!(w, "<table><tr><th>d\\r")?;
         for j in 0..n {
             write!(w, "<th style=\"width:24px; text-align:center;\">{j}")?;
         }
         for i in 0..6 {
             write!(w, "<tr><td>{i}")?;
-            for j in 0..n {
+            for d in doors.iter() {
                 write!(
                     w,
                     "<td style=\"background:#afa; text-align:center;\">{}",
-                    doors[j][i]
+                    d[i]
                 )?;
             }
         }
@@ -125,13 +125,13 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str) -> Result<Strin
         for i in 0..n {
             write!(w, "<th style=\"width:24px; text-align:center;\">{i}")?;
         }
-        for i in 0..n {
+        for (i, row) in adj.iter().enumerate() {
             write!(w, "<tr><td style=\"width:24px; text-align:center;\">{i}")?;
-            for j in 0..n {
+            for &val in row.iter() {
                 write!(
                     w,
                     "<td style=\"background:#aaf; text-align:center;\">{}",
-                    adj[i][j]
+                    val
                 )?;
             }
         }
