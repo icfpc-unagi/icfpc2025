@@ -10,6 +10,8 @@
     clippy::ptr_arg,
     clippy::if_same_then_else,
     clippy::cloned_ref_to_slice_refs,
+    clippy::match_like_matches_macro,
+    clippy::bool_comparison,
     non_snake_case,
     unused_variables
 )]
