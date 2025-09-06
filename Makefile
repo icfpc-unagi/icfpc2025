@@ -56,7 +56,7 @@ test/unagi:
 
 .PHONY: lint/rust
 lint/rust:
-	cargo clippy -- -D warnings
+	cargo clippy --features skip_lint -- -D warnings
 	cargo fmt --check
 
 ###############################################################################

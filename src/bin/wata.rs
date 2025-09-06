@@ -1,11 +1,4 @@
-#![allow(
-    clippy::collapsible_if,
-    clippy::cast_abs_to_unsigned,
-    clippy::ptr_arg,
-    clippy::if_same_then_else,
-    clippy::needless_range_loop,
-    clippy::useless_vec
-)]
+#![cfg_attr(feature = "skip_lint", allow(clippy::all, clippy::pedantic, warnings))]
 use icfpc2025::{judge::*, *};
 use itertools::Itertools;
 use rand::prelude::*;

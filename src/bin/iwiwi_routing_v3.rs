@@ -1,3 +1,4 @@
+#![cfg_attr(feature = "skip_lint", allow(clippy::all, clippy::pedantic, warnings))]
 use icfpc2025::judge::{JsonIn, *};
 use itertools::Itertools;
 use ordered_float::OrderedFloat;

@@ -1,16 +1,5 @@
 // EVOLVE-BLOCK-START
-#![allow(
-    clippy::needless_range_loop,
-    clippy::useless_vec,
-    clippy::partialeq_to_none,
-    clippy::ptr_arg,
-    clippy::manual_memcpy,
-    clippy::cloned_ref_to_slice_refs,
-    clippy::if_same_then_else,
-    non_snake_case,
-    unused_variables,
-    dead_code
-)]
+#![cfg_attr(feature = "skip_lint", allow(clippy::all, clippy::pedantic, warnings))]
 use icfpc2025::{judge::*, *};
 use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;

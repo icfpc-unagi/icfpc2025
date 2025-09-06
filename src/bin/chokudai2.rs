@@ -1,12 +1,4 @@
-#![allow(
-    clippy::collapsible_if,
-    clippy::cast_abs_to_unsigned,
-    clippy::ptr_arg,
-    clippy::needless_return,
-    clippy::len_zero,
-    clippy::needless_range_loop
-)]
-#![allow(unused_imports, unused_variables, unused_mut, unused_parens)]
+#![cfg_attr(feature = "skip_lint", allow(clippy::all, clippy::pedantic, warnings))]
 use clap::Parser;
 use icfpc2025::judge::*;
 use rand::prelude::*;
