@@ -41,12 +41,13 @@ fn main() {
     let n = judge.num_rooms();
 
     // Use pre-recorded explores instead of generating random route
-    let explores = judge.explored();
-    let first = explores
-        .first()
-        .expect("explored is empty; provide explores via JSON");
-    let plan = first.plans[0].clone();
-    let r = vec![first.results[0].clone()];
+    let exp = judge.explored();
+    assert!(
+        !exp.plans.is_empty(),
+        "explored is empty; provide explores via JSON"
+    );
+    let plan = exp.plans[0].clone();
+    let r = vec![exp.results[0].clone()];
 
     assert_eq!(r.len(), 1);
     let seq = &r[0];
