@@ -129,3 +129,5 @@ pub mod mapgen {
     /// A module for generating random maps.
     pub mod random;
 }
+
+pub mod routes;
