@@ -1,12 +1,7 @@
-#![allow(
-    non_snake_case,
-    dead_code,
-    clippy::if_same_then_else,
-    clippy::ptr_arg,
-    clippy::manual_memcpy,
-    clippy::needless_range_loop
-)]
-use crate::{judge::Guess, mat};
+use crate::{
+    judge::{check_explore, Guess},
+    mat,
+};
 
 // ----------------------------- CNF utilities -----------------------------
 
@@ -97,16 +92,23 @@ impl Cnf {
 // -------------------------- Combinatorial helpers ------------------------
 
 #[inline]
-fn compute_diff(plan: &[usize], labels: &[usize]) -> Vec<Vec<bool>> {
+fn compute_diff(door: &[Option<usize>], labels: &[usize]) -> Vec<Vec<bool>> {
     let m = labels.len();
-    let t = plan.len();
     let mut diff = mat![false; m; m];
+    // DP: two positions i,j are distinguishable if label differs OR if next states with same door distinguishable
     for i in (0..m).rev() {
         for j in (0..m).rev() {
             if labels[i] != labels[j] {
                 diff[i][j] = true;
-            } else if i < t && j < t && plan[i] == plan[j] && diff[i + 1][j + 1] {
-                diff[i][j] = true;
+            } else if i + 1 < m && j + 1 < m {
+                match (door[i], door[j]) {
+                    (Some(e1), Some(e2)) if e1 == e2 => {
+                        if diff[i + 1][j + 1] {
+                            diff[i][j] = true;
+                        }
+                    }
+                    _ => {}
+                }
             }
         }
     }
@@ -123,77 +125,62 @@ fn compute_diff(plan: &[usize], labels: &[usize]) -> Vec<Vec<bool>> {
 
 // ------------------------------ Problem view -----------------------------
 
-struct MultiInfo {
+struct PlanInfo {
     n: usize,
-    plans: Vec<Vec<usize>>,     // per plan
-    labels: Vec<Vec<usize>>,    // per plan
-    ts: Vec<usize>,             // per plan
-    ms: Vec<usize>,             // per plan
-    offsets: Vec<usize>,        // per plan -> global time offset
-    m_total: usize,             // total timepoints across all plans
-    labels_global: Vec<usize>,  // flattened labels by global time
-    diffs: Vec<Vec<Vec<bool>>>, // per plan diff matrix
+    labels: Vec<usize>,
+    door: Vec<Option<usize>>, // door[i] is the edge used from time i to i+1, or None at plan boundaries/last
+    m: usize,
+    diff: Vec<Vec<bool>>,
 }
 
-fn build_multi_info(
-    num_rooms: usize,
-    plans: &Vec<Vec<usize>>,
-    labels: &Vec<Vec<usize>>,
-) -> MultiInfo {
+fn build_info(num_rooms: usize, plans: &Vec<Vec<usize>>, labels: &Vec<Vec<usize>>) -> PlanInfo {
     assert_eq!(plans.len(), labels.len());
-    let q = plans.len();
-    let mut ts = Vec::with_capacity(q);
-    let mut ms = Vec::with_capacity(q);
-    let mut diffs = Vec::with_capacity(q);
-    for p in 0..q {
-        let t = plans[p].len();
-        let m = labels[p].len();
-        assert_eq!(m, t + 1);
-        ts.push(t);
-        ms.push(m);
-        diffs.push(compute_diff(&plans[p], &labels[p]));
-    }
-    let mut offsets = Vec::with_capacity(q);
-    let mut sum = 0usize;
-    for &m in &ms {
-        offsets.push(sum);
-        sum += m;
-    }
-    let m_total = sum;
-    let mut labels_global = vec![0usize; m_total];
-    for p in 0..q {
-        let off = offsets[p];
-        for i in 0..ms[p] {
-            labels_global[off + i] = labels[p][i];
+    let n = num_rooms;
+
+    // Flatten labels and doors with boundary markers (None)
+    let mut labels_flat = Vec::new();
+    let mut door_flat = Vec::new();
+    for (p, l) in plans.iter().zip(labels.iter()) {
+        assert_eq!(l.len(), p.len() + 1);
+        // Append labels and doors for this plan
+        if labels_flat.is_empty() {
+            // first plan: push all labels
+            labels_flat.extend_from_slice(l);
+        } else {
+            // subsequent plans: concatenate labels directly; boundaries handled by door=None
+            labels_flat.extend_from_slice(l);
         }
+        // Doors: for each step in plan push Some(door), and one trailing None for boundary
+        for &e in p {
+            door_flat.push(Some(e));
+        }
+        door_flat.push(None); // boundary after this plan
     }
-    MultiInfo {
-        n: num_rooms,
-        plans: plans.clone(),
-        labels: labels.clone(),
-        ts,
-        ms,
-        offsets,
-        m_total,
-        labels_global,
-        diffs,
+    let m = labels_flat.len();
+    assert_eq!(door_flat.len(), m); // last entry must be None for the last plan as well
+    let diff = compute_diff(&door_flat, &labels_flat);
+
+    PlanInfo {
+        n,
+        labels: labels_flat,
+        door: door_flat,
+        m,
+        diff,
     }
 }
 
 struct Buckets {
     rooms_by_label: [Vec<usize>; 4],
-    times_by_label: [Vec<usize>; 4], // global time indices
+    times_by_label: [Vec<usize>; 4],
 }
-
-fn build_buckets(info: &MultiInfo) -> Buckets {
+fn build_buckets(info: &PlanInfo) -> Buckets {
     let mut rooms_by_label: [Vec<usize>; 4] = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
     for u in 0..info.n {
         rooms_by_label[u % 4].push(u);
     }
     let mut times_by_label: [Vec<usize>; 4] = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
-    for g in 0..info.m_total {
-        let k = info.labels_global[g];
-        times_by_label[k].push(g);
+    for i in 0..info.m {
+        times_by_label[info.labels[i]].push(i);
     }
     Buckets {
         rooms_by_label,
@@ -202,25 +189,24 @@ fn build_buckets(info: &MultiInfo) -> Buckets {
 }
 
 struct Candidates {
-    // V_map[global_time][u] = Some(var) if room u allowed at that time (label match)
+    // V_map[i][u] = Some(var) if room u allowed at time i (label match).
     V_map: Vec<Vec<Option<i32>>>,
-    // V_rows[global_time] = list of variables for that time
+    // V_rows[i] = list of variables for time i.
     V_rows: Vec<Vec<i32>>,
 }
-
-fn build_candidates(cnf: &mut Cnf, info: &MultiInfo, buckets: &Buckets) -> Candidates {
-    let mut V_map = vec![vec![None; info.n]; info.m_total];
-    let mut V_rows: Vec<Vec<i32>> = vec![Vec::new(); info.m_total];
-    for g in 0..info.m_total {
-        let k = info.labels_global[g];
+fn build_candidates(cnf: &mut Cnf, info: &PlanInfo, buckets: &Buckets) -> Candidates {
+    let mut V_map = vec![vec![None; info.n]; info.m];
+    let mut V_rows: Vec<Vec<i32>> = vec![Vec::new(); info.m];
+    for i in 0..info.m {
+        let k = info.labels[i];
         let rooms = &buckets.rooms_by_label[k];
-        V_rows[g].reserve(rooms.len());
+        V_rows[i].reserve(rooms.len());
         for &u in rooms {
             let v = cnf.var();
-            V_map[g][u] = Some(v);
-            V_rows[g].push(v);
+            V_map[i][u] = Some(v);
+            V_rows[i].push(v);
         }
-        cnf.choose_one(&V_rows[g]);
+        cnf.choose_one(&V_rows[i]);
     }
     Candidates { V_map, V_rows }
 }
@@ -269,7 +255,7 @@ fn first_use_sbp_rect_truncated(cnf: &mut Cnf, W_full: &Vec<Vec<i32>>) {
     }
 }
 
-fn add_sbp(cnf: &mut Cnf, info: &MultiInfo, buckets: &Buckets, cand: &Candidates) {
+fn add_sbp(cnf: &mut Cnf, info: &PlanInfo, buckets: &Buckets, cand: &Candidates) {
     // Per-label rectangular first-use SBP with truncation and anchor earliest to smallest room.
     for k in 0..4 {
         let times = &buckets.times_by_label[k];
@@ -278,10 +264,10 @@ fn add_sbp(cnf: &mut Cnf, info: &MultiInfo, buckets: &Buckets, cand: &Candidates
         }
         let rooms = &buckets.rooms_by_label[k];
         let mut W: Vec<Vec<i32>> = Vec::with_capacity(times.len());
-        for &g in times {
+        for &i in times {
             let mut row = Vec::with_capacity(rooms.len());
             for &u in rooms {
-                let var = cand.V_map[g][u].unwrap();
+                let var = cand.V_map[i][u].unwrap();
                 row.push(var);
             }
             W.push(row);
@@ -293,31 +279,26 @@ fn add_sbp(cnf: &mut Cnf, info: &MultiInfo, buckets: &Buckets, cand: &Candidates
 
     // Also pin the first seen time of each label to the canonical u=k if present.
     let mut seen = [false; 4];
-    for g in 0..info.m_total {
-        let k = info.labels_global[g];
+    for i in 0..info.m {
+        let k = info.labels[i];
         if !seen[k] {
             seen[k] = true;
-            if let Some(v) = cand.V_map[g][k] {
+            if let Some(v) = cand.V_map[i][k] {
                 cnf.clause([v]);
             }
         }
     }
 }
 
-fn add_diff_pruning(cnf: &mut Cnf, info: &MultiInfo, buckets: &Buckets, cand: &Candidates) {
-    // Within each plan, for equal labels but distinguishable times, forbid same room.
-    let q = info.plans.len();
-    for p in 0..q {
-        let off = info.offsets[p];
-        for i in 0..info.ms[p] {
-            for j in (i + 1)..info.ms[p] {
-                if info.labels[p][i] == info.labels[p][j] && info.diffs[p][i][j] {
-                    let k = info.labels[p][i];
-                    for &u in &buckets.rooms_by_label[k] {
-                        let vi = cand.V_map[off + i][u].unwrap();
-                        let vj = cand.V_map[off + j][u].unwrap();
-                        cnf.clause([-vi, -vj]);
-                    }
+fn add_diff_pruning(cnf: &mut Cnf, info: &PlanInfo, buckets: &Buckets, cand: &Candidates) {
+    for i in 0..info.m {
+        for j in (i + 1)..info.m {
+            if info.labels[i] == info.labels[j] && info.diff[i][j] {
+                let k = info.labels[i];
+                for &u in &buckets.rooms_by_label[k] {
+                    let vi = cand.V_map[i][u].unwrap();
+                    let vj = cand.V_map[j][u].unwrap();
+                    cnf.clause([-vi, -vj]);
                 }
             }
         }
@@ -328,43 +309,40 @@ fn add_diff_pruning(cnf: &mut Cnf, info: &MultiInfo, buckets: &Buckets, cand: &C
 // enforce (V[i]=u ∧ V[j]=u ∧ V[i+1]=v) -> V[j+1]=v for all u,v in the respective label buckets.
 fn add_same_door_equalization(
     cnf: &mut Cnf,
-    info: &MultiInfo,
+    info: &PlanInfo,
     buckets: &Buckets,
     cand: &Candidates,
 ) {
-    let q = info.plans.len();
-    for p in 0..q {
-        // index by (label, door) for this plan
-        let mut idx_by_ke: Vec<Vec<Vec<usize>>> = vec![vec![Vec::new(); 6]; 4];
-        for i in 0..info.ts[p] {
-            idx_by_ke[info.labels[p][i]][info.plans[p][i]].push(i);
+    let mut idx_by_ke: Vec<Vec<Vec<usize>>> = vec![vec![Vec::new(); 6]; 4];
+    for i in 0..info.m.saturating_sub(1) {
+        if let Some(e) = info.door[i] {
+            idx_by_ke[info.labels[i]][e].push(i);
         }
-        for k in 0..4 {
-            for e in 0..6 {
-                let idxs = &idx_by_ke[k][e];
-                if idxs.len() <= 1 {
-                    continue;
-                }
-                for a in 0..idxs.len() {
-                    for b in (a + 1)..idxs.len() {
-                        let i = idxs[a];
-                        let j = idxs[b];
-                        // Require same next-label and not distinguishable next
-                        if info.labels[p][i + 1] != info.labels[p][j + 1]
-                            || info.diffs[p][i + 1][j + 1]
-                        {
-                            continue;
-                        }
-                        let h = info.labels[p][i + 1];
-                        let off = info.offsets[p];
-                        for &u in &buckets.rooms_by_label[k] {
-                            let vi = cand.V_map[off + i][u].unwrap();
-                            let vj = cand.V_map[off + j][u].unwrap();
-                            for &v in &buckets.rooms_by_label[h] {
-                                let qi = cand.V_map[off + i + 1][v].unwrap();
-                                let qj = cand.V_map[off + j + 1][v].unwrap();
-                                cnf.clause([-vi, -vj, -qi, qj]);
-                            }
+    }
+    for k in 0..4 {
+        for e in 0..6 {
+            let idxs = &idx_by_ke[k][e];
+            if idxs.len() <= 1 {
+                continue;
+            }
+            for a in 0..idxs.len() {
+                for b in (a + 1)..idxs.len() {
+                    let i = idxs[a];
+                    let j = idxs[b];
+                    if i + 1 >= info.m || j + 1 >= info.m {
+                        continue;
+                    }
+                    if info.labels[i + 1] != info.labels[j + 1] || info.diff[i + 1][j + 1] {
+                        continue;
+                    }
+                    let h = info.labels[i + 1];
+                    for &u in &buckets.rooms_by_label[k] {
+                        let vi = cand.V_map[i][u].unwrap();
+                        let vj = cand.V_map[j][u].unwrap();
+                        for &v in &buckets.rooms_by_label[h] {
+                            let qi = cand.V_map[i + 1][v].unwrap();
+                            let qj = cand.V_map[j + 1][v].unwrap();
+                            cnf.clause([-vi, -vj, -qi, qj]);
                         }
                     }
                 }
@@ -373,85 +351,73 @@ fn add_same_door_equalization(
     }
 }
 
-// Enforce that all plans start at the same room as plan 0 (both directions equality per room u).
-fn add_start_unification(cnf: &mut Cnf, info: &MultiInfo, buckets: &Buckets, cand: &Candidates) {
-    let q = info.plans.len();
-    if q <= 1 {
-        return;
-    }
-    let off0 = info.offsets[0];
-    let k0 = info.labels[0][0];
-    for p in 1..q {
-        let offp = info.offsets[p];
-        let kp = info.labels[p][0];
-        assert_eq!(kp, k0, "All plans must start with the same observed label");
-        for &u in &buckets.rooms_by_label[k0] {
-            let v0 = cand.V_map[off0][u].unwrap();
-            let vp = cand.V_map[offp][u].unwrap();
-            // v0 <-> vp
-            cnf.clause([-v0, vp]);
-            cnf.clause([-vp, v0]);
-        }
-    }
-}
-
 // -------------------------- Edge variable layer --------------------------
 
 struct EdgeVars {
-    // Tlab[u][e][h] = door e from room u leads to a room with label h
-    Tlab: Vec<Vec<Vec<i32>>>,
-    // F[u][e][v] = door e from room u leads to room v
+    // Tlab[u][e][k]
+    Tlab: Vec<Vec<[i32; 4]>>,
+    // F[u][e][v]
     F: Vec<Vec<Vec<i32>>>,
-    // M[u][v][e][f] = edge from (u,e) to (v,f)
-    M: Vec<Vec<Vec<Vec<i32>>>>,
+    // M[u][v][e][f] symmetric shared
+    M: Vec<Vec<[[i32; 6]; 6]>>,
 }
-
-fn build_edge_vars(cnf: &mut Cnf, info: &MultiInfo) -> EdgeVars {
+fn build_edge_vars(cnf: &mut Cnf, info: &PlanInfo) -> EdgeVars {
     let n = info.n;
-    let mut Tlab = vec![vec![vec![0i32; 4]; 6]; n];
-    for u in 0..n {
-        for e in 0..6 {
-            for h in 0..4 {
-                Tlab[u][e][h] = cnf.var();
-            }
-            // Exactly one next-label per (u,e)
-            cnf.choose_one(&Tlab[u][e]);
-        }
-    }
+    let mut Tlab = vec![vec![[0i32; 4]; 6]; n];
+    let mut F = mat![0; n; 6; n];
 
-    let mut F = vec![vec![vec![0i32; n]; 6]; n];
     for u in 0..n {
         for e in 0..6 {
+            let mut trow = [0i32; 4];
+            for k in 0..4 {
+                Tlab[u][e][k] = cnf.var();
+                trow[k] = Tlab[u][e][k];
+            }
+            cnf.choose_one(&trow);
+
+            let mut frow = Vec::with_capacity(n);
             for v in 0..n {
                 F[u][e][v] = cnf.var();
+                frow.push(F[u][e][v]);
+                cnf.clause([-F[u][e][v], Tlab[u][e][v % 4]]);
             }
-            // Exactly one target room per (u,e)
-            cnf.choose_one(&F[u][e]);
+            cnf.choose_one(&frow);
         }
     }
 
-    // For each (u,v), the doors must pair bijectively
-    let mut M = vec![vec![vec![vec![0i32; 6]; 6]; n]; n];
     for u in 0..n {
-        for v in 0..n {
+        for e in 0..6 {
+            for k in 0..4 {
+                cnf.buf.clear();
+                cnf.buf.push(-Tlab[u][e][k]);
+                for v in (k..n).step_by(4) {
+                    cnf.buf.push(F[u][e][v]);
+                }
+                cnf.clause(cnf.buf.clone());
+            }
+        }
+    }
+
+    let mut M = vec![vec![[[0i32; 6]; 6]; n]; n];
+    for u in 0..n {
+        for v in u..n {
             for e in 0..6 {
                 for f in 0..6 {
-                    M[u][v][e][f] = cnf.var();
+                    let var = cnf.var();
+                    M[u][v][e][f] = var;
+                    M[v][u][f][e] = var;
                 }
             }
         }
     }
-    // Tie M and F and enforce bijection per (u,v)
+    // M -> F both endpoints
     for u in 0..n {
         for v in 0..n {
             for e in 0..6 {
                 for f in 0..6 {
-                    // M[u][v][e][f] -> F[u][e][v]
-                    cnf.clause([-M[u][v][e][f], F[u][e][v]]);
-                    // M[u][v][e][f] -> F[v][f][u]
-                    cnf.clause([-M[u][v][e][f], F[v][f][u]]);
-                    // F[u][e][v] ∧ F[v][f][u] -> M[u][v][e][f]
-                    cnf.clause([-F[u][e][v], -F[v][f][u], M[u][v][e][f]]);
+                    let mv = M[u][v][e][f];
+                    cnf.clause([-mv, F[u][e][v]]);
+                    cnf.clause([-mv, F[v][f][u]]);
                 }
             }
         }
@@ -494,25 +460,31 @@ fn build_edge_vars(cnf: &mut Cnf, info: &MultiInfo) -> EdgeVars {
 
 fn add_plan_constraints(
     cnf: &mut Cnf,
-    info: &MultiInfo,
+    info: &PlanInfo,
     buckets: &Buckets,
     cand: &Candidates,
     edges: &EdgeVars,
 ) {
-    // V[g]=u -> Tlab[u, plan[p][i], labels[p][i+1]]
-    // (V[g]=u ∧ V[g+1]=v) -> F[u, plan[p][i], v]
-    let q = info.plans.len();
-    for p in 0..q {
-        let off = info.offsets[p];
-        for i in 0..info.ts[p] {
-            let e = info.plans[p][i];
-            let k = info.labels[p][i];
-            let h = info.labels[p][i + 1];
+    // V[i]=u -> Tlab[u, door[i], labels[i+1]] for valid steps
+    for i in 0..info.m.saturating_sub(1) {
+        if let Some(e) = info.door[i] {
+            let h = info.labels[i + 1];
+            let k = info.labels[i];
             for &u in &buckets.rooms_by_label[k] {
-                let vi = cand.V_map[off + i][u].unwrap();
+                let vi = cand.V_map[i][u].unwrap();
                 cnf.clause([-vi, edges.Tlab[u][e][h]]);
+            }
+        }
+    }
+    // (V[i]=u ∧ V[i+1]=v) -> F[u, door[i], v]
+    for i in 0..info.m.saturating_sub(1) {
+        if let Some(e) = info.door[i] {
+            let k = info.labels[i];
+            let h = info.labels[i + 1];
+            for &u in &buckets.rooms_by_label[k] {
+                let vi = cand.V_map[i][u].unwrap();
                 for &v in &buckets.rooms_by_label[h] {
-                    let vj = cand.V_map[off + i + 1][v].unwrap();
+                    let vj = cand.V_map[i + 1][v].unwrap();
                     cnf.clause([-vi, -vj, edges.F[u][e][v]]);
                 }
             }
@@ -524,7 +496,7 @@ fn add_plan_constraints(
 
 fn extract_guess(
     cnf: &Cnf,
-    info: &MultiInfo,
+    info: &PlanInfo,
     buckets: &Buckets,
     cand: &Candidates,
     edges: &EdgeVars,
@@ -536,14 +508,13 @@ fn extract_guess(
         graph: vec![[(!0, !0); 6]; n],
     };
 
-    // Start room: find true variable at the first global time (plan 0, time 0)
+    // Start room: find true variable at time 0
     {
-        let g0 = info.offsets[0];
-        let k0 = info.labels_global[g0];
+        let k0 = info.labels[0];
         let rooms0 = &buckets.rooms_by_label[k0];
         let mut s = rooms0[0];
         for &u in rooms0 {
-            let v = cand.V_map[g0][u].unwrap();
+            let v = cand.V_map[0][u].unwrap();
             if cnf.sat.value(v) == Some(true) {
                 s = u;
                 break;
@@ -578,19 +549,18 @@ fn extract_guess(
     guess
 }
 
-// ------------------------------ Main solve -------------------------------
+// ------------------------------ Public solve ------------------------------
 
 pub fn solve(num_rooms: usize, plans: &Vec<Vec<usize>>, labels: &Vec<Vec<usize>>) -> Guess {
-    // 1) Multi-plan info assembly
-    let info = build_multi_info(num_rooms, plans, labels);
+    // 1) Build flattened info from provided plans and labels
+    let info = build_info(num_rooms, plans, labels);
 
-    // 2) Buckets and candidates
+    // 2) Build buckets and candidates
     let buckets = build_buckets(&info);
     let mut cnf = Cnf::new();
     let cand = build_candidates(&mut cnf, &info, &buckets);
 
-    // 3) Pruning and symmetry breaking
-    add_start_unification(&mut cnf, &info, &buckets, &cand);
+    // 3) Add pruning and symmetry breaking
     add_diff_pruning(&mut cnf, &info, &buckets, &cand);
     add_sbp(&mut cnf, &info, &buckets, &cand);
     add_same_door_equalization(&mut cnf, &info, &buckets, &cand);
@@ -604,6 +574,6 @@ pub fn solve(num_rooms: usize, plans: &Vec<Vec<usize>>, labels: &Vec<Vec<usize>>
 
     // 6) Extract and verify
     let guess = extract_guess(&cnf, &info, &buckets, &cand, &edges);
-    assert!(crate::judge::check_explore(&guess, plans, labels));
+    assert!(check_explore(&guess, plans, labels));
     guess
 }
