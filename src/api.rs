@@ -370,12 +370,7 @@ where
     let url = format!("{}/explore", aedificium_base());
     let id = get_id()?;
     // Convert the plans from Vec<usize> to strings of digits for the JSON request.
-    let plans_vec: Vec<String> = plans
-        .into_iter()
-        .map(|s| {
-            s.as_ref().to_string()
-        })
-        .collect();
+    let plans_vec: Vec<String> = plans.into_iter().map(|s| s.as_ref().to_string()).collect();
     let req = ExploreRequest {
         id: id.as_str(),
         plans: &plans_vec,
