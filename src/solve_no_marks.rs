@@ -125,17 +125,21 @@ fn compute_diff(plan: &[usize], labels: &[usize]) -> Vec<Vec<bool>> {
 
 struct MultiInfo {
     n: usize,
-    plans: Vec<Vec<usize>>,  // per plan
-    labels: Vec<Vec<usize>>, // per plan
-    ts: Vec<usize>,          // per plan
-    ms: Vec<usize>,          // per plan
-    offsets: Vec<usize>,     // per plan -> global time offset
-    m_total: usize,          // total timepoints across all plans
-    labels_global: Vec<usize>, // flattened labels by global time
+    plans: Vec<Vec<usize>>,     // per plan
+    labels: Vec<Vec<usize>>,    // per plan
+    ts: Vec<usize>,             // per plan
+    ms: Vec<usize>,             // per plan
+    offsets: Vec<usize>,        // per plan -> global time offset
+    m_total: usize,             // total timepoints across all plans
+    labels_global: Vec<usize>,  // flattened labels by global time
     diffs: Vec<Vec<Vec<bool>>>, // per plan diff matrix
 }
 
-fn build_multi_info(num_rooms: usize, plans: &Vec<Vec<usize>>, labels: &Vec<Vec<usize>>) -> MultiInfo {
+fn build_multi_info(
+    num_rooms: usize,
+    plans: &Vec<Vec<usize>>,
+    labels: &Vec<Vec<usize>>,
+) -> MultiInfo {
     assert_eq!(plans.len(), labels.len());
     let q = plans.len();
     let mut ts = Vec::with_capacity(q);
@@ -600,10 +604,6 @@ pub fn solve(num_rooms: usize, plans: &Vec<Vec<usize>>, labels: &Vec<Vec<usize>>
 
     // 6) Extract and verify
     let guess = extract_guess(&cnf, &info, &buckets, &cand, &edges);
-    assert!(crate::judge::check_explore(
-        &guess,
-        plans,
-        labels
-    ));
+    assert!(crate::judge::check_explore(&guess, plans, labels));
     guess
 }
