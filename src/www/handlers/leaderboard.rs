@@ -10,6 +10,7 @@ use anyhow::Result;
 use cached::proc_macro::cached;
 use chrono::NaiveDateTime;
 use mysql::params;
+use mysql::prelude::*;
 use serde::Deserialize;
 use std::fmt::Write;
 use tokio::time::Duration;
@@ -100,15 +101,22 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
     let mut nav_links: Vec<String> = Vec::new();
     nav_links.push("[<a href=\"/leaderboard/global\">Global</a>]".to_string());
     for p in crate::problems::all_problems() {
-        nav_links.push(format!(
-            "[<a href=\"/leaderboard/{}\">{}</a>]",
-            p.problem_name, p.problem_name
-        ));
+        nav_links.push(if p.problem_name == problem {
+            format!("<b>[{}]</b>", p.problem_name)
+        } else {
+            format!(
+                "[<a href=\"/leaderboard/{problem_name}\">{problem_name}</a>]",
+                problem_name = p.problem_name
+            )
+        });
     }
     let nav_html = format!(
         "<div class=\"lb-nav\" style=\"margin:8px 0;\">{}</div>",
         nav_links.join(" ")
     );
+
+    // Fetch recent guesses for the problem to display.
+    let guesses_html = recent_guesses(problem).await?;
 
     // Fetch the latest correct guess for the problem, optionally bypassing the cache.
     let map_html = if problem == "global" {
@@ -293,10 +301,10 @@ document.getElementById('lb-table').addEventListener('click', (ev) => {{
   highlightTeam(team);
 }});
 </script>
-<div style="margin-top:32px;">
-  <h3>Latest successful map</h3>
-  {map_html}
-</div>
+<h3>Recent guesses submitted</h3>
+{guesses_html}
+<h3>Latest successful map</h3>
+{map_html}
 "#,
         nav = nav_html,
         problem = problem,
@@ -394,6 +402,75 @@ async fn fetch_snapshots(problem: &str) -> Result<Vec<Snapshot>> {
             data: serde_json::from_slice::<Vec<LeaderboardEntry>>(&bytes).unwrap_or_default(),
         })
         .collect())
+}
+
+/// 最近の提出（guess）を取得してHTMLとして返す関数
+async fn recent_guesses(problem: &str) -> Result<String> {
+    // 直近10件の正解・不正解のguessを取得
+    let rows = if problem != "global" {
+        sql::select(
+            "
+        SELECT g.api_log_id AS id,
+               g.api_log_created AS ts,
+               JSON_VALUE(s.api_log_request, '$.problemName') AS problem,
+               JSON_VALUE(g.api_log_response, '$.correct' RETURNING UNSIGNED) AS correct,
+               JSON_EXTRACT(g.api_log_request, '$.map') AS map
+        FROM api_logs g
+        JOIN api_logs s
+          ON g.api_log_select_id = s.api_log_id
+            AND g.api_log_path = '/guess'
+            AND s.api_log_path = '/select'
+        WHERE JSON_VALUE(s.api_log_request, '$.problemName') = :problem
+          AND g.api_log_response_code = 200
+        ORDER BY g.api_log_id DESC
+        LIMIT 20",
+            params! { "problem" => problem },
+        )?
+    } else {
+        sql::select(
+            "
+        SELECT g.api_log_id AS id,
+               g.api_log_created AS ts,
+               JSON_VALUE(s.api_log_request, '$.problemName') AS problem,
+               JSON_VALUE(g.api_log_response, '$.correct' RETURNING UNSIGNED) AS correct,
+               JSON_EXTRACT(g.api_log_request, '$.map') AS map
+        FROM api_logs g
+        JOIN api_logs s
+          ON g.api_log_select_id = s.api_log_id
+            AND g.api_log_path = '/guess'
+            AND s.api_log_path = '/select'
+        WHERE g.api_log_response_code = 200
+        ORDER BY g.api_log_id DESC
+        LIMIT 100",
+            params::Params::Empty,
+        )?
+    };
+
+    let mut w = String::new();
+    w.push_str(
+      r#"<table style="border-collapse:collapse;font-size:13px;">
+        <tr><th>ID</th><th>Timestamp (UTC)</th><th>Problem</th><th>Map (truncated)</th><th>Correct</th></tr>"#);
+    for row in rows {
+        let id = row.at::<i64>(0)?;
+        let ts = row.at::<NaiveDateTime>(1)?;
+        let problem = row.at::<String>(2)?;
+        let correct = row.at::<bool>(3)?;
+        let map = row.at::<String>(4)?;
+        // compact
+        let map = serde_json::to_string(&serde_json::from_str::<api::Map>(&map)?)?;
+        let map_leading_part = &map[..100.min(map.len())];
+        write!(
+            w,
+            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}...</td><td>{}</td></tr>",
+            id,
+            ts,
+            problem,
+            map_leading_part,
+            if correct { "✅" } else { "❌" }
+        )?;
+    }
+    w.push_str("</table>");
+    Ok(w)
 }
 
 #[cached(
