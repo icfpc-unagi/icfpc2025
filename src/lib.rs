@@ -60,6 +60,7 @@ where
 /// # Examples
 ///
 /// ```
+/// use icfpc2025::mat;
 /// // A simple vector
 /// let v1 = mat![1, 2, 3];
 ///

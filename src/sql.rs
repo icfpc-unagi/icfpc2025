@@ -135,11 +135,12 @@ impl Row {
         T: FromValue,
     {
         match self.row.get_opt::<mysql::Value, usize>(idx) {
-            Some(Ok(mysql::Value::NULL)) => Ok(None),
-            Some(Ok(x)) => mysql::from_value_opt::<T>(x).map_err(|e| e.into()),
-            Some(Err(e)) => Err(e.into()),
-            None => Ok(None), // Should not happen if index is valid, but handle gracefully.
+            Some(Ok(mysql::Value::NULL)) => None,
+            Some(Ok(x)) => Some(mysql::from_value_opt::<T>(x.clone())),
+            Some(Err(e)) => Some(Err(e)),
+            None => None, // Should not happen if index is valid, but handle gracefully.
         }
+        .transpose()
         .map_err(|e| {
             anyhow::anyhow!(
                 "Error in column {} (#{}): {}",
@@ -193,7 +194,6 @@ impl Row {
         self.at_option(self.idx(name)?)
     }
 }
-
 
 #[cfg(test)]
 mod tests {
