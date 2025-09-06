@@ -16,7 +16,7 @@ pub mod template;
 pub mod api;
 pub mod leaderboard;
 
-use actix_web::{web, HttpResponse, Responder};
+use actix_web::{HttpResponse, Responder, web};
 use serde::Deserialize;
 
 /// Handler for the root path (`/`).

@@ -3,7 +3,7 @@
 //! This module contains the core client functions for making API requests to
 //! Google Cloud Storage for operations like listing, downloading, and uploading objects.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use reqwest::Url;
 
 use crate::gcp::gcs::types::{FileInfo, ListResponse, ObjectItem};

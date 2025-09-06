@@ -11,10 +11,10 @@
 //!    with an additional `X-Unagi-Log` header containing the log ID.
 
 use crate::sql;
-use actix_web::{http::header, web, HttpRequest, HttpResponse, Responder};
+use actix_web::{HttpRequest, HttpResponse, Responder, http::header, web};
 use chrono::Utc;
 use mysql::params;
-use reqwest::{header as reqwest_header, Client};
+use reqwest::{Client, header as reqwest_header};
 use std::time::Instant;
 
 /// The base URL of the official ICFP 2025 contest server.
@@ -23,11 +23,7 @@ const BACKEND_BASE: &str = "https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.c
 /// A helper function to remove the `/api` prefix from a request path.
 fn strip_api_prefix(path: &str) -> &str {
     if let Some(rest) = path.strip_prefix("/api") {
-        if rest.is_empty() {
-            "/"
-        } else {
-            rest
-        }
+        if rest.is_empty() { "/" } else { rest }
     } else {
         path
     }

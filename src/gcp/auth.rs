@@ -5,7 +5,7 @@
 //! temporary access token that can be used to authorize API requests.
 
 use anyhow::{Context, Result};
-use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
+use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use serde::{Deserialize, Serialize};
 
 use crate::gcp::types::{AccessToken, ServiceAccount};

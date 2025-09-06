@@ -7,9 +7,9 @@
 
 use crate::api;
 use rand::Rng;
-use svg::node::element::{Path, Text};
-use svg::node::element::path::Data;
 use svg::Document;
+use svg::node::element::path::Data;
+use svg::node::element::{Path, Text};
 
 /// Represents a node (a room) in the force-directed layout simulation.
 #[derive(Debug, Clone)]
@@ -195,10 +195,11 @@ pub fn render(map: &api::Map) -> String {
         .collect::<Vec<_>>();
 
     // Normalize positions to fit within a standard SVG viewbox.
-    let (min_x, min_y, max_x, max_y) = positions.iter().fold(
-        (f64::MAX, f64::MAX, f64::MIN, f64::MIN),
-        |acc, &(x, y)| (acc.0.min(x), acc.1.min(y), acc.2.max(x), acc.3.max(y)),
-    );
+    let (min_x, min_y, max_x, max_y) = positions
+        .iter()
+        .fold((f64::MAX, f64::MAX, f64::MIN, f64::MIN), |acc, &(x, y)| {
+            (acc.0.min(x), acc.1.min(y), acc.2.max(x), acc.3.max(y))
+        });
 
     let mut width = (max_x - min_x) * 1.2 + 2.0 * radius;
     let mut height = (max_y - min_y) * 1.2 + 2.0 * radius;
