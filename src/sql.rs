@@ -1,3 +1,19 @@
+//! # MySQL Database Wrapper
+//!
+//! This module provides a simplified, opinionated interface for interacting with a
+//! MySQL database. It uses a globally shared, lazily-initialized connection pool
+//! (`CLIENT`) to manage database connections.
+//!
+//! The main goals are to reduce boilerplate for common query patterns and to provide
+//! more ergonomic error handling and data access.
+//!
+//! ## Configuration
+//!
+//! The database connection is configured via environment variables:
+//! - `UNAGI_PASSWORD`: The password for the `root` user.
+//! - `MYSQL_SOCKET`: (Optional) Path to the MySQL socket file.
+//! - `MYSQL_HOSTNAME`: (Optional) Hostname or IP of the MySQL server. Defaults to a hardcoded IP.
+
 use anyhow::Result;
 use mysql;
 use mysql::prelude::*;
@@ -5,8 +21,15 @@ use mysql::*;
 use once_cell::sync::Lazy;
 use std::env;
 
+/// A global, lazily-initialized MySQL connection pool.
+///
+/// The connection URL is constructed at first use, based on environment variables.
+/// This allows the application to connect to the database without needing to
+/// explicitly pass connection objects around.
 static CLIENT: Lazy<mysql::Pool> = Lazy::new(|| {
     let password = env::var("UNAGI_PASSWORD").unwrap_or_else(|_| "".into());
+    // The connection logic prioritizes a local socket if MYSQL_SOCKET is set,
+    // otherwise it connects via TCP to a specified or default hostname.
     let url = match env::var("MYSQL_SOCKET") {
         Ok(socket) => format!(
             "mysql://root:{}@localhost:3306/unagi?socket={}",
@@ -26,12 +49,20 @@ static CLIENT: Lazy<mysql::Pool> = Lazy::new(|| {
     pool
 });
 
+/// Executes a query that is expected to return multiple rows.
+///
+/// # Returns
+/// A `Result` containing a `Vec<Row>` of all rows returned by the query.
 pub fn select(query: &str, params: impl Into<Params>) -> Result<Vec<Row>> {
     let mut conn = CLIENT.get_conn()?;
     conn.exec_map(query, params, |r| Row { row: r })
         .map_err(|e| e.into())
 }
 
+/// Executes a query that is expected to return at most one row.
+///
+/// # Returns
+/// A `Result` containing an `Option<Row>`. `Some` if a row was found, `None` otherwise.
 pub fn row(query: &str, params: impl Into<Params>) -> Result<Option<Row>> {
     Ok(CLIENT
         .get_conn()?
@@ -39,6 +70,11 @@ pub fn row(query: &str, params: impl Into<Params>) -> Result<Option<Row>> {
         .map(|r| Row { row: r }))
 }
 
+/// Executes a query that is expected to return a single cell (one row, one column).
+///
+/// # Returns
+/// A `Result` containing an `Option<T>`, where `T` is the type of the value in the cell.
+/// `Some` if a row was found, `None` otherwise.
 pub fn cell<T: FromValue>(query: &str, params: impl Into<Params>) -> Result<Option<T>> {
     match row(query, params)? {
         Some(row) => Ok(Some(row.at(0)?)),
@@ -46,19 +82,30 @@ pub fn cell<T: FromValue>(query: &str, params: impl Into<Params>) -> Result<Opti
     }
 }
 
+/// Executes a statement that does not return rows (e.g., UPDATE, DELETE, DDL).
+///
+/// # Returns
+/// A `Result` containing the number of affected rows.
 pub fn exec(query: &str, params: impl Into<Params>) -> Result<u64> {
     let mut conn = CLIENT.get_conn()?;
     conn.exec_drop(query, params)?;
     Ok(conn.affected_rows())
 }
 
-// insert is the same as exec, but it returns the last insert ID.
+/// Executes an INSERT statement.
+///
+/// This is a convenience wrapper around `exec`.
+///
+/// # Returns
+/// A `Result` containing the last insert ID.
 pub fn insert(query: &str, params: impl Into<Params>) -> Result<u64> {
     let mut conn = CLIENT.get_conn()?;
     conn.exec_drop(query, params)?;
     Ok(conn.last_insert_id())
 }
 
+/// Executes a statement multiple times with different parameters in a single batch.
+/// This is more efficient than executing the same statement repeatedly.
 pub fn exec_batch<P, I>(query: &str, params: I) -> Result<()>
 where
     P: Into<Params>,
@@ -69,11 +116,20 @@ where
     Ok(())
 }
 
+/// A wrapper around `mysql::Row` that provides more ergonomic data access methods.
 pub struct Row {
     row: mysql::Row,
 }
 
 impl Row {
+    /// Gets an optional value from the row by column index.
+    ///
+    /// This handles the case where the database value is `NULL`.
+    ///
+    /// # Returns
+    /// `Ok(Some(T))` if the value is not NULL.
+    /// `Ok(None)` if the value is NULL.
+    /// `Err` if the value cannot be converted to type `T`.
     pub fn at_option<T>(&self, idx: usize) -> Result<Option<T>>
     where
         T: FromValue,
@@ -82,7 +138,7 @@ impl Row {
             Some(Ok(mysql::Value::NULL)) => None,
             Some(Ok(x)) => Some(mysql::from_value_opt::<T>(x.clone())),
             Some(Err(e)) => Some(Err(e)),
-            None => None,
+            None => None, // Should not happen if index is valid, but handle gracefully.
         }
         .transpose()
         .map_err(|e| {
@@ -95,6 +151,11 @@ impl Row {
         })
     }
 
+    /// Gets a required value from the row by column index.
+    ///
+    /// # Returns
+    /// `Ok(T)` if the value is not NULL and can be converted.
+    /// `Err` if the value is NULL or cannot be converted.
     pub fn at<T>(&self, idx: usize) -> Result<T>
     where
         T: FromValue,
@@ -108,11 +169,16 @@ impl Row {
         })
     }
 
+    /// Finds the index of a column by its name.
     fn idx(&self, name: &str) -> Result<usize> {
-        name.idx(&self.row.columns())
+        self.row
+            .columns()
+            .iter()
+            .position(|c| c.name_str() == name)
             .ok_or_else(|| anyhow::anyhow!("Column {} is not found", name))
     }
 
+    /// Gets a required value from the row by column name.
     pub fn get<T>(&self, name: &str) -> Result<T>
     where
         T: FromValue,
@@ -120,6 +186,7 @@ impl Row {
         self.at(self.idx(name)?)
     }
 
+    /// Gets an optional value from the row by column name.
     pub fn get_option<T>(&self, name: &str) -> Result<Option<T>>
     where
         T: FromValue,

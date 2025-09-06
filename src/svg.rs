@@ -1,33 +1,56 @@
+//! # SVG Map Visualization
+//!
+//! This module provides functionality to generate an SVG visualization of an
+//! Aedificium map structure (`api::Map`). It uses a simple physics-based
+//! force-directed layout engine to position the rooms (nodes) in a visually
+//! appealing way.
+
 use crate::api;
 use rand::Rng;
 use svg::Document;
 use svg::node::element::path::Data;
 use svg::node::element::{Path, Text};
 
+/// Represents a node (a room) in the force-directed layout simulation.
 #[derive(Debug, Clone)]
 struct Node {
+    /// The (x, y) coordinates of the node.
     position: (f64, f64),
+    /// The current velocity of the node.
     velocity: (f64, f64),
+    /// The net force acting on the node.
     force: (f64, f64),
 }
 
+/// A simple force-directed layout engine for positioning graph nodes.
+///
+/// It simulates physical forces:
+/// - A repulsive force between all pairs of nodes (like charged particles).
+/// - An attractive force between connected nodes (like springs).
 struct LayoutEngine {
+    /// The nodes (rooms) in the graph.
     nodes: Vec<Node>,
+    /// An adjacency matrix representing the connections (passages).
     adjacency_matrix: Vec<Vec<bool>>,
+    /// The strength of the repulsive force.
     k_repel: f64,
+    /// The strength of the attractive (spring) force.
     k_attract: f64,
+    /// A damping factor to prevent oscillations and help the system stabilize.
     damping: f64,
+    /// The time step for the simulation.
     dt: f64,
 }
 
 impl LayoutEngine {
+    /// Creates a new `LayoutEngine` with randomly initialized node positions.
     fn new(n_nodes: usize, adjacency_matrix: Vec<Vec<bool>>) -> Self {
         let mut nodes = Vec::with_capacity(n_nodes);
         let mut rng = rand::rng();
 
         for i in 0..n_nodes {
             nodes.push(Node {
-                // Initial positions in a grid with slight randomness
+                // Initial positions in a grid with slight randomness to break symmetry.
                 position: (
                     (i % 10) as f64 * 50.0 + rng.random_range(-5.0..5.0),
                     (i / 10) as f64 * 50.0 + rng.random_range(-5.0..5.0),
@@ -46,12 +69,13 @@ impl LayoutEngine {
         }
     }
 
+    /// Calculates the net force on each node based on repulsion and attraction.
     fn update_forces(&mut self) {
         const EPSILON: f64 = 1e-6;
         for i in 0..self.nodes.len() {
             self.nodes[i].force = (0.0, 0.0);
 
-            // Repulsive forces
+            // Repulsive forces (Coulomb's Law): pushes all nodes away from each other.
             for j in 0..self.nodes.len() {
                 if i == j {
                     continue;
@@ -64,8 +88,8 @@ impl LayoutEngine {
                 let dist = dist_sq.sqrt();
 
                 if dist < EPSILON {
-                    // Nodes are too close, apply a strong repulsive force
-                    let force_magnitude = self.k_repel * 1000.0; // Large constant force
+                    // Nodes are too close, apply a strong, constant repulsive force to separate them.
+                    let force_magnitude = self.k_repel * 1000.0;
                     self.nodes[i].force.0 += force_magnitude * dx.signum();
                     self.nodes[i].force.1 += force_magnitude * dy.signum();
                     continue;
@@ -76,7 +100,7 @@ impl LayoutEngine {
                 self.nodes[i].force.1 += force_magnitude * dy / dist;
             }
 
-            // Attractive forces
+            // Attractive forces (Hooke's Law): pulls connected nodes together.
             for j in 0..self.nodes.len() {
                 if self.adjacency_matrix[i][j] {
                     let (xi, yi) = self.nodes[i].position;
@@ -97,14 +121,17 @@ impl LayoutEngine {
         }
     }
 
+    /// Updates node velocities and positions based on the calculated forces.
     fn update_positions(&mut self, t: f64) {
-        // Update velocities and positions
+        // Use Verlet integration to update positions.
         for i in 0..self.nodes.len() {
             let (vx, vy) = self.nodes[i].velocity;
             let (fx, fy) = self.nodes[i].force;
             let (px, py) = self.nodes[i].position;
+            // Apply force and damping to velocity.
             let new_vx = (vx + fx * self.dt) * self.damping;
             let new_vy = (vy + fy * self.dt) * self.damping;
+            // Update position based on new velocity.
             let new_px = px + new_vx * self.dt * t;
             let new_py = py + new_vy * self.dt * t;
             self.nodes[i].velocity = (new_vx, new_vy);
@@ -112,13 +139,16 @@ impl LayoutEngine {
         }
     }
 
+    /// Runs the physics simulation for a fixed number of iterations.
     fn run(&mut self, iterations: usize) {
         const EPSILON: f64 = 1e-3;
         for i in 0..iterations {
+            // The `t` factor here seems to be a cooling schedule, reducing movement over time.
             let t = ((iterations - i) as f64 / (iterations as f64)).powf(2.0) * 100.0;
             self.update_forces();
             self.update_positions(t);
-            // eprintln!("Iteration {}/{}", i + 1, iterations);
+
+            // Check if the system has stabilized (i.e., minimal movement).
             let mut stable = true;
             for node in &self.nodes {
                 if node.velocity.0.abs() > EPSILON
@@ -127,31 +157,34 @@ impl LayoutEngine {
                     || node.force.1.abs() > EPSILON
                 {
                     stable = false;
+                    break;
                 }
-                // eprintln!(
-                //     "p=({:.2},{:.2}) v=({:.2},{:.2}) f=({:.2},{:.2})",
-                //     node.position.0,
-                //     node.position.1,
-                //     node.velocity.0,
-                //     node.velocity.1,
-                //     node.force.0,
-                //     node.force.1,
-                // );
             }
             if stable {
+                // Stop early if the layout is stable.
                 break;
             }
         }
     }
 }
 
+/// Renders a given `api::Map` into an SVG string.
+///
+/// The process involves:
+/// 1. Creating a `LayoutEngine` to calculate node positions.
+/// 2. Running the simulation to stabilize the layout.
+/// 3. Normalizing and scaling the final positions to fit in a viewbox.
+/// 4. Drawing the passages (connections) as cubic Bezier curves.
+/// 5. Drawing the rooms as colored circles with text labels.
 pub fn render(map: &api::Map) -> String {
     let n_rooms = map.rooms.len();
     let radius: f64 = 15.0 + 5.0 * (100.0 / n_rooms as f64).sqrt();
 
+    // Set up and run the layout engine.
     let mut adjacency_matrix = vec![vec![false; n_rooms]; n_rooms];
     for conn in &map.connections {
         adjacency_matrix[conn.from.room][conn.to.room] = true;
+        adjacency_matrix[conn.to.room][conn.from.room] = true; // Ensure symmetry
     }
     let mut layout_engine = LayoutEngine::new(n_rooms, adjacency_matrix);
     layout_engine.run(1000);
@@ -160,42 +193,27 @@ pub fn render(map: &api::Map) -> String {
         .iter()
         .map(|node| node.position)
         .collect::<Vec<_>>();
-    let _forces = layout_engine
-        .nodes
+
+    // Normalize positions to fit within a standard SVG viewbox.
+    let (min_x, min_y, max_x, max_y) = positions
         .iter()
-        .map(|node| node.force)
-        .collect::<Vec<_>>();
-
-    // Normalize positions to fit within the SVG viewbox
-    let mut min_x = f64::MAX;
-    let mut min_y = f64::MAX;
-    let mut max_x = f64::MIN;
-    let mut max_y = f64::MIN;
-
-    for &(x, y) in &positions {
-        min_x = min_x.min(x);
-        min_y = min_y.min(y);
-        max_x = max_x.max(x);
-        max_y = max_y.max(y);
-    }
+        .fold((f64::MAX, f64::MAX, f64::MIN, f64::MIN), |acc, &(x, y)| {
+            (acc.0.min(x), acc.1.min(y), acc.2.max(x), acc.3.max(y))
+        });
 
     let mut width = (max_x - min_x) * 1.2 + 2.0 * radius;
     let mut height = (max_y - min_y) * 1.2 + 2.0 * radius;
 
-    // Ensure minimum size
-    if width < 500.0 {
-        width = 500.0;
-    }
-    if height < 500.0 {
-        height = 500.0;
-    }
+    // Ensure a minimum canvas size.
+    width = width.max(500.0);
+    height = height.max(500.0);
 
-    let scale_x = if (max_x - min_x) > 0.0 {
+    let scale_x = if (max_x - min_x).abs() > 1e-6 {
         (width - 2.0 * radius) / (max_x - min_x)
     } else {
         1.0
     };
-    let scale_y = if (max_y - min_y) > 0.0 {
+    let scale_y = if (max_y - min_y).abs() > 1e-6 {
         (height - 2.0 * radius) / (max_y - min_y)
     } else {
         1.0
@@ -212,8 +230,12 @@ pub fn render(map: &api::Map) -> String {
         .set("height", height + 20.0)
         .set("viewBox", (-10.0, -10.0, width + 10.0, height + 10.0));
 
-    // Draw connections
+    // Draw connections (passages) as curved paths.
     for conn in &map.connections {
+        // Only draw each edge once for an undirected graph.
+        if conn.from.room >= conn.to.room {
+            continue;
+        }
         let p1 = positions[conn.from.room];
         let p2 = positions[conn.to.room];
 
@@ -225,6 +247,7 @@ pub fn render(map: &api::Map) -> String {
 
         let dist = ((p1.0 - p2.0).powi(2) + (p1.1 - p2.1).powi(2)).sqrt();
 
+        // Use a cubic Bezier curve for a nice arc.
         let data = Data::new().move_to((c1.0, c1.1)).cubic_curve_to((
             c1.0 + (c1.0 - p1.0) / radius * dist * 0.4,
             c1.1 + (c1.1 - p1.1) / radius * dist * 0.4,
@@ -246,7 +269,7 @@ pub fn render(map: &api::Map) -> String {
         document = document.add(path);
     }
 
-    // Draw rooms
+    // Draw rooms as circles.
     for (i, pos) in positions.iter().enumerate() {
         let color = match map.rooms[i] {
             0 => "#ff8080",
@@ -262,29 +285,16 @@ pub fn render(map: &api::Map) -> String {
             .set("fill", color)
             .set("stroke", "black")
             .set("stroke-width", 2)
-            .set("title", format!("Index {}, Hash {}", i, map.rooms[i]));
+            .set("title", format!("Room {}, Signature {}", i, map.rooms[i]));
         document = document.add(circle);
 
+        // Add text label inside the circle.
         let text = Text::new(format!("{}#{}", i, map.rooms[i]))
             .set("x", pos.0)
             .set("y", pos.1 + 7.0)
             .set("text-anchor", "middle")
             .set("font-size", "20px");
         document = document.add(text);
-
-        // let force = forces[i];
-        // let arrow: Path = Path::new()
-        //     .set("fill", "none")
-        //     .set("stroke", "#ff0000")
-        //     .set("stroke-width", 4)
-        //     .set(
-        //         "d",
-        //         Data::new()
-        //             .move_to((pos.0, pos.1))
-        //             .line_to((pos.0 + force.0 * 0.1, pos.1 + force.1 * 0.1)),
-        //     )
-        //     .set("marker-end", "url(#arrowhead)");
-        // document = document.add(arrow);
     }
 
     document.to_string()
@@ -308,8 +318,8 @@ mod tests {
         assert!(svg_str.contains("<svg"));
         assert!(svg_str.contains("<circle"));
         assert!(svg_str.contains("<path"));
-        // assert!(svg_str.contains("0:0"));
-        // assert!(svg_str.contains("1:1"));
+        assert!(svg_str.contains("Room 0, Signature 0"));
+        assert!(svg_str.contains("Room 1, Signature 1"));
     }
 
     #[test]
@@ -322,6 +332,6 @@ mod tests {
         let svg_str = svg::render(&map);
         assert!(svg_str.contains("<svg"));
         assert!(svg_str.contains("<circle"));
-        // assert!(svg_str.contains("0:2"));
+        assert!(svg_str.contains("Room 0, Signature 2"));
     }
 }

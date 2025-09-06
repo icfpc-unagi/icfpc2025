@@ -1,3 +1,15 @@
+//! # API Logging Proxy Handlers
+//!
+//! This module implements a logging proxy for the official contest API.
+//! It defines handlers for the `/select`, `/explore`, and `/guess` endpoints.
+//!
+//! When a request is received, it is:
+//! 1. Forwarded to the official contest server.
+//! 2. The original request and the response from the server are both logged to a
+//!    database table (`api_logs`) for debugging, analysis, and replay purposes.
+//! 3. The response from the official server is then returned to the original caller,
+//!    with an additional `X-Unagi-Log` header containing the log ID.
+
 use crate::sql;
 use actix_web::{HttpRequest, HttpResponse, Responder, http::header, web};
 use chrono::Utc;
@@ -5,8 +17,10 @@ use mysql::params;
 use reqwest::{Client, header as reqwest_header};
 use std::time::Instant;
 
+/// The base URL of the official ICFP 2025 contest server.
 const BACKEND_BASE: &str = "https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.com";
 
+/// A helper function to remove the `/api` prefix from a request path.
 fn strip_api_prefix(path: &str) -> &str {
     if let Some(rest) = path.strip_prefix("/api") {
         if rest.is_empty() { "/" } else { rest }
@@ -15,12 +29,17 @@ fn strip_api_prefix(path: &str) -> &str {
     }
 }
 
+/// Forwards a request to the backend server and logs the entire transaction.
+///
+/// This is the core logic of the proxy. It performs the request forwarding,
+/// measures the duration, logs all relevant data to the `api_logs` table,
+/// and constructs a response that mirrors the backend's response.
 async fn forward_and_log(path: &str, body: web::Bytes, req: &HttpRequest) -> HttpResponse {
     let started = Instant::now();
     let client = Client::new();
     let backend_url = format!("{}{}", BACKEND_BASE, path);
 
-    // Forward request and collect response pieces
+    // Forward the request to the official backend and capture the response.
     let (status_code, ct_from_backend, resp_body) = match client
         .post(&backend_url)
         .header(reqwest_header::CONTENT_TYPE, "application/json")
@@ -48,11 +67,12 @@ async fn forward_and_log(path: &str, body: web::Bytes, req: &HttpRequest) -> Htt
         ),
     };
 
-    // Determine select_id linkage
+    // Link logs together in a session, starting from a `/select` call.
     let path_for_log = strip_api_prefix(path);
     let select_id: i64 = if path_for_log == "/select" {
         0
     } else {
+        // Find the most recent `/select` call to associate this log with it.
         sql::cell::<i64>(
             "SELECT MAX(api_log_id) FROM api_logs WHERE api_log_path = '/select'",
             (),
@@ -62,7 +82,7 @@ async fn forward_and_log(path: &str, body: web::Bytes, req: &HttpRequest) -> Htt
         .unwrap_or(0)
     };
 
-    // Prepare metadata and insert log
+    // Log the transaction to the database.
     let duration_ms = started.elapsed().as_millis() as u64;
     let meta = serde_json::json!({
         "method": req.method().as_str(),
@@ -86,7 +106,8 @@ async fn forward_and_log(path: &str, body: web::Bytes, req: &HttpRequest) -> Htt
     )
     .unwrap_or_default();
 
-    // Build response mirroring backend
+    // Build and return a response that mirrors the backend's response,
+    // adding a custom header with the log ID.
     let mut builder = HttpResponse::build(
         actix_web::http::StatusCode::from_u16(status_code)
             .unwrap_or(actix_web::http::StatusCode::BAD_GATEWAY),
@@ -105,14 +126,17 @@ async fn forward_and_log(path: &str, body: web::Bytes, req: &HttpRequest) -> Htt
     builder.body(resp_body)
 }
 
+/// Handles proxying requests to `/select`.
 pub async fn post_select(req: HttpRequest, body: web::Bytes) -> impl Responder {
     forward_and_log("/select", body, &req).await
 }
 
+/// Handles proxying requests to `/explore`.
 pub async fn post_explore(req: HttpRequest, body: web::Bytes) -> impl Responder {
     forward_and_log("/explore", body, &req).await
 }
 
+/// Handles proxying requests to `/guess`.
 pub async fn post_guess(req: HttpRequest, body: web::Bytes) -> impl Responder {
     forward_and_log("/guess", body, &req).await
 }

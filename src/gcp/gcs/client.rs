@@ -1,9 +1,15 @@
+//! # GCS API Client Logic
+//!
+//! This module contains the core client functions for making API requests to
+//! Google Cloud Storage for operations like listing, downloading, and uploading objects.
+
 use anyhow::{Context, Result, bail};
 use reqwest::Url;
 
 use crate::gcp::gcs::types::{FileInfo, ListResponse, ObjectItem};
 use crate::gcp::get_access_token;
 
+/// Parses a GCS URL string (`gs://bucket/object/path`) into a bucket and object prefix.
 pub fn parse_gs_url(s: &str) -> Result<(String, String)> {
     let rest = s
         .strip_prefix("gs://")
@@ -18,6 +24,9 @@ pub fn parse_gs_url(s: &str) -> Result<(String, String)> {
     Ok((bucket, prefix))
 }
 
+/// Internal generic function for listing objects in a GCS directory.
+/// It handles pagination and separates results into "directories" (prefixes) and "files" (items).
+/// The `map` function allows customizing the output format for file items.
 async fn list_dir_internal<T, F>(
     bucket: &str,
     prefix: &str,
@@ -35,13 +44,13 @@ where
     let token = get_access_token()
         .await
         .context("Failed to get access token")?;
-
     let client = reqwest::Client::new();
 
     let mut page_token: Option<String> = None;
     let mut dirs: Vec<String> = Vec::new();
     let mut out_items: Vec<T> = Vec::new();
 
+    // Loop to handle paginated results from the GCS API.
     loop {
         let mut url = Url::parse(&format!(
             "https://storage.googleapis.com/storage/v1/b/{}/o",
@@ -49,7 +58,7 @@ where
         ))?;
         {
             let mut qp = url.query_pairs_mut();
-            qp.append_pair("delimiter", "/");
+            qp.append_pair("delimiter", "/"); // Use delimiter to get directory-like behavior.
             if !eff_prefix.is_empty() {
                 qp.append_pair("prefix", &eff_prefix);
             }
@@ -73,18 +82,19 @@ where
 
         let body: ListResponse = res.json().await.context("Invalid GCS response")?;
 
+        // Prefixes are the "subdirectories".
         for p in body.prefixes {
-            // Each prefix is eff_prefix + subdir/
             let name = p.strip_prefix(&eff_prefix).unwrap_or(&p).to_string();
             dirs.push(name);
         }
+        // Items are the "files".
         for it in body.items {
-            // Each item name is eff_prefix + file
             let rel = it
                 .name
                 .strip_prefix(&eff_prefix)
                 .unwrap_or(&it.name)
                 .to_string();
+            // Skip the directory placeholder object itself.
             if rel.is_empty() || rel.ends_with('/') {
                 continue;
             }
@@ -103,10 +113,22 @@ where
     Ok((dirs, out_items))
 }
 
+/// Lists the contents of a "directory" in a GCS bucket.
+///
+/// # Returns
+/// A tuple containing two vectors:
+/// 1. A list of subdirectory names.
+/// 2. A list of file names.
 pub async fn list_dir(bucket: &str, prefix: &str) -> Result<(Vec<String>, Vec<String>)> {
     list_dir_internal(bucket, prefix, |_it, rel| Some(rel.to_string())).await
 }
 
+/// Lists the contents of a "directory" in a GCS bucket with detailed file information.
+///
+/// # Returns
+/// A tuple containing two vectors:
+/// 1. A list of subdirectory names.
+/// 2. A list of `FileInfo` structs for each file.
 pub async fn list_dir_detailed(bucket: &str, prefix: &str) -> Result<(Vec<String>, Vec<FileInfo>)> {
     let (dirs, files) = list_dir_internal(bucket, prefix, |it, rel| {
         let size = it.size.as_deref().and_then(|s| s.parse::<u64>().ok());
@@ -124,13 +146,18 @@ pub async fn list_dir_detailed(bucket: &str, prefix: &str) -> Result<(Vec<String
     Ok((dirs, files))
 }
 
+/// Downloads an object from a GCS bucket.
+///
+/// # Returns
+/// A `Vec<u8>` containing the raw bytes of the object.
 pub async fn download_object(bucket: &str, object: &str) -> Result<Vec<u8>> {
     let token = get_access_token()
         .await
         .context("Failed to get access token")?;
     let client = reqwest::Client::new();
 
-    // Percent-encode object as a single path component (encode '/')
+    // GCS API requires object paths to be percent-encoded as a single path segment.
+    // This helper ensures characters like '/' are correctly encoded.
     fn encode_component(s: &str) -> String {
         let mut out = String::with_capacity(s.len() * 3);
         for b in s.as_bytes() {
@@ -167,6 +194,16 @@ pub async fn download_object(bucket: &str, object: &str) -> Result<Vec<u8>> {
     Ok(bytes.to_vec())
 }
 
+/// Uploads data as a new object to a GCS bucket.
+///
+/// # Arguments
+/// * `bucket` - The destination bucket name.
+/// * `name` - The full path and name for the new object.
+/// * `data` - The raw byte data to upload.
+/// * `content_type` - The MIME type of the data (e.g., "text/plain").
+///
+/// # Returns
+/// An `ObjectItem` containing the metadata of the newly created object.
 pub async fn upload_object(
     bucket: &str,
     name: &str,
@@ -178,6 +215,7 @@ pub async fn upload_object(
         .context("Failed to get access token")?;
     let client = reqwest::Client::new();
 
+    // Use the "media" upload type for simple, one-shot uploads.
     let mut url = Url::parse(&format!(
         "https://storage.googleapis.com/upload/storage/v1/b/{}/o",
         bucket
@@ -207,6 +245,11 @@ pub async fn upload_object(
     Ok(item)
 }
 
+/// Fetches the metadata for a single object in a GCS bucket.
+///
+/// This function uses the `list` API with a `prefix` filter to find the exact
+/// object, as there is no direct "get metadata" endpoint that works with slashes
+/// in the object name without special encoding.
 pub async fn get_object_metadata(bucket: &str, object: &str) -> Result<ObjectItem> {
     let token = get_access_token()
         .await
@@ -214,6 +257,7 @@ pub async fn get_object_metadata(bucket: &str, object: &str) -> Result<ObjectIte
 
     let client = reqwest::Client::new();
     let mut page_token: Option<String> = None;
+    // Loop to handle pagination, though for a unique object name, we expect one result.
     loop {
         let mut url = Url::parse(&format!(
             "https://storage.googleapis.com/storage/v1/b/{}/o",
@@ -243,6 +287,7 @@ pub async fn get_object_metadata(bucket: &str, object: &str) -> Result<ObjectIte
             bail!("GCS get object failed ({}): {}", status, body);
         }
         let body: ListResponse = res.json().await.context("Invalid GCS response")?;
+        // Find the exact match from the list results.
         if let Some(item) = body.items.into_iter().find(|it| it.name == object) {
             return Ok(item);
         }
