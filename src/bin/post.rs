@@ -105,7 +105,7 @@ fn handle_explore(json_arg: &str) -> Result<()> {
         .get("plans")
         .context("explore requires field 'plans': [string]")?;
     let plans_arr = plans_v.as_array().context("'plans' must be an array")?;
-    let mut plans: Vec<Vec<usize>> = Vec::with_capacity(plans_arr.len());
+    let mut plans_strs: Vec<String> = Vec::with_capacity(plans_arr.len());
     for (i, p) in plans_arr.iter().enumerate() {
         let s = p
             .as_str()
@@ -116,14 +116,10 @@ fn handle_explore(json_arg: &str) -> Result<()> {
                 i
             );
         }
-        plans.push(
-            s.chars()
-                .map(|c| c.to_digit(10).unwrap() as usize)
-                .collect(),
-        );
+        plans_strs.push(s.to_string());
     }
 
-    let resp = api::explore(plans)?;
+    let resp = api::explore(plans_strs)?;
     let out = serde_json::json!({
         "results": resp.results,
         "queryCount": resp.query_count,

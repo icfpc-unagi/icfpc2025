@@ -76,7 +76,7 @@ fn main() {
         // queue = VecDeque::new();
         assert!(cnt < 7 * n);
         cnt += 1;
-        let mut batched_plans = vec![];
+        let mut batched_plans: Vec<Vec<usize>> = vec![];
         for path in paths.iter() {
             let plans = suffixes
                 .iter()
@@ -88,7 +88,11 @@ fn main() {
                 .collect::<Vec<_>>();
             batched_plans.extend(plans);
         }
-        let batched_results = judge.explore(&batched_plans);
+        let batched_steps: Vec<Vec<(Option<usize>, usize)>> = batched_plans
+            .iter()
+            .map(|p| p.iter().copied().map(|d| (None, d)).collect())
+            .collect();
+        let batched_results = judge.explore(&batched_steps);
         cost += batched_plans.len() + 1;
         // for (i, path) in paths.into_iter().enumerate() {}
         for (path, results) in paths

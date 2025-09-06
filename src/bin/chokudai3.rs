@@ -212,7 +212,7 @@ fn main() {
         !explored.plans.is_empty(),
         "explored is empty; provide explores via JSON"
     );
-    m.door = explored.plans[0].clone();
+    m.door = explored.plans[0].iter().map(|&(_, d)| d).collect();
     m.label = explored.results[0].clone();
 
     //推測を行う

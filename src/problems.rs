@@ -43,16 +43,16 @@ const PROBLEMS_DATA: &[Problem] = &[
         size: 30,
     },
     // added data
-// aleph	12	-
-// beth	24	-
-// gimel	36	-
-// daleth	48	-
-// he	60	-
-// vau	18	-
-// zain	36	-
-// hhet	54	-
-// teth	72	-
-// iod	90	-
+    // aleph	12	-
+    // beth	24	-
+    // gimel	36	-
+    // daleth	48	-
+    // he	60	-
+    // vau	18	-
+    // zain	36	-
+    // hhet	54	-
+    // teth	72	-
+    // iod	90	-
     Problem {
         problem_name: "aleph",
         size: 12,

@@ -156,7 +156,8 @@ fn acquire_plan_and_labels(judge: &mut dyn icfpc2025::judge::Judge) -> PlanInfo 
     let n = judge.num_rooms();
     let mut rng = ChaCha12Rng::seed_from_u64(0xC0FF_EE42);
     let plan = balanced_plan(n, &mut rng);
-    let labels = judge.explore(&vec![plan.clone()])[0].clone();
+    let steps: Vec<(Option<usize>, usize)> = plan.iter().copied().map(|d| (None, d)).collect();
+    let labels = judge.explore(&[steps])[0].clone();
     let m = labels.len();
     let t = plan.len();
     debug_assert_eq!(m, t + 1);
@@ -189,7 +190,8 @@ fn acquire_plan_and_labels(judge: &mut dyn icfpc2025::judge::Judge) -> PlanInfo 
         .map(|c| c.to_digit(10).unwrap() as usize)
         .collect::<Vec<_>>();
 
-    let labels = judge.explore(&vec![plan.clone()])[0].clone();
+    let steps: Vec<(Option<usize>, usize)> = plan.iter().copied().map(|d| (None, d)).collect();
+    let labels = judge.explore(&[steps])[0].clone();
     let m = labels.len();
     let t = plan.len();
     debug_assert_eq!(m, t + 1);

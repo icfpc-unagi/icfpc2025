@@ -371,7 +371,7 @@ fn main() {
         !explored.plans.is_empty(),
         "explored is empty; provide explores via JSON"
     );
-    let plan = explored.plans[0].clone();
+    let plan: Vec<usize> = explored.plans[0].iter().map(|&(_, d)| d).collect();
     let labels = explored.results[0].clone();
     let mut m = Moves {
         label: vec![],
