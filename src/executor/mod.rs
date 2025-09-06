@@ -1,15 +1,15 @@
 use anyhow::{Context, Result};
 use mysql::params;
-use serde_json::Value as JsonValue;
-use std::fs::{File, create_dir_all};
-use std::io::{BufRead, BufReader, Write};
+use std::fs::create_dir_all;
 use std::path::PathBuf;
-use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
+#[cfg(unix)]
+use std::os::unix::process::ExitStatusExt;
 
 use crate::sql;
 
 pub mod lock;
+pub mod run;
 
 /// Information required to execute a task.
 pub struct Task {
@@ -154,134 +154,93 @@ pub fn run_task(task: &Task) -> Result<(Option<i64>, u128)> {
     let stdout_path = base_dir.join("stdout.jsonl");
     let stderr_path = base_dir.join("stderr.jsonl");
 
-    let mut stdout_file = File::create(&stdout_path)?;
-    let mut stderr_file = File::create(&stderr_path)?;
-
     eprintln!(
         "[executor] starting task_id={} (logs: {:?}, {:?})",
         task.task_id, stdout_path, stderr_path
     );
-
-    // Spawn `bash -lc` to run the script
-    let mut child = Command::new("bash")
-        .arg("-lc")
-        .arg(script)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .context("Failed to spawn bash")?;
-
-    let start = Instant::now();
-    let mut last_unagi_json: Option<JsonValue> = None;
-
-    // Readers for stdout and stderr
-    let mut out_reader = BufReader::new(child.stdout.take().unwrap());
-    let mut err_reader = BufReader::new(child.stderr.take().unwrap());
-
-    // Set up heartbeat that can terminate the process if lock extension fails
+    // Prepare cancel flag and heartbeat (lock management only)
     use std::sync::{
-        Arc, Mutex,
+        Arc,
         atomic::{AtomicBool, Ordering},
     };
+    let cancel = Arc::new(AtomicBool::new(false));
     let stop_flag = Arc::new(AtomicBool::new(false));
-    let child_arc = Arc::new(Mutex::new(child));
     let hb_task_id = task.task_id;
     let hb_lock = task.task_lock.clone();
     let hb_stop = Arc::clone(&stop_flag);
-    let hb_child = Arc::clone(&child_arc);
+    let hb_cancel = Arc::clone(&cancel);
     let _hb = std::thread::spawn(move || {
-        while !hb_stop.load(Ordering::Relaxed) {
-            std::thread::sleep(Duration::from_secs(10));
+        let mut failed_count = 0usize;
+        let mut next_extend = Instant::now() + Duration::from_secs(10);
+        loop {
+            if hb_stop.load(Ordering::Relaxed) {
+                break;
+            }
+            if Instant::now() < next_extend {
+                std::thread::sleep(Duration::from_millis(100));
+                continue;
+            }
             match crate::executor::lock::extend_lock(hb_task_id, &hb_lock) {
-                Ok(true) => {}
-                Ok(false) | Err(_) => {
+                Ok(true) => {
+                    failed_count = 0;
+                    next_extend = Instant::now() + Duration::from_secs(10);
+                }
+                Ok(false) => {
                     eprintln!(
-                        "[executor] lock extend failed for task_id={}, terminating process",
+                        "[executor] lock extend returned false for task_id={}, cancelling",
                         hb_task_id
                     );
-                    if let Ok(mut ch) = hb_child.lock() {
-                        let _ = ch.kill();
-                    }
+                    hb_cancel.store(true, Ordering::Relaxed);
                     break;
+                }
+                Err(e) => {
+                    failed_count += 1;
+                    eprintln!(
+                        "[executor] lock extend error (#{}) for task_id={}: {}",
+                        failed_count, hb_task_id, e
+                    );
+                    if failed_count >= 3 {
+                        eprintln!(
+                            "[executor] lock extend failed {} times for task_id={}, cancelling",
+                            failed_count, hb_task_id
+                        );
+                        hb_cancel.store(true, Ordering::Relaxed);
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(500));
                 }
             }
         }
     });
 
-    // Simple loop to read both streams without blocking indefinitely on one.
-    // We alternate attempts using non-blocking `fill_buf` checks.
-    let timeout = Duration::from_secs(600);
-    loop {
-        // Check for timeout
-        if start.elapsed() > timeout {
+    // Execute the script (execution only)
+    let start = Instant::now();
+    let (score, _status) = match run::run_command(
+        &script,
+        &stdout_path,
+        &stderr_path,
+        Duration::from_secs(600),
+        Arc::clone(&cancel),
+    ) {
+        Ok(v) => v,
+        Err(e) => {
             eprintln!(
-                "[executor] timeout reached (600s) for task_id={}, killing process",
-                task.task_id
+                "[executor] run_command failed for task_id={} (treat as timeout/cancel): {}",
+                task.task_id, e
             );
-            if let Ok(mut ch) = child_arc.lock() {
-                let _ = ch.kill();
+            #[cfg(unix)]
+            {
+                (None, std::process::ExitStatus::from_raw(1 << 8))
             }
-            break;
-        }
-
-        let mut progressed = false;
-
-        // Read one line from stdout if available
-        let mut line = String::new();
-        let n = out_reader.read_line(&mut line)?;
-        if n > 0 {
-            progressed = true;
-            write_jsonl(&mut stdout_file, &line)?;
-            if let Some(json) = parse_unagi_line(&line) {
-                last_unagi_json = Some(json);
+            #[cfg(not(unix))]
+            {
+                let status = std::process::Command::new("cmd")
+                    .args(["/C", "exit", "1"]).status()
+                    .unwrap_or_else(|_| std::process::ExitStatus::from_raw(1));
+                (None, status)
             }
         }
-
-        // Read one line from stderr if available
-        let mut eline = String::new();
-        let n = err_reader.read_line(&mut eline)?;
-        if n > 0 {
-            progressed = true;
-            write_jsonl(&mut stderr_file, &eline)?;
-        }
-
-        // If process exited and both streams are drained, break
-        let status_opt = {
-            if let Ok(mut ch) = child_arc.lock() {
-                ch.try_wait()?
-            } else {
-                None
-            }
-        };
-        match status_opt {
-            Some(status) => {
-                eprintln!(
-                    "[executor] process exited for task_id={} status={}",
-                    task.task_id, status
-                );
-                // Drain remaining lines
-                let mut tmp = String::new();
-                while out_reader.read_line(&mut tmp)? > 0 {
-                    write_jsonl(&mut stdout_file, &tmp)?;
-                    if let Some(json) = parse_unagi_line(&tmp) {
-                        last_unagi_json = Some(json);
-                    }
-                    tmp.clear();
-                }
-                while err_reader.read_line(&mut tmp)? > 0 {
-                    write_jsonl(&mut stderr_file, &tmp)?;
-                    tmp.clear();
-                }
-                break;
-            }
-            None => {
-                if !progressed {
-                    // Avoid busy loop
-                    std::thread::sleep(Duration::from_millis(10));
-                }
-            }
-        }
-    }
+    };
 
     let duration_ms = start.elapsed().as_millis();
 
@@ -301,10 +260,6 @@ pub fn run_task(task: &Task) -> Result<(Option<i64>, u128)> {
     upload_logs(task.task_id, &stdout_path, &stderr_path)?;
     eprintln!("[executor] uploaded logs for task_id={}", task.task_id);
 
-    // Extract score from last UNAGI JSON
-    let score = last_unagi_json
-        .and_then(|v| v.get("score").cloned())
-        .and_then(|v| v.as_i64());
     if let Some(s) = score {
         eprintln!(
             "[executor] detected score for task_id={}: {}",
@@ -348,28 +303,6 @@ pub fn update_task(task: &Task, score: Option<i64>, duration_ms: u128) -> Result
 fn gen_lock_token() -> String {
     let buf: [u8; 16] = rand::random();
     hex::encode(buf)
-}
-
-fn write_jsonl(file: &mut File, text: &str) -> Result<()> {
-    let ts = chrono::Utc::now().to_rfc3339();
-    let obj = serde_json::json!({
-        "timestamp": ts,
-        "text": text.trim_end_matches(['\n', '\r'])
-    });
-    let line = serde_json::to_string(&obj)?;
-    file.write_all(line.as_bytes())?;
-    file.write_all(b"\n")?;
-    file.flush()?; // try to avoid buffering
-    Ok(())
-}
-
-fn parse_unagi_line(line: &str) -> Option<JsonValue> {
-    let trimmed = line.trim_start();
-    if let Some(rest) = trimmed.strip_prefix("<UNAGI>:") {
-        serde_json::from_str::<JsonValue>(rest.trim()).ok()
-    } else {
-        None
-    }
 }
 
 fn upload_logs(task_id: i64, stdout_path: &PathBuf, stderr_path: &PathBuf) -> Result<()> {
