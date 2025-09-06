@@ -234,8 +234,7 @@ pub fn generate_random_edges_v2(
     let mut edges = vec![];
 
     let mut i2 = 0;
-    for i1 in 0..list1.len() {
-        let (u1, d1) = list1[i1];
+    for &(u1, d1) in &list1 {
         if used[u1][d1] {
             continue;
         }
@@ -305,7 +304,10 @@ impl LocalJudge {
                     rooms,
                     graph,
                     cost: 0,
-                    explored_log: Vec::new(),
+                    explored_log: Explored {
+                        plans: vec![],
+                        results: vec![],
+                    },
                 }
             }
             _ => panic!("Unknown problem type: {}", problem_type),
