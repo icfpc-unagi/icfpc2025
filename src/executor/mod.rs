@@ -135,7 +135,7 @@ pub fn acquire_task() -> Result<Option<Task>> {
 /// - Writes stdout/stderr as JSONL lines to `target/logs/{task_id}/stdout.jsonl` and `stderr.jsonl`.
 /// - Uploads both files to `gs://icfpc2025-data/logs/{task_id}/`.
 /// - Returns the parsed `score` from the last line starting with "<UNAGI>:" in stdout.
-pub fn run_task(task: &Task) -> Result<(Option<i64>, u128)> {
+pub fn run_task(task: &Task) -> Result<(Option<i64>, i32, u128)> {
     // Prepare command by substituting placeholders
     let mut script = task.agent_code.clone();
     script = script.replace("\r", "");
@@ -202,7 +202,7 @@ pub fn run_task(task: &Task) -> Result<(Option<i64>, u128)> {
 
     // Execute the script (execution only)
     let start = Instant::now();
-    let (score, _status, artifacts_opt): (
+    let (score, status, artifacts_opt): (
         Option<i64>,
         std::process::ExitStatus,
         Option<run::Artifacts>,
@@ -229,6 +229,20 @@ pub fn run_task(task: &Task) -> Result<(Option<i64>, u128)> {
     };
 
     let duration_ms = start.elapsed().as_millis();
+    let exit_code: i32 = {
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::ExitStatusExt;
+            match status.code() {
+                Some(c) => c,
+                None => status.signal().map(|s| 128 + s).unwrap_or(1),
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            status.code().unwrap_or(1)
+        }
+    };
 
     // Stop heartbeat and attempt to release lock (best-effort)
     stop_flag.store(true, Ordering::Relaxed);
@@ -265,25 +279,32 @@ pub fn run_task(task: &Task) -> Result<(Option<i64>, u128)> {
         );
     }
 
-    Ok((score, duration_ms))
+    Ok((score, exit_code, duration_ms))
 }
 
 /// Updates the task with the given score and duration, and releases the lock.
-pub fn update_task(task: &Task, score: Option<i64>, duration_ms: u128) -> Result<()> {
+pub fn update_task(
+    task: &Task,
+    score: Option<i64>,
+    exit_code: i32,
+    duration_ms: u128,
+) -> Result<()> {
     eprintln!(
-        "[executor] updating task_id={} score={:?} duration_ms={}",
-        task.task_id, score, duration_ms
+        "[executor] updating task_id={} score={:?} exit_code={} duration_ms={}",
+        task.task_id, score, exit_code, duration_ms
     );
     let _ = sql::exec(
         r#"
         UPDATE tasks
         SET task_score = :task_score,
+            task_exit_code = :task_exit_code,
             task_duration_ms = :task_duration_ms,
             task_locked = NULL
         WHERE task_id = :task_id AND task_lock = :task_lock
         "#,
         params! {
             "task_score" => score,
+            "task_exit_code" => exit_code,
             "task_duration_ms" => (duration_ms as i64),
             "task_id" => task.task_id,
             "task_lock" => &task.task_lock,
