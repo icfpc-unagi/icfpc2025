@@ -86,12 +86,12 @@ async fn render_problem_leaderboard(bucket: &str, problem: &str) -> Result<Strin
         "
         SELECT JSON_EXTRACT(g.api_log_request, '$.map') AS map,
                g.api_log_created AS ts
-        FROM api_logs s
-        JOIN api_logs g
-          ON g.api_log_path = '/guess'
-            AND g.api_log_id > s.api_log_id
-        WHERE s.api_log_path = '/select'
-          AND JSON_EXTRACT(s.api_log_request, '$.problemName') = :problem
+        FROM api_logs g
+        JOIN api_logs s
+          ON g.api_log_select_id = s.api_log_id
+            AND g.api_log_path = '/guess'
+            AND s.api_log_path = '/select'
+        WHERE JSON_EXTRACT(s.api_log_request, '$.problemName') = :problem
           AND g.api_log_response_code = 200
           AND JSON_EXTRACT(g.api_log_response, '$.correct') = true",
         params! { "problem" => problem },
