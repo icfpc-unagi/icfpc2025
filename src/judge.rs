@@ -237,6 +237,11 @@ impl Judge for LocalJudge {
         }
         eprintln!("!log status AC");
         eprintln!("!log score {}", self.cost);
+
+        // DO NOT REMOVE HERE. THIS IS USED FOR SYSTEM TESTING!!!
+        // Output JSON-encoded result for the executor to parse.
+        println!("<UNAGI>: {}", serde_json::json!({ "score": self.cost }));
+
         true
     }
     fn explored(&self) -> Explored {
