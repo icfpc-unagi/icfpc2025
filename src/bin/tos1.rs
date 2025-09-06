@@ -97,7 +97,11 @@ fn main() {
     }
 
     // senpuku
-    judge.explore(&vec![vec![]; 999999 - cost - 1]);
+    while cost < 88999 {
+        judge.explore(&vec![vec![]; 10000]);
+        cost += 10001;
+    }
+    judge.explore(&vec![vec![]; 100000 - cost - 1]);
 
     let start = 0;
     let rooms = room_to_res.iter().map(|r| r[0][0]).collect::<Vec<_>>();
