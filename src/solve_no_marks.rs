@@ -1,5 +1,5 @@
 use crate::{
-    judge::{check_explore, Guess},
+    judge::{Guess, check_explore},
     mat,
 };
 
