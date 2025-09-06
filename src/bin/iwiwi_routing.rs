@@ -1,3 +1,4 @@
+#![allow(unused_imports, unused_mut, clippy::overly_complex_bool_expr)]
 use icfpc2025::{judge::*, *};
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
