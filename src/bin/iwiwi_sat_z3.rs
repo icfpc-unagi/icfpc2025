@@ -203,3 +203,7 @@ fn main() {
     });
 }
 */
+
+fn main() {
+    panic!("This file is not used in the current setup. Please check the context or the intended usage.");
+}
