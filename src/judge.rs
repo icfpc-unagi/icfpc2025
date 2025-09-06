@@ -45,8 +45,8 @@ impl Judge for LocalJudge {
                 route.push(self.rooms[u]);
             }
             ret.push(route);
+            assert!(plan.len() <= 18 * self.num_rooms());
         }
-        assert!(plans.len() <= 18 * self.num_rooms());
         for r in &ret {
             println!("{}", r.iter().join(""));
         }
