@@ -50,16 +50,33 @@ fn main() {
 
     let mut rng = rand::rng();
 
-    let orig_start_label = judge.explore(&vec![vec![]])[0][0];
-    let start_label = (orig_start_label + 1) % 4;
+    let mut pairs: Vec<(usize, usize)> = (0..4)
+        .flat_map(|i| (1..4).map(move |j| (i, (i + j) % 4)))
+        .collect();
+    pairs.shuffle(&mut rng);
+    let pairs = pairs;
+    let mut prefix_a = vec![];
+    let mut prefix_b = vec![];
+    for &(a, b) in pairs.iter() {
+        let door = rng.random_range(0..6);
+        prefix_a.push((Some(a), door));
+        prefix_b.push((Some(b), door));
+    }
+    let prefix_a = prefix_a;
+    let prefix_b = prefix_b;
+    // let prefixes = vec![prefix_a, prefix_b];
 
-    let suffixes: Vec<Vec<Step>> = (0..36)
+    let prefix_len = pairs.len();
+    let suffix_len = 42.min(4 * n - prefix_len);
+    // assert_eq!(prefix_len, 12);
+
+    let suffixes: Vec<Vec<Step>> = (0..24) // TODO: tune
         .map(|i| {
             let mut s = vec![];
             for door in [i % 6, (i % 6 + i / 6 + 1) % 6] {
                 s.push((Some(rng.random_range(0..4)), door));
             }
-            for _ in 0..(42 - 2) {
+            for _ in 2..suffix_len {
                 s.push((Some(rng.random_range(0..4)), rng.random_range(0..6)));
             }
             s
@@ -74,28 +91,31 @@ fn main() {
     let mut room_to_res: Vec<Vec<Vec<usize>>> = vec![];
     let mut room_to_a_path: Vec<Vec<usize>> = vec![];
 
+    let mut start = usize::MAX;
+
     let mut cost = 0usize;
 
     let mut cnt = 0;
+    let max_batch_size = 20; // 1 to debug locally
     while !queue.is_empty() {
-        let paths = queue.drain(..queue.len().min(20)).collect::<Vec<_>>();
+        let paths = queue
+            .drain(..queue.len().min(max_batch_size))
+            .collect::<Vec<_>>();
         // queue = VecDeque::new();
         assert!(cnt < 7 * n);
         cnt += 1;
         let mut batched_plans: Vec<Vec<Step>> = vec![];
         for path in paths.iter() {
-            let plans = suffixes
-                .iter()
-                .map(|s| {
-                    let mut p = path
-                        .iter()
-                        .enumerate()
-                        .map(|(i, &door)| (if i == 0 { Some(start_label) } else { None }, door))
-                        .collect::<Vec<_>>();
-                    p.extend(s);
-                    p
-                })
-                .collect::<Vec<_>>();
+            let noop_path = path.iter().map(|&d| (None, d)).collect::<Vec<_>>();
+            let mut plans = vec![];
+            for suffix in &suffixes {
+                for prefix in [&prefix_a, &prefix_b] {
+                    let mut p = prefix.clone();
+                    p.extend(noop_path.iter());
+                    p.extend(suffix);
+                    plans.push(p);
+                }
+            }
             batched_plans.extend(plans);
         }
         let batched_results = judge.explore(&batched_plans);
@@ -103,7 +123,7 @@ fn main() {
         // for (i, path) in paths.into_iter().enumerate() {}
         for (path, results) in paths
             .into_iter()
-            .zip(batched_results.chunks_exact(suffixes.len()))
+            .zip(batched_results.chunks_exact(suffixes.len() * 2))
         {
             // let results = judge.explore(&plans);
             // let start_index = suffixes.len() * i;
@@ -111,16 +131,12 @@ fn main() {
             // let results = &batched_results[start_index..stop_index];
             // let plans = &batched_plans[start_index..stop_index];
             // cost += plans.len() + 1;
-            let mut results = results
+            let results_a = results[0][..prefix_len].to_vec();
+            let results_b = results[1][..prefix_len].to_vec();
+            let results = results
                 .iter()
-                .map(|r| r[path.len()..].to_vec())
+                .map(|r| r[(prefix_len + path.len())..].to_vec())
                 .collect::<Vec<_>>();
-            if path.is_empty() {
-                for result in results.iter_mut() {
-                    // assert_eq!(result[0], orig_start_label);
-                    result[0] = start_label;
-                }
-            }
             let room = *res_to_room.entry(results.clone()).or_insert_with(|| {
                 let r = room_to_res.len();
                 room_to_res.push(results.clone());
@@ -141,6 +157,22 @@ fn main() {
                     .join(""),
                 room
             );
+
+            let mut start_label = pairs[0];
+            for (i, label_pair) in results_a.into_iter().zip(results_b).enumerate() {
+                // dbg!((i, label_pair, start_label));
+                if start_label == label_pair {
+                    start_label = pairs[i];
+                }
+            }
+            if start_label == (results[0][0], results[1][0]) {
+                eprintln!("start room: {}", room);
+                if start == usize::MAX {
+                    start = room;
+                } else {
+                    assert_eq!(start, room);
+                }
+            }
         }
     }
 
@@ -163,9 +195,10 @@ fn main() {
     //     eprintln!();
     // }
 
-    let start = 0;
+    // let start = 0;
     let mut rooms = room_to_res.iter().map(|r| r[0][0]).collect::<Vec<_>>();
-    rooms[0] = orig_start_label;
+    // rooms[0] = orig_start_label;
+    eprintln!("start: {}", start);
     eprintln!("rooms: {:?}", rooms);
     let graph: Vec<Vec<usize>> = room_to_a_path
         .iter()
