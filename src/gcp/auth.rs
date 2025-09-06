@@ -43,8 +43,7 @@ struct Claims {
 ///
 /// # Returns
 /// A `Result` containing the access token string if successful.
-// #[cached(result = true)]
-#[once(result = true)]
+#[once(result = true, sync_writes = true)]
 pub async fn get_access_token() -> Result<String> {
     // 1. Download the service account key file.
     let unagi_password = std::env::var("UNAGI_PASSWORD").context("UNAGI_PASSWORD not set")?;

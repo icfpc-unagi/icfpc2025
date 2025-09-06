@@ -26,6 +26,11 @@ async fn main() -> std::io::Result<()> {
                 "/leaderboard/{problem}",
                 web::get().to(www::handlers::leaderboard::show),
             )
+            .route("/unlock", web::get().to(www::handlers::unlock::unlock_get))
+            .route(
+                "/unlock",
+                web::post().to(www::handlers::unlock::unlock_post),
+            )
             .route(
                 "/api/select",
                 web::post().to(www::handlers::api::post_select),
