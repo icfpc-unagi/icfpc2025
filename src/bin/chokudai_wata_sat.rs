@@ -364,15 +364,12 @@ fn main() {
     let n = judge.num_rooms();
 
     let mut plan = vec![];
-    for _ in 0..9 * n {
-        for _ in 0..1 {
-            let c: usize = rng.random_range(0..3) * 2;
-            plan.push(c);
+    for i in 0..18 * n {
+        let mut c: usize = rng.random_range(0..3) * 2;
+        if i % 4 == 0 || i % 4 == 3 {
+            c += 1;
         }
-        for _ in 0..1 {
-            let c: usize = rng.random_range(0..3) * 2 + 1;
-            plan.push(c);
-        }
+        plan.push(c);
     }
 
     let r = judge.explore(&vec![plan.clone()]);
