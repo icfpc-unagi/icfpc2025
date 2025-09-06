@@ -1,3 +1,8 @@
+#![allow(
+    clippy::type_complexity,
+    clippy::ptr_arg,
+    clippy::overly_complex_bool_expr
+)]
 use icfpc2025::judge::*;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
