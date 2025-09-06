@@ -1,10 +1,4 @@
-#![allow(
-    clippy::needless_range_loop,
-    clippy::useless_vec,
-    clippy::partialeq_to_none,
-    non_snake_case,
-    unused_variables
-)]
+#![cfg_attr(feature = "skip_lint", allow(clippy::all, clippy::pedantic, warnings))]
 use icfpc2025::judge::*;
 
 // SAT variable encoding functions.

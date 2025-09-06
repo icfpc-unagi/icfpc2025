@@ -5,7 +5,7 @@
     clippy::ptr_arg,
     clippy::manual_memcpy,
     clippy::needless_range_loop,
-    clippy::cloned_ref_to_slice_refs,
+    clippy::cloned_ref_to_slice_refs
 )]
 
 use crate::{

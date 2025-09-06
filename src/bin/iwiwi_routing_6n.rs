@@ -1,10 +1,4 @@
-#![allow(
-    clippy::type_complexity,
-    clippy::ptr_arg,
-    clippy::overly_complex_bool_expr,
-    unused_variables,
-    dead_code
-)]
+#![cfg_attr(feature = "skip_lint", allow(clippy::all, clippy::pedantic, warnings))]
 use icfpc2025::judge::*;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;

@@ -1,16 +1,4 @@
-#![allow(
-    unused_variables,
-    unused_mut,
-    unused_imports,
-    dead_code,
-    clippy::needless_range_loop,
-    clippy::useless_vec,
-    clippy::ptr_arg,
-    clippy::needless_return,
-    clippy::len_zero,
-    clippy::cloned_ref_to_slice_refs,
-    non_snake_case
-)]
+#![cfg_attr(feature = "skip_lint", allow(clippy::all, clippy::pedantic, warnings))]
 use std::collections::{HashMap, VecDeque};
 
 use icfpc2025::judge::*;

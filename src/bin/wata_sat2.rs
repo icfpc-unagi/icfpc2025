@@ -3,18 +3,7 @@
 // rustsat = "0.7"
 // rustsat-minisat = "0.7"   // もしくは rustsat-cadical / rustsat-kissat 等
 
-#![allow(
-    clippy::needless_range_loop,
-    clippy::useless_vec,
-    clippy::partialeq_to_none,
-    clippy::ptr_arg,
-    clippy::if_same_then_else,
-    clippy::cloned_ref_to_slice_refs,
-    clippy::match_like_matches_macro,
-    clippy::bool_comparison,
-    non_snake_case,
-    unused_variables
-)]
+#![cfg_attr(feature = "skip_lint", allow(clippy::all, clippy::pedantic, warnings))]
 use icfpc2025::{judge::*, *};
 use rand::prelude::*;
 
