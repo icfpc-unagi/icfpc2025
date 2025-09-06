@@ -7,6 +7,8 @@
     clippy::ptr_arg,
     clippy::manual_memcpy,
     clippy::cloned_ref_to_slice_refs,
+    clippy::vec_init_then_push,
+    clippy::match_like_matches_macro,
     non_snake_case,
     unused_variables,
     dead_code

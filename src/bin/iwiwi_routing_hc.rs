@@ -1,3 +1,12 @@
+#![allow(
+    unused_imports,
+    dead_code,
+    clippy::type_complexity,
+    clippy::ptr_arg,
+    clippy::needless_return,
+    clippy::unnecessary_cast,
+    clippy::needless_borrow
+)]
 use icfpc2025::judge::*;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
