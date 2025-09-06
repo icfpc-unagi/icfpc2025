@@ -324,12 +324,23 @@ fn error_check(ans: &[usize], m: &Moves, n: usize) -> (usize, Vec<Vec<usize>>) {
         }
     }
 
+    //ドアの個数が合うかのチェック
     for i in 0..n {
         for j in 0..n {
             if door_cnt[i][j] != door_cnt[j][i] {
-                wrong += 70100 * (door_cnt[i][j] as isize - door_cnt[j][i] as isize).abs() as usize;
+                wrong += 30100 * (door_cnt[i][j] as isize - door_cnt[j][i] as isize).abs() as usize;
             }
         }
+    }
+
+    //ドアの受けすぎチェック
+    for i in 0..n {
+        let mut sum = 0;
+        for j in 0..n {
+            sum += door_cnt[j][i];
+        }
+        let diff = (sum - 6).abs();
+        wrong += 50000 * diff * diff;
     }
 
     (wrong, to)
