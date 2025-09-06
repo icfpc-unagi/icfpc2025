@@ -189,7 +189,8 @@ impl LocalJudge {
         let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(seed);
         match problem_type {
             "random" => {
-                let rooms = (0..num_rooms).map(|_| rng.random_range(0..4)).collect_vec();
+                let mut rooms = (0..num_rooms).map(|i| i % 4).collect_vec();
+                rooms.shuffle(&mut rng);
                 let mut graph = vec![[!0; 6]; num_rooms];
                 let mut list = vec![];
                 for i in 0..num_rooms {
