@@ -29,6 +29,7 @@ resvg = { version = "0.45.1", optional = true }
 chrono-humanize = "0.2.3"
 chrono = "0.4.41"
 num-bigint = "0.4.6"
+libc = "0.2"
 clap = { version = "4.5.47", features = ["derive"] }
 num-traits = "0.2"
 num = { version = "0.4.3", features = ["num-bigint"] }
