@@ -341,19 +341,7 @@ fn main() {
             tx.send(model).unwrap();
         });
     }
-    {
-        let tx = tx.clone();
-        let inst = inst.clone();
-        std::thread::spawn(move || {
-            let mut solver = rustsat_cadical::CaDiCaL::default();
-            solver.add_cnf(inst.clone().into_cnf().0).unwrap();
-            let res = solver.solve().unwrap();
-            eprintln!("CaDiCaL");
-            assert!(matches!(res, SolverResult::Sat));
-            let model = solver.full_solution().unwrap();
-            tx.send(model).unwrap();
-        });
-    }
+    // CaDiCaL via rustsat-cadical is disabled to avoid conflicts with `cadical` crate
     {
         let tx = tx.clone();
         let inst = inst.clone();
