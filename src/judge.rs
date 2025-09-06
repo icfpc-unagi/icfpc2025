@@ -195,7 +195,7 @@ impl Judge for LocalJudge {
                 assert_eq!(out.graph[i2][door2], (i, door), "Graph is not undirected");
             }
         }
-        fn get_ids(graph: &Vec<[usize; 6]>, s: usize) -> Vec<usize> {
+        fn get_ids(graph: &[[usize; 6]], s: usize) -> Vec<usize> {
             let n = graph.len();
             let mut ids = vec![!0; n];
             let mut stack = vec![];
