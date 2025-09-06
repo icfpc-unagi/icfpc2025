@@ -165,7 +165,7 @@ impl Judge for LocalJudge {
                 route.push(labels[u]);
             }
             ret.push(route);
-            assert!(plan.len() <= 6 * self.num_rooms());
+            // assert!(plan.len() <= 6 * self.num_rooms());
         }
         for r in &ret {
             println!("{}", r.iter().join(""));
@@ -286,7 +286,7 @@ impl Judge for RemoteJudge {
         self.cost += plans.len() + 1;
         for plan in plans {
             println!("{}", plan.iter().map(|&step| format_step(step)).join(""));
-            assert!(plan.len() <= 6 * self.num_rooms());
+            // assert!(plan.len() <= 6 * self.num_rooms());
         }
         let str_plans: Vec<String> = plans
             .iter()
@@ -720,6 +720,37 @@ pub fn check_explore(guess: &Guess, plans: &[Vec<usize>], results: &[Vec<usize>]
             eprintln!("actual  : {}", route.iter().join(""));
             return false;
         }
+    }
+    true
+}
+
+pub fn check_explore2(
+    guess: &Guess,
+    plans: &[Vec<(Option<usize>, usize)>],
+    results: &[Vec<usize>],
+) -> bool {
+    assert_eq!(plans.len(), results.len());
+    let mut id = 0;
+    for (plan, result) in plans.iter().zip(results.iter()) {
+        // Simulate the plan on the guessed map.
+        let mut labels = guess.rooms.clone();
+        let mut u = guess.start;
+        let mut route = vec![labels[u]];
+        for &(new_label, door) in plan {
+            if let Some(new_label) = new_label {
+                labels[u] = new_label;
+            }
+            u = guess.graph[u][door].0;
+            route.push(labels[u]);
+        }
+        // Check if the simulated route matches the actual result.
+        if &route != result {
+            eprintln!("mismatch in plan #{}:", id);
+            eprintln!("expected: {}", result.iter().join(""));
+            eprintln!("actual  : {}", route.iter().join(""));
+            return false;
+        }
+        id += 1;
     }
     true
 }
