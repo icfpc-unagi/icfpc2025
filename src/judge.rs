@@ -270,6 +270,10 @@ impl LocalJudge {
 }
 
 pub fn get_judge_from_stdin() -> Box<dyn Judge> {
+    get_judge_from_stdin_with(false)
+}
+
+pub fn get_judge_from_stdin_with(explored: bool) -> Box<dyn Judge> {
     use std::io::Read;
     let mut input = String::new();
     std::io::stdin().read_to_string(&mut input).unwrap();
@@ -316,23 +320,22 @@ pub fn get_judge_from_stdin() -> Box<dyn Judge> {
             out
         }
 
-        match parsed.mode.as_deref() {
+        let mut j: Box<dyn Judge> = match parsed.mode.as_deref() {
             Some("remote") => {
                 let name = parsed
                     .problem_name
                     .as_ref()
                     .expect("problemName is required for remote mode");
-                let mut j = RemoteJudge::new(name);
+                let mut jr = RemoteJudge::new(name);
                 if let Some(exps) = parsed.explores {
-                    j.set_explored(to_explored(exps));
+                    jr.set_explored(to_explored(exps));
                 }
-                return Box::new(j);
+                Box::new(jr)
             }
             Some("local") | None => {
                 if let Some(map) = parsed.map {
-                    return Box::new(LocalJudge::new_json(parsed.problem_name, &map));
-                }
-                if let Some(exps) = parsed.explores {
+                    Box::new(LocalJudge::new_json(parsed.problem_name, &map))
+                } else if let Some(exps) = parsed.explores {
                     let explored_log = to_explored(exps);
                     let num_rooms = if let Some(n) = parsed.num_rooms {
                         n
@@ -343,25 +346,38 @@ pub fn get_judge_from_stdin() -> Box<dyn Judge> {
                     } else {
                         panic!("numRooms missing and problemName not provided");
                     };
-                    return Box::new(LocalJudge {
+                    Box::new(LocalJudge {
                         problem_name: parsed.problem_name.unwrap_or_else(|| "json".to_string()),
                         rooms: vec![0; num_rooms],
                         graph: vec![[0; 6]; num_rooms],
                         cost: 0,
                         explored_log,
-                    });
+                    })
+                } else {
+                    panic!("JSON must contain either 'map' or 'explores'");
                 }
-                panic!("JSON must contain either 'map' or 'explores'");
             }
             Some(other) => panic!("unknown JSON mode: {}", other),
+        };
+
+        // Optionally pre-populate with a random explore if requested and none provided
+        if explored && j.explored().is_empty() {
+            let n = j.num_rooms();
+            let mut rng = rand::rng();
+            let mut plan = Vec::with_capacity(18 * n);
+            for _ in 0..(18 * n) {
+                plan.push(rng.random_range(0..6));
+            }
+            let _ = j.explore(&[plan]);
         }
+        return j;
     }
 
     // Otherwise, parse tokens via proconio from OnceSource
     use proconio::source::once::OnceSource;
     let mut src = OnceSource::from(s);
     input! { from &mut src, mode: String }
-    match mode.as_str() {
+    let mut j: Box<dyn Judge> = match mode.as_str() {
         "local" => {
             input! {
                 from &mut src,
@@ -379,7 +395,18 @@ pub fn get_judge_from_stdin() -> Box<dyn Judge> {
             Box::new(RemoteJudge::new(&problem_name))
         }
         _ => panic!("local_remote must be 'local' or 'remote'"),
+    };
+
+    if explored && j.explored().is_empty() {
+        let n = j.num_rooms();
+        let mut rng = rand::rng();
+        let mut plan = Vec::with_capacity(18 * n);
+        for _ in 0..(18 * n) {
+            plan.push(rng.random_range(0..6));
+        }
+        let _ = j.explore(&[plan]);
     }
+    j
 }
 
 pub fn check_explore(guess: &Guess, plans: &[Vec<usize>], results: &[Vec<usize>]) -> bool {

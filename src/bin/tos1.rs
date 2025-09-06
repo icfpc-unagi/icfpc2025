@@ -31,7 +31,7 @@ fn fill_doors(graph: &[Vec<usize>]) -> Vec<[(usize, usize); 6]> {
 }
 
 fn main() {
-    let mut judge = get_judge_from_stdin();
+    let mut judge = get_judge_from_stdin_with(true);
     let n = judge.num_rooms();
 
     let mut rng = rand::rng();

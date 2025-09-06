@@ -12,10 +12,14 @@ use rand::prelude::*;
 
 fn main() {
     let mut rng = rand_pcg::Pcg64Mcg::seed_from_u64(849328);
-    let mut judge = get_judge_from_stdin();
+    let judge = get_judge_from_stdin_with(true);
     let n = judge.num_rooms();
-    let doors = (0..18 * n).map(|_| rng.random_range(0..6)).collect_vec();
-    let labels = judge.explore(&vec![doors.clone()])[0].clone();
+    let explores = judge.explored();
+    let first = explores
+        .first()
+        .expect("explored is empty; provide explores via JSON");
+    let doors = first.plans[0].clone();
+    let labels = first.results[0].clone();
     let mut guess = Guess {
         rooms: vec![!0; n],
         start: 0,

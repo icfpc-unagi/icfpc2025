@@ -13,7 +13,6 @@
 use std::collections::VecDeque;
 
 use icfpc2025::{judge::*, *};
-use rand::prelude::*;
 
 struct Counter {
     cnt: i32,
@@ -361,29 +360,23 @@ fn find_creek(
 }
 
 fn main() {
-    let mut judge = get_judge_from_stdin();
-    let mut rng = rand::rng();
+    let judge = get_judge_from_stdin_with(true);
     let fix_label = true;
     let use_diff = true;
 
     let n = judge.num_rooms();
-
-    let mut plan = vec![];
-    for i in 0..18 * n {
-        let mut c: usize = rng.random_range(0..3) * 2;
-        if i % 4 == 0 || i % 4 == 3 {
-            c += 1;
-        }
-        plan.push(c);
-    }
-
-    let r = judge.explore(&vec![plan.clone()]);
-    let labels = r[0].clone();
+    // 事前に与えられた explore ログを使用
+    let explores = judge.explored();
+    let first = explores
+        .first()
+        .expect("explored is empty; provide explores via JSON");
+    let plan = first.plans[0].clone();
+    let labels = first.results[0].clone();
     let mut m = Moves {
         label: vec![],
         door: vec![],
     };
-    m.label = r[0].clone();
+    m.label = labels.clone();
     m.door = plan.clone();
 
     let mut st = SameTable::new(m.door.len() + 1);
