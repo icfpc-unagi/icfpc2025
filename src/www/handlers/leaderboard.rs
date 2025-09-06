@@ -84,9 +84,7 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
           LIMIT 1
           ",
         params::Params::Empty,
-    )?
-    .or(Some("test".to_string()))
-    {
+    )? {
         format!(
             r#"<div style="width:100vw;position:relative;left:50%;right:50%;margin-left:-50vw;margin-right:-50vw;background-color:#66bb6a;color:white;font-weight:bold;padding:4px 0;text-align:center;font-size:1.2em;box-shadow:0 2px 8px rgba(0,0,0,0.08);z-index:1000;">
       <a href="/unlock"><img style="height:1em;vertical-align:text-bottom;" src="/static/sansho.png" alt="Lock icon">
