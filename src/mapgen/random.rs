@@ -104,7 +104,7 @@ pub fn generate_as_api_map(n_rooms: usize, seed: Option<u64>) -> api::Map {
 
     api::Map {
         rooms,
-        starting_room: rng.gen_range(0..n_rooms),
+        starting_room: rng.random_range(0..n_rooms),
         connections,
     }
 }

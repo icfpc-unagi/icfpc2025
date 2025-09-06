@@ -501,10 +501,10 @@ pub fn get_judge_from_stdin_with(explored: bool) -> Box<dyn Judge> {
         // Optionally pre-populate with a random exploration if requested and none were provided in the JSON.
         if explored && j.explored().plans.is_empty() {
             let n = j.num_rooms();
-            let mut rng = rand::thread_rng();
+            let mut rng = rand::rng();
             let mut plan = Vec::with_capacity(18 * n);
             for _ in 0..(18 * n) {
-                plan.push(rng.gen_range(0..6));
+                plan.push(rng.random_range(0..6));
             }
             let _ = j.explore(&[plan]);
         }
@@ -539,10 +539,10 @@ pub fn get_judge_from_stdin_with(explored: bool) -> Box<dyn Judge> {
     // Optionally pre-populate with a random exploration if requested.
     if explored && j.explored().plans.is_empty() {
         let n = j.num_rooms();
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
         let mut plan = Vec::with_capacity(18 * n);
         for _ in 0..(18 * n) {
-            plan.push(rng.gen_range(0..6));
+            plan.push(rng.random_range(0..6));
         }
         let _ = j.explore(&[plan]);
     }

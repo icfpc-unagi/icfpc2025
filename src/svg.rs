@@ -46,14 +46,14 @@ impl LayoutEngine {
     /// Creates a new `LayoutEngine` with randomly initialized node positions.
     fn new(n_nodes: usize, adjacency_matrix: Vec<Vec<bool>>) -> Self {
         let mut nodes = Vec::with_capacity(n_nodes);
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         for i in 0..n_nodes {
             nodes.push(Node {
                 // Initial positions in a grid with slight randomness to break symmetry.
                 position: (
-                    (i % 10) as f64 * 50.0 + rng.gen_range(-5.0..5.0),
-                    (i / 10) as f64 * 50.0 + rng.gen_range(-5.0..5.0),
+                    (i % 10) as f64 * 50.0 + rng.random_range(-5.0..5.0),
+                    (i / 10) as f64 * 50.0 + rng.random_range(-5.0..5.0),
                 ),
                 velocity: (0.0, 0.0),
                 force: (0.0, 0.0),

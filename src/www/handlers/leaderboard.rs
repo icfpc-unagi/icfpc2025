@@ -5,7 +5,6 @@
 //! and displays the latest solved map for a given problem.
 
 use crate::{api, sql, svg};
-use crate::{api::MapConnection};
 use actix_web::{web, HttpResponse, Responder};
 use anyhow::Result;
 use chrono::NaiveDateTime;
