@@ -42,6 +42,57 @@ const PROBLEMS_DATA: &[Problem] = &[
         problem_name: "quintus",
         size: 30,
     },
+    // added data
+// aleph	12	-
+// beth	24	-
+// gimel	36	-
+// daleth	48	-
+// he	60	-
+// vau	18	-
+// zain	36	-
+// hhet	54	-
+// teth	72	-
+// iod	90	-
+    Problem {
+        problem_name: "aleph",
+        size: 12,
+    },
+    Problem {
+        problem_name: "beth",
+        size: 24,
+    },
+    Problem {
+        problem_name: "gimel",
+        size: 36,
+    },
+    Problem {
+        problem_name: "daleth",
+        size: 48,
+    },
+    Problem {
+        problem_name: "he",
+        size: 60,
+    },
+    Problem {
+        problem_name: "vau",
+        size: 18,
+    },
+    Problem {
+        problem_name: "zain",
+        size: 36,
+    },
+    Problem {
+        problem_name: "hhet",
+        size: 54,
+    },
+    Problem {
+        problem_name: "teth",
+        size: 72,
+    },
+    Problem {
+        problem_name: "iod",
+        size: 90,
+    },
 ];
 
 /// Returns a slice containing all defined contest problems.
