@@ -4,7 +4,7 @@ use icfpc2025::judge::*;
 use rand::prelude::*;
 
 fn fill_doors(graph: &Vec<Vec<usize>>) -> Vec<[(usize, usize); 6]> {
-    let na = !0usize;
+    let na = usize::MAX;
     let mut res = vec![[(na, na); 6]; graph.len()];
     for (u, edges) in graph.iter().enumerate() {
         for (door, &v) in edges.iter().enumerate() {
@@ -14,7 +14,6 @@ fn fill_doors(graph: &Vec<Vec<usize>>) -> Vec<[(usize, usize); 6]> {
     for (u, edges) in graph.iter().enumerate() {
         for (door, &v) in edges.iter().enumerate() {
             if res[u][door].1 == na {
-                let v = edges[door];
                 let mut ok = false;
                 for back_door in 0..6 {
                     if res[v][back_door] == (u, na) {
@@ -54,17 +53,13 @@ fn main() {
     let mut res_to_room: HashMap<Vec<Vec<usize>>, usize> = HashMap::new();
     let mut room_to_res: Vec<Vec<Vec<usize>>> = vec![];
     let mut room_to_a_path: Vec<Vec<usize>> = vec![];
-    // let rooms: HashMap<Vec<usize>, _> = HashMap::new();
 
     let mut cost = 0usize;
 
     let mut cnt = 0;
     while let Some(path) = queue.pop_front() {
-        // eprintln!("queue len {}", queue.len());
+        assert!(cnt < 7 * n);
         cnt += 1;
-        if cnt == 7 * n {
-            return;
-        }
         let plans = suffixes
             .iter()
             .map(|s| {
@@ -119,21 +114,9 @@ fn main() {
         })
         .collect();
     let graph = fill_doors(&graph);
-    // let mut graph = vec![];
-    // for (r, path) in room_to_a_path.iter().enumerate() {
-    //     let mut g = [(9999usize, 99usize); 6];
-    //     for door in 0..6 {
-    //         let mut p = path.clone();
-    //         p.push(door);
-    //         let to = *path_to_room.get(&p).unwrap();
-    //         g[door] = (to, 99usize);
-    //     }
-    //     graph.push(g);
-    // }
     judge.guess(&Guess {
         start,
         rooms,
         graph,
     });
-    // eprintln!("my cost {}", cost);
 }
