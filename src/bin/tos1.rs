@@ -50,11 +50,14 @@ fn main() {
 
     let mut rng = rand::rng();
 
-    let suffixes = (0..12)
+    let suffixes: Vec<Vec<Step>> = (0..36)
         .map(|i| {
-            let mut s = vec![i % 6, (i % 6 + i / 6 + 1) % 6];
-            for _ in 0..(42.min(18 * n) - 2) {
-                s.push(rng.random_range(0..6));
+            let mut s = vec![];
+            for door in [i % 6, (i % 6 + i / 6 + 1) % 6] {
+                s.push((Some(rng.random_range(0..4)), door));
+            }
+            for _ in 0..(42 - 2) {
+                s.push((Some(rng.random_range(0..4)), rng.random_range(0..6)));
             }
             s
         })
@@ -76,23 +79,19 @@ fn main() {
         // queue = VecDeque::new();
         assert!(cnt < 7 * n);
         cnt += 1;
-        let mut batched_plans: Vec<Vec<usize>> = vec![];
+        let mut batched_plans: Vec<Vec<Step>> = vec![];
         for path in paths.iter() {
             let plans = suffixes
                 .iter()
                 .map(|s| {
-                    let mut p = path.clone();
+                    let mut p = path.iter().map(|&door| (None, door)).collect::<Vec<_>>();
                     p.extend(s);
                     p
                 })
                 .collect::<Vec<_>>();
             batched_plans.extend(plans);
         }
-        let batched_steps: Vec<Vec<(Option<usize>, usize)>> = batched_plans
-            .iter()
-            .map(|p| p.iter().copied().map(|d| (None, d)).collect())
-            .collect();
-        let batched_results = judge.explore(&batched_steps);
+        let batched_results = judge.explore(&batched_plans);
         cost += batched_plans.len() + 1;
         // for (i, path) in paths.into_iter().enumerate() {}
         for (path, results) in paths
