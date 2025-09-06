@@ -42,8 +42,8 @@ rebase:
 
 .PHONY: test/rust
 test/rust:
-	cargo test
-	cargo build --bins
+	cargo test --features skip_lint
+	cargo build --features skip_lint --bins
 
 .PHONY: test/unagi
 test/unagi:

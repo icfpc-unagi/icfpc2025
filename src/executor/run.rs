@@ -1,8 +1,8 @@
 use anyhow::{Context, Result};
 use serde_json::Value as JsonValue;
-use std::fs::File;
+use std::fs::{self, File};
 use std::io::{BufRead, BufReader, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStderr, ChildStdout, Command, ExitStatus, Stdio};
 use std::sync::{
     Arc, Mutex,
@@ -11,19 +11,22 @@ use std::sync::{
 };
 use std::time::{Duration, Instant};
 
-/// Run the provided bash script, capture stdout/stderr as JSONL to files, and
-/// return the last <UNAGI>: JSON score and exit status. Honors timeout and a
-/// cancellation flag (when set to true, terminates the child).
+/// Run the provided bash script, capture stdout/stderr as JSONL to files under
+/// a temporary directory, and return the last <UNAGI>: JSON score, exit status,
+/// and created artifacts. Honors timeout and a cancellation flag.
 pub fn run_command(
     script: &str,
-    stdout_path: &Path,
-    stderr_path: &Path,
     timeout: Duration,
     cancel: Arc<AtomicBool>,
-) -> Result<(Option<i64>, std::process::ExitStatus)> {
-    // Open logs and spawn child
-    let (stdout_file, stderr_file) = open_logs(stdout_path, stderr_path)?;
-    let mut child = spawn_bash(script)?;
+) -> Result<(Option<i64>, std::process::ExitStatus, Artifacts)> {
+    // Prepare artifacts and directories
+    let artifacts = create_artifacts_dir()?;
+    fs::create_dir_all(artifacts.root_dir())?;
+    fs::create_dir_all(artifacts.log_dir())?;
+
+    // Open logs and spawn child using root as cwd
+    let (stdout_file, stderr_file) = open_logs(&artifacts.stdout_file(), &artifacts.stderr_file())?;
+    let mut child = spawn_bash(script, artifacts.root_dir())?;
 
     // Take pipes and spawn reader threads
     let out_pipe = child.stdout.take().unwrap();
@@ -47,7 +50,7 @@ pub fn run_command(
         anyhow::bail!("timeout/cancel wait exceeded 1s");
     }
     let status = status_opt.expect("status should be present unless bailed");
-    Ok((score, status))
+    Ok((score, status, artifacts))
 }
 
 #[cfg(unix)]
@@ -70,7 +73,7 @@ fn open_logs(stdout_path: &Path, stderr_path: &Path) -> Result<(File, File)> {
     Ok((stdout_file, stderr_file))
 }
 
-fn spawn_bash(script: &str) -> Result<Child> {
+fn spawn_bash(script: &str, workdir: &Path) -> Result<Child> {
     let mut cmd = Command::new("bash");
     #[cfg(unix)]
     {
@@ -85,6 +88,7 @@ fn spawn_bash(script: &str) -> Result<Child> {
     let child = cmd
         .arg("-lc")
         .arg(script)
+        .current_dir(workdir)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
@@ -207,6 +211,23 @@ fn parse_unagi_line(line: &str) -> Option<JsonValue> {
     }
 }
 
+fn uuid() -> String {
+    let buf: [u8; 8] = rand::random();
+    hex::encode(buf)
+}
+
+fn create_artifacts_dir() -> Result<Artifacts> {
+    let base = std::env::temp_dir().join(format!("executor_run_{}", uuid()));
+    let root = base.join("root");
+    let log = base.join("log");
+    fs::create_dir_all(&base)?;
+    Ok(Artifacts {
+        base_dir: base,
+        root_dir: root,
+        log_dir: log,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -215,26 +236,18 @@ mod tests {
 
     #[test]
     fn run_command_captures_and_parses_unagi() -> Result<()> {
-        // Prepare temp paths
-        let base = std::env::temp_dir().join(format!("executor_test_{}", uuid()));
-        fs::create_dir_all(&base)?;
-        let stdout_path = base.join("stdout.jsonl");
-        let stderr_path = base.join("stderr.jsonl");
-
         // A script that prints to stdout/stderr and an UNAGI line
         let script = "echo out1; echo err1 1>&2; echo '<UNAGI>: {\"score\": 123}';";
-        let (score, status) = run_command(
+        let (score, status, artifacts) = run_command(
             script,
-            &stdout_path,
-            &stderr_path,
             Duration::from_secs(5),
             Arc::new(AtomicBool::new(false)),
         )?;
 
         assert!(status.success());
         assert_eq!(score, Some(123));
-        let out = fs::read_to_string(&stdout_path)?;
-        let err = fs::read_to_string(&stderr_path)?;
+        let out = fs::read_to_string(artifacts.stdout_file())?;
+        let err = fs::read_to_string(artifacts.stderr_file())?;
         assert!(out.contains("out1"));
         assert!(out.contains("<UNAGI>"));
         assert!(err.contains("err1"));
@@ -244,18 +257,10 @@ mod tests {
     #[test]
     #[ignore]
     fn run_command_times_out_and_kills() -> Result<()> {
-        // Prepare temp paths
-        let base = std::env::temp_dir().join(format!("executor_timeout_{}", uuid()));
-        fs::create_dir_all(&base)?;
-        let stdout_path = base.join("stdout.jsonl");
-        let stderr_path = base.join("stderr.jsonl");
-
         // Script that sleeps longer than timeout
         let script = "echo start; sleep 3; echo done";
-        let (score, status) = run_command(
+        let (score, status, artifacts) = run_command(
             script,
-            &stdout_path,
-            &stderr_path,
             Duration::from_millis(800),
             Arc::new(AtomicBool::new(false)),
         )?;
@@ -265,7 +270,7 @@ mod tests {
         // No UNAGI score expected
         assert_eq!(score, None);
         // Ensure at least the initial output got captured before timeout
-        let out = fs::read_to_string(&stdout_path)?;
+        let out = fs::read_to_string(artifacts.stdout_file())?;
         assert!(out.contains("start"));
         Ok(())
     }
@@ -273,5 +278,37 @@ mod tests {
     fn uuid() -> String {
         let buf: [u8; 8] = rand::random();
         hex::encode(buf)
+    }
+}
+/// Artifacts created for a single run. Holds the temporary directory and
+/// subdirectories for `root` (working directory) and `log` (stdout/stderr).
+/// When dropped, the entire temporary directory is removed.
+pub struct Artifacts {
+    base_dir: PathBuf,
+    root_dir: PathBuf,
+    log_dir: PathBuf,
+}
+
+impl Artifacts {
+    pub fn base_dir(&self) -> &Path {
+        &self.base_dir
+    }
+    pub fn root_dir(&self) -> &Path {
+        &self.root_dir
+    }
+    pub fn log_dir(&self) -> &Path {
+        &self.log_dir
+    }
+    pub fn stdout_file(&self) -> PathBuf {
+        self.log_dir.join("stdout.jsonl")
+    }
+    pub fn stderr_file(&self) -> PathBuf {
+        self.log_dir.join("stderr.jsonl")
+    }
+}
+
+impl Drop for Artifacts {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.base_dir);
     }
 }

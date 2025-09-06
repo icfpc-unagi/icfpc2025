@@ -1,9 +1,7 @@
 use anyhow::{Context, Result};
 use mysql::params;
-use std::fs::create_dir_all;
 #[cfg(unix)]
 use std::os::unix::process::ExitStatusExt;
-use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use crate::sql;
@@ -146,18 +144,7 @@ pub fn run_task(task: &Task) -> Result<(Option<i64>, u128)> {
     script = script.replace("{{task_id}}", &task.task_id.to_string());
     script = script.replace("{{agent_name}}", &task.agent_name);
 
-    // Output directory and files
-    let base_dir: PathBuf = ["target", "logs", &task.task_id.to_string()]
-        .iter()
-        .collect();
-    create_dir_all(&base_dir)?;
-    let stdout_path = base_dir.join("stdout.jsonl");
-    let stderr_path = base_dir.join("stderr.jsonl");
-
-    eprintln!(
-        "[executor] starting task_id={} (logs: {:?}, {:?})",
-        task.task_id, stdout_path, stderr_path
-    );
+    eprintln!("[executor] starting task_id={}", task.task_id);
     // Prepare cancel flag and heartbeat (lock management only)
     use std::sync::{
         Arc,
@@ -215,14 +202,12 @@ pub fn run_task(task: &Task) -> Result<(Option<i64>, u128)> {
 
     // Execute the script (execution only)
     let start = Instant::now();
-    let (score, _status) = match run::run_command(
-        &script,
-        &stdout_path,
-        &stderr_path,
-        Duration::from_secs(600),
-        Arc::clone(&cancel),
-    ) {
-        Ok(v) => v,
+    let (score, _status, artifacts_opt): (
+        Option<i64>,
+        std::process::ExitStatus,
+        Option<run::Artifacts>,
+    ) = match run::run_command(&script, Duration::from_secs(600), Arc::clone(&cancel)) {
+        Ok((s, st, arts)) => (s, st, Some(arts)),
         Err(e) => {
             eprintln!(
                 "[executor] run_command failed for task_id={} (treat as timeout/cancel): {}",
@@ -230,7 +215,7 @@ pub fn run_task(task: &Task) -> Result<(Option<i64>, u128)> {
             );
             #[cfg(unix)]
             {
-                (None, std::process::ExitStatus::from_raw(1 << 8))
+                (None, std::process::ExitStatus::from_raw(1 << 8), None)
             }
             #[cfg(not(unix))]
             {
@@ -238,7 +223,7 @@ pub fn run_task(task: &Task) -> Result<(Option<i64>, u128)> {
                     .args(["/C", "exit", "1"])
                     .status()
                     .unwrap_or_else(|_| std::process::ExitStatus::from_raw(1));
-                (None, status)
+                (None, status, None)
             }
         }
     };
@@ -253,13 +238,20 @@ pub fn run_task(task: &Task) -> Result<(Option<i64>, u128)> {
         task.task_id, duration_ms
     );
 
-    // Upload logs to GCS
-    eprintln!(
-        "[executor] uploading logs for task_id={} to gs://icfpc2025-data/logs/{}/",
-        task.task_id, task.task_id
-    );
-    upload_logs(task.task_id, &stdout_path, &stderr_path)?;
-    eprintln!("[executor] uploaded logs for task_id={}", task.task_id);
+    // Upload logs to GCS (only if artifacts exist)
+    if let Some(ref arts) = artifacts_opt {
+        eprintln!(
+            "[executor] uploading logs for task_id={} to gs://icfpc2025-data/logs/{}/",
+            task.task_id, task.task_id
+        );
+        upload_logs(task.task_id, arts)?;
+        eprintln!("[executor] uploaded logs for task_id={}", task.task_id);
+    } else {
+        eprintln!(
+            "[executor] no artifacts; skipping log upload for task_id={}",
+            task.task_id
+        );
+    }
 
     if let Some(s) = score {
         eprintln!(
@@ -306,7 +298,7 @@ fn gen_lock_token() -> String {
     hex::encode(buf)
 }
 
-fn upload_logs(task_id: i64, stdout_path: &PathBuf, stderr_path: &PathBuf) -> Result<()> {
+fn upload_logs(task_id: i64, artifacts: &run::Artifacts) -> Result<()> {
     // Build object names
     let bucket = "icfpc2025-data";
     let prefix = format!("logs/{}/", task_id);
@@ -314,8 +306,8 @@ fn upload_logs(task_id: i64, stdout_path: &PathBuf, stderr_path: &PathBuf) -> Re
     let stderr_name = format!("{}stderr.jsonl", prefix);
 
     // Read files
-    let stdout_bytes = std::fs::read(stdout_path)?;
-    let stderr_bytes = std::fs::read(stderr_path)?;
+    let stdout_bytes = std::fs::read(artifacts.stdout_file())?;
+    let stderr_bytes = std::fs::read(artifacts.stderr_file())?;
 
     // Use a local runtime to perform async uploads
     let rt = tokio::runtime::Runtime::new()?;
