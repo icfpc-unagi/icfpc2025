@@ -32,6 +32,11 @@ pub fn acquire_task() -> Result<Option<Task>> {
     // 1) Generate new lock token
     let lock_token = gen_lock_token();
 
+    eprintln!(
+        "[executor] trying to acquire a task with lock={}",
+        lock_token
+    );
+
     // 2) Atomically update one candidate task
     let affected = sql::exec(
         r#"
@@ -53,6 +58,7 @@ pub fn acquire_task() -> Result<Option<Task>> {
     )?;
 
     if affected == 0 {
+        eprintln!("[executor] no task acquired");
         return Ok(None);
     }
 
@@ -76,8 +82,17 @@ pub fn acquire_task() -> Result<Option<Task>> {
     let problem_variant: i64 = row.get("problem_variant")?;
     let task_failed: i64 = row.get("task_failed")?;
 
+    eprintln!(
+        "[executor] candidate acquired: token={} (checking failures)",
+        lock_token
+    );
+
     // 4) If task_failed >= 3, release this task by clearing task_locked
     if task_failed >= 3 {
+        eprintln!(
+            "[executor] skipping task_id={} due to task_failed={} (clearing lock)",
+            task_id, task_failed
+        );
         let _ = sql::exec(
             r#"UPDATE tasks SET task_locked = NULL WHERE task_id = :task_id AND task_lock = :task_lock"#,
             params! { "task_id" => task_id, "task_lock" => &lock_token },
@@ -100,6 +115,11 @@ pub fn acquire_task() -> Result<Option<Task>> {
     let agent_name: String = row.get("agent_name")?;
     let agent_code: String = row.get("agent_code")?;
 
+    eprintln!(
+        "[executor] acquired task: id={} problem={} variant={} agent={}",
+        task_id, problem_name, problem_variant, agent_name
+    );
+
     Ok(Some(Task {
         task_id,
         problem_name,
@@ -120,6 +140,7 @@ pub fn acquire_task() -> Result<Option<Task>> {
 pub fn run_task(task: &Task) -> Result<(Option<i64>, u128)> {
     // Prepare command by substituting placeholders
     let mut script = task.agent_code.clone();
+    script = script.replace("\r", "");
     script = script.replace("{{problem_name}}", &task.problem_name);
     script = script.replace("{{problem_variant}}", &task.problem_variant.to_string());
     script = script.replace("{{task_id}}", &task.task_id.to_string());
@@ -136,22 +157,10 @@ pub fn run_task(task: &Task) -> Result<(Option<i64>, u128)> {
     let mut stdout_file = File::create(&stdout_path)?;
     let mut stderr_file = File::create(&stderr_path)?;
 
-    // Start lock heartbeat to extend lock every ~10s while running
-    use std::sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    };
-    let stop_flag = Arc::new(AtomicBool::new(false));
-    let hb_task_id = task.task_id;
-    let hb_lock = task.task_lock.clone();
-    let hb_stop = stop_flag.clone();
-    let _hb = std::thread::spawn(move || {
-        while !hb_stop.load(Ordering::Relaxed) {
-            // Sleep a short interval and extend lock
-            std::thread::sleep(Duration::from_secs(10));
-            let _ = crate::executor::lock::extend_lock(hb_task_id, &hb_lock);
-        }
-    });
+    eprintln!(
+        "[executor] starting task_id={} (logs: {:?}, {:?})",
+        task.task_id, stdout_path, stderr_path
+    );
 
     // Spawn `bash -lc` to run the script
     let mut child = Command::new("bash")
@@ -169,13 +178,49 @@ pub fn run_task(task: &Task) -> Result<(Option<i64>, u128)> {
     let mut out_reader = BufReader::new(child.stdout.take().unwrap());
     let mut err_reader = BufReader::new(child.stderr.take().unwrap());
 
+    // Set up heartbeat that can terminate the process if lock extension fails
+    use std::sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    };
+    let stop_flag = Arc::new(AtomicBool::new(false));
+    let child_arc = Arc::new(Mutex::new(child));
+    let hb_task_id = task.task_id;
+    let hb_lock = task.task_lock.clone();
+    let hb_stop = Arc::clone(&stop_flag);
+    let hb_child = Arc::clone(&child_arc);
+    let _hb = std::thread::spawn(move || {
+        while !hb_stop.load(Ordering::Relaxed) {
+            std::thread::sleep(Duration::from_secs(10));
+            match crate::executor::lock::extend_lock(hb_task_id, &hb_lock) {
+                Ok(true) => {}
+                Ok(false) | Err(_) => {
+                    eprintln!(
+                        "[executor] lock extend failed for task_id={}, terminating process",
+                        hb_task_id
+                    );
+                    if let Ok(mut ch) = hb_child.lock() {
+                        let _ = ch.kill();
+                    }
+                    break;
+                }
+            }
+        }
+    });
+
     // Simple loop to read both streams without blocking indefinitely on one.
     // We alternate attempts using non-blocking `fill_buf` checks.
     let timeout = Duration::from_secs(600);
     loop {
         // Check for timeout
         if start.elapsed() > timeout {
-            let _ = child.kill();
+            eprintln!(
+                "[executor] timeout reached (600s) for task_id={}, killing process",
+                task.task_id
+            );
+            if let Ok(mut ch) = child_arc.lock() {
+                let _ = ch.kill();
+            }
             break;
         }
 
@@ -201,8 +246,19 @@ pub fn run_task(task: &Task) -> Result<(Option<i64>, u128)> {
         }
 
         // If process exited and both streams are drained, break
-        match child.try_wait()? {
-            Some(_status) => {
+        let status_opt = {
+            if let Ok(mut ch) = child_arc.lock() {
+                ch.try_wait()?
+            } else {
+                None
+            }
+        };
+        match status_opt {
+            Some(status) => {
+                eprintln!(
+                    "[executor] process exited for task_id={} status={}",
+                    task.task_id, status
+                );
                 // Drain remaining lines
                 let mut tmp = String::new();
                 while out_reader.read_line(&mut tmp)? > 0 {
@@ -232,20 +288,44 @@ pub fn run_task(task: &Task) -> Result<(Option<i64>, u128)> {
     // Stop heartbeat and attempt to release lock (best-effort)
     stop_flag.store(true, Ordering::Relaxed);
     let _ = crate::executor::lock::release_lock(task.task_id, &task.task_lock);
+    eprintln!(
+        "[executor] finished task_id={} in {} ms (releasing lock)",
+        task.task_id, duration_ms
+    );
 
     // Upload logs to GCS
+    eprintln!(
+        "[executor] uploading logs for task_id={} to gs://icfpc2025-data/logs/{}/",
+        task.task_id, task.task_id
+    );
     upload_logs(task.task_id, &stdout_path, &stderr_path)?;
+    eprintln!("[executor] uploaded logs for task_id={}", task.task_id);
 
     // Extract score from last UNAGI JSON
     let score = last_unagi_json
         .and_then(|v| v.get("score").cloned())
         .and_then(|v| v.as_i64());
+    if let Some(s) = score {
+        eprintln!(
+            "[executor] detected score for task_id={}: {}",
+            task.task_id, s
+        );
+    } else {
+        eprintln!(
+            "[executor] no <UNAGI> score found for task_id={}",
+            task.task_id
+        );
+    }
 
     Ok((score, duration_ms))
 }
 
 /// Updates the task with the given score and duration, and releases the lock.
 pub fn update_task(task: &Task, score: Option<i64>, duration_ms: u128) -> Result<()> {
+    eprintln!(
+        "[executor] updating task_id={} score={:?} duration_ms={}",
+        task.task_id, score, duration_ms
+    );
     let _ = sql::exec(
         r#"
         UPDATE tasks
@@ -261,6 +341,7 @@ pub fn update_task(task: &Task, score: Option<i64>, duration_ms: u128) -> Result
             "task_lock" => &task.task_lock,
         },
     )?;
+    eprintln!("[executor] updated task_id={} (lock cleared)", task.task_id);
     Ok(())
 }
 
@@ -305,20 +386,35 @@ fn upload_logs(task_id: i64, stdout_path: &PathBuf, stderr_path: &PathBuf) -> Re
     // Use a local runtime to perform async uploads
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(async {
-        let _ = crate::gcp::gcs::upload_object(
-            bucket,
-            &stdout_name,
-            &stdout_bytes,
-            "application/x-ndjson",
-        )
-        .await?;
-        let _ = crate::gcp::gcs::upload_object(
-            bucket,
-            &stderr_name,
-            &stderr_bytes,
-            "application/x-ndjson",
-        )
-        .await?;
+        if stdout_bytes.is_empty() {
+            eprintln!(
+                "[executor] skipping upload (stdout is empty) for task_id={}",
+                task_id
+            );
+        } else {
+            let _ = crate::gcp::gcs::upload_object(
+                bucket,
+                &stdout_name,
+                &stdout_bytes,
+                "application/x-ndjson",
+            )
+            .await?;
+        }
+
+        if stderr_bytes.is_empty() {
+            eprintln!(
+                "[executor] skipping upload (stderr is empty) for task_id={}",
+                task_id
+            );
+        } else {
+            let _ = crate::gcp::gcs::upload_object(
+                bucket,
+                &stderr_name,
+                &stderr_bytes,
+                "application/x-ndjson",
+            )
+            .await?;
+        }
         anyhow::Ok(())
     })
 }
