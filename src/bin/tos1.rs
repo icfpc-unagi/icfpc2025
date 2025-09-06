@@ -1,16 +1,3 @@
-#![allow(
-    unused_variables,
-    unused_mut,
-    unused_imports,
-    dead_code,
-    clippy::needless_range_loop,
-    clippy::useless_vec,
-    clippy::ptr_arg,
-    clippy::needless_return,
-    clippy::len_zero,
-    clippy::cloned_ref_to_slice_refs,
-    non_snake_case
-)]
 use std::collections::{HashMap, VecDeque};
 
 use icfpc2025::judge::*;
@@ -90,8 +77,13 @@ fn main() {
     let mut res_to_room: HashMap<Vec<Vec<usize>>, usize> = HashMap::new();
     let mut room_to_res: Vec<Vec<Vec<usize>>> = vec![];
     let mut room_to_a_path: Vec<Vec<usize>> = vec![];
+    let mut room_to_label = vec![];
 
     let mut start = usize::MAX;
+    let mut start_label = pairs[0];
+    // let mut orig_labels = vec![];
+    let mut orig_labels = HashMap::new();
+    orig_labels.extend((0..4).map(|i| ((i, i), i)));
 
     let mut cost = 0usize;
 
@@ -125,14 +117,25 @@ fn main() {
             .into_iter()
             .zip(batched_results.chunks_exact(suffixes.len() * 2))
         {
-            // let results = judge.explore(&plans);
-            // let start_index = suffixes.len() * i;
-            // let stop_index = suffixes.len() * (i + 1);
-            // let results = &batched_results[start_index..stop_index];
-            // let plans = &batched_plans[start_index..stop_index];
-            // cost += plans.len() + 1;
-            let results_a = results[0][..prefix_len].to_vec();
-            let results_b = results[1][..prefix_len].to_vec();
+            if path.is_empty() {
+                // first iter
+                let results_a = results[0][..prefix_len].to_vec();
+                let results_b = results[1][..prefix_len].to_vec();
+
+                for (i, label_pair) in results_a.into_iter().zip(results_b).enumerate() {
+                    // let (a, b) = label_pair;
+                    // let orig_label = if a == b {
+                    //     a;
+                    // } else {
+                    //     let j = (0..i).find(|&j| pairs[j] == label_pair).unwrap();
+                    //     orig_labels[j]
+                    // };
+                    orig_labels.insert(pairs[i], orig_labels[&label_pair]);
+                    if label_pair == start_label {
+                        start_label = pairs[i];
+                    }
+                }
+            }
             let results = results
                 .iter()
                 .map(|r| r[(prefix_len + path.len())..].to_vec())
@@ -141,6 +144,13 @@ fn main() {
                 let r = room_to_res.len();
                 room_to_res.push(results.clone());
                 room_to_a_path.push(path.clone());
+                let label_pair = (results[0][0], results[1][0]);
+                room_to_label.push(orig_labels[&label_pair]);
+                if label_pair == start_label {
+                    eprintln!("start room: {}", r);
+                    assert_eq!(start, usize::MAX);
+                    start = r;
+                }
                 for door in 0..6 {
                     let mut p = path.clone();
                     p.push(door);
@@ -157,22 +167,6 @@ fn main() {
                     .join(""),
                 room
             );
-
-            let mut start_label = pairs[0];
-            for (i, label_pair) in results_a.into_iter().zip(results_b).enumerate() {
-                // dbg!((i, label_pair, start_label));
-                if start_label == label_pair {
-                    start_label = pairs[i];
-                }
-            }
-            if start_label == (results[0][0], results[1][0]) {
-                eprintln!("start room: {}", room);
-                if start == usize::MAX {
-                    start = room;
-                } else {
-                    assert_eq!(start, room);
-                }
-            }
         }
     }
 
@@ -196,8 +190,7 @@ fn main() {
     // }
 
     // let start = 0;
-    let mut rooms = room_to_res.iter().map(|r| r[0][0]).collect::<Vec<_>>();
-    // rooms[0] = orig_start_label;
+    let rooms = room_to_label;
     eprintln!("start: {}", start);
     eprintln!("rooms: {:?}", rooms);
     let graph: Vec<Vec<usize>> = room_to_a_path
