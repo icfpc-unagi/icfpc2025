@@ -386,6 +386,7 @@ fn main() {
 
     let mut st = SameTable::new(m.door.len() + 1);
 
+    /*
     for k in 0..2 {
         for i in 0..n {
             for j in i + 1..n {
@@ -405,6 +406,7 @@ fn main() {
             }
         }
     }
+    */
 
     for i in 0..m.label.len() - 1 {
         for j in i + 1..m.label.len() {
