@@ -45,49 +45,58 @@ struct Claims {
 ///
 /// # Returns
 /// A `Result` containing the access token string if successful.
-enum CacheEntry {
-    Success(String),
-    Error { message: String, time: Instant },
+/// Cache for the downloaded and parsed Service Account JSON.
+/// This avoids refetching the key material on every token request.
+static SA_CACHE: Lazy<Mutex<Option<ServiceAccount>>> = Lazy::new(|| Mutex::new(None));
+
+/// Cache for access tokens with a short lifetime to avoid frequent token endpoint calls.
+/// We cache for at most 5 minutes and never beyond the token's actual expiry (minus a safety margin).
+struct TokenCache {
+    token: String,
+    fetched_at: Instant,
+    expires_at: Instant,
 }
 
-static TOKEN_CACHE: Lazy<Mutex<Option<CacheEntry>>> = Lazy::new(|| Mutex::new(None));
+static TOKEN_CACHE: Lazy<Mutex<Option<TokenCache>>> = Lazy::new(|| Mutex::new(None));
 
 pub async fn get_access_token() -> Result<String> {
-    // Check cache first
-    if let Some(entry) = TOKEN_CACHE.lock().unwrap().as_ref() {
-        match entry {
-            CacheEntry::Success(token) => {
-                return Ok(token.clone());
-            }
-            CacheEntry::Error { message, time } => {
-                if time.elapsed() < Duration::from_secs(30) {
-                    return Err(anyhow::anyhow!(message.clone()));
-                }
-                // else fall through to refresh
-            }
+    // 0. Check token cache: valid if fetched within 5 minutes AND not near expiry (60s margin)
+    if let Some(c) = TOKEN_CACHE.lock().unwrap().as_ref() {
+        let now = Instant::now();
+        let within_5m = now.duration_since(c.fetched_at) < Duration::from_secs(5 * 60);
+        let not_near_expiry = now + Duration::from_secs(60) < c.expires_at;
+        if within_5m && not_near_expiry {
+            return Ok(c.token.clone());
         }
     }
-    // 1. Download the service account key file.
-    let unagi_password = std::env::var("UNAGI_PASSWORD").context("UNAGI_PASSWORD not set")?;
-    let sa_url = format!(
-        "https://storage.googleapis.com/icfpc2025-data/{}/service_account.json",
-        unagi_password
-    );
 
-    let client = reqwest::Client::new();
-    let service_account_json = client
-        .get(sa_url)
-        .send()
-        .await
-        .context("Failed to download service_account.json")?
-        .error_for_status()
-        .context("Failed to download service_account.json: HTTP error")?
-        .text()
-        .await
-        .context("Failed to read service_account.json body")?;
+    // 1. Get or download the service account key file (cacheable)
+    let service_account = if let Some(sa) = SA_CACHE.lock().unwrap().clone() {
+        sa
+    } else {
+        let unagi_password = std::env::var("UNAGI_PASSWORD").context("UNAGI_PASSWORD not set")?;
+        let sa_url = format!(
+            "https://storage.googleapis.com/icfpc2025-data/{}/service_account.json",
+            unagi_password
+        );
 
-    let service_account: ServiceAccount =
-        serde_json::from_str(&service_account_json).context("Invalid service_account.json")?;
+        let client = reqwest::Client::new();
+        let service_account_json = client
+            .get(sa_url)
+            .send()
+            .await
+            .context("Failed to download service_account.json")?
+            .error_for_status()
+            .context("Failed to download service_account.json: HTTP error")?
+            .text()
+            .await
+            .context("Failed to read service_account.json body")?;
+
+        let sa: ServiceAccount =
+            serde_json::from_str(&service_account_json).context("Invalid service_account.json")?;
+        *SA_CACHE.lock().unwrap() = Some(sa.clone());
+        sa
+    };
 
     // 2. Create the JWT claims.
     let now = std::time::SystemTime::now()
@@ -114,33 +123,21 @@ pub async fn get_access_token() -> Result<String> {
         ("assertion", &jwt),
     ];
 
-    let response = client.post(TOKEN_URL).form(&params).send().await;
-
-    match response {
-        Err(e) => {
-            let msg = format!("Failed to get access token: {e}");
-            *TOKEN_CACHE.lock().unwrap() = Some(CacheEntry::Error {
-                message: msg.clone(),
-                time: Instant::now(),
-            });
-            Err(anyhow::anyhow!(msg))
-        }
-        Ok(resp) => {
-            if !resp.status().is_success() {
-                let error_text = resp.text().await.unwrap_or_else(|_| "<no body>".into());
-                let msg = format!("Failed to get access token: {}", error_text);
-                *TOKEN_CACHE.lock().unwrap() = Some(CacheEntry::Error {
-                    message: msg.clone(),
-                    time: Instant::now(),
-                });
-                Err(anyhow::anyhow!(msg))
-            } else {
-                // 5. Parse the response and return the token.
-                let token_response: AccessToken = resp.json().await?;
-                let token = token_response.access_token;
-                *TOKEN_CACHE.lock().unwrap() = Some(CacheEntry::Success(token.clone()));
-                Ok(token)
-            }
-        }
+    let client = reqwest::Client::new();
+    let response = client.post(TOKEN_URL).form(&params).send().await?;
+    if !response.status().is_success() {
+        let error_text = response.text().await.unwrap_or_else(|_| "<no body>".into());
+        anyhow::bail!("Failed to get access token: {}", error_text);
     }
+    let token_response: AccessToken = response.json().await?;
+    let token = token_response.access_token;
+    // Cache with expiry and fetched_at timestamps
+    let fetched_at = Instant::now();
+    let expires_at = fetched_at + Duration::from_secs(token_response.expires_in.saturating_sub(0));
+    *TOKEN_CACHE.lock().unwrap() = Some(TokenCache {
+        token: token.clone(),
+        fetched_at,
+        expires_at,
+    });
+    Ok(token)
 }
