@@ -13,11 +13,11 @@ from statistics import median
 from typing import Any
 
 
-TIMEOUT_SEC = 300
+TIMEOUT_SEC = 30
 MAX_TEXT_LEN = 10000  # cap stdout/stderr saved into metrics
-N_TESTS = 4
-N_WORKERS = 4
-N_ROOMS = 24
+N_TESTS = 63 * 3
+N_WORKERS = 63
+N_ROOMS = 18
 
 
 def _trim(text: str, limit: int = MAX_TEXT_LEN) -> str:
@@ -258,11 +258,7 @@ def main(program_path: str, results_dir: str) -> None:
         print(f"=== test {idx} stderr ===")
         print(_trim(r.get("stderr", "")))
 
-    # median of values, negate for combined score
-    med_val = float(median(values)) if values else float(TIMEOUT_SEC)
-    combined_score = -med_val
-
-    # p90 helper
+    # percentile helper (nearest-rank on [0,1])
     def pctl(vals: list[float], p: float) -> float:
         if not vals:
             return float("nan")
@@ -270,10 +266,26 @@ def main(program_path: str, results_dir: str) -> None:
         k = max(0, min(len(s) - 1, int((len(s) - 1) * p)))
         return float(s[k])
 
+    # Compute summary stats
+    min_val = float(min(values)) if values else float("nan")
+    p10_val = pctl(values, 0.10)
+    p25_val = pctl(values, 0.25)
+    p50_val = pctl(values, 0.50)
+    p75_val = pctl(values, 0.75)
+    p90_val = pctl(values, 0.90)
+    max_val = float(max(values)) if values else float("nan")
+
+    # combined_score = negative 25th percentile
     metrics: dict[str, Any] = {
-        "combined_score": combined_score,
-        "value_median_sec": med_val,
-        "value_p90_sec": pctl(values, 0.9),
+        "combined_score": -p25_val,
+        "value_min_sec": min_val,
+        "value_p10_sec": p10_val,
+        "value_p25_sec": p25_val,
+        "value_median_sec": p50_val,
+        "value_p50_sec": p50_val,
+        "value_p75_sec": p75_val,
+        "value_p90_sec": p90_val,
+        "value_max_sec": max_val,
         "timeout_sec": TIMEOUT_SEC,
         "n_tests": N_TESTS,
         "n_workers": N_WORKERS,

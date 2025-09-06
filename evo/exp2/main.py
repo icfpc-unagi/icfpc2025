@@ -12,7 +12,7 @@ async def main():
         language="rust",
         patch_types=["full", "diff", "cross"],
         patch_type_probs=[0.45, 0.45, 0.1],
-        num_generations=50,
+        num_generations=320,
         max_parallel_jobs=20,
         llm_models=["gpt-5"],
         llm_kwargs=dict(
@@ -28,7 +28,7 @@ async def main():
             eval_program_path="evaluate.py",
         ),
         db_config=DatabaseConfig(db_path="evolution.sqlite"),
-        max_proposal_jobs=10,  # 10,  # Generate 10 proposals concurrently
+        max_proposal_jobs=32,  # 10,  # Generate 10 proposals concurrently
         max_evaluation_jobs=1,  # 0,  # Proposals to evaluate in parallel
     )
     
