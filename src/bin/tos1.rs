@@ -3,7 +3,7 @@ use std::collections::{HashMap, VecDeque};
 use icfpc2025::judge::*;
 use rand::prelude::*;
 
-fn fill_doors(graph: &Vec<Vec<usize>>) -> Vec<[(usize, usize); 6]> {
+fn fill_doors(graph: &[Vec<usize>]) -> Vec<[(usize, usize); 6]> {
     let na = usize::MAX;
     let mut res = vec![[(na, na); 6]; graph.len()];
     for (u, edges) in graph.iter().enumerate() {
