@@ -339,13 +339,7 @@ pub fn get_judge_from_stdin_with(explored: bool) -> Box<dyn Judge> {
                             .map(|p| p.size)
                             .expect("numRooms missing and unknown problemName")
                     } else {
-                        // Fallback: infer from results length if problem name missing
-                        explored_log
-                            .results
-                            .first()
-                            .map(|r| r.len())
-                            .expect("numRooms missing and problemName not provided")
-                            - 1
+                        panic!("numRooms missing and problemName not provided");
                     };
                     Box::new(LocalJudge {
                         problem_name: parsed.problem_name.unwrap_or_else(|| "json".to_string()),
