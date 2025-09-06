@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 ///
 /// This file contains the credentials needed for a service account to
 /// authenticate with GCP APIs.
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ServiceAccount {
     /// The type of the key, typically "service_account".
     #[serde(rename = "type")]
