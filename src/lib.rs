@@ -135,3 +135,5 @@ pub mod mapgen {
 }
 
 pub mod routes;
+
+pub mod solve_no_marks;
