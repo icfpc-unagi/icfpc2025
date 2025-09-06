@@ -524,7 +524,7 @@ pub fn get_judge_from_stdin_with(explored: bool) -> Box<dyn Judge> {
                 num_rooms: usize,
                 seed: u64,
             }
-            Box::new(LocalJudge::.new(&problem_type, num_rooms, seed))
+            Box::new(LocalJudge::new(&problem_type, num_rooms, seed))
         }
         "remote" => {
             input! {
