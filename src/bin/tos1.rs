@@ -44,15 +44,16 @@ fn fill_doors(graph: &[Vec<usize>]) -> Vec<[(usize, usize); 6]> {
 }
 
 fn main() {
-    let mut judge = get_judge_from_stdin_with(true);
+    let senpuku = false;
+    let mut judge = get_judge_from_stdin_with(false);
     let n = judge.num_rooms();
 
     let mut rng = rand::rng();
 
-    let suffixes = (0..36)
+    let suffixes = (0..12)
         .map(|i| {
-            let mut s = vec![i / 6, i % 6];
-            for _ in 0..(137.min(18 * n) - 2) {
+            let mut s = vec![i % 6, (i % 6 + i / 6 + 1) % 6];
+            for _ in 0..(42.min(18 * n) - 2) {
                 s.push(rng.random_range(0..6));
             }
             s
@@ -90,10 +91,13 @@ fn main() {
         let batched_results = judge.explore(&batched_plans);
         cost += batched_plans.len() + 1;
         // for (i, path) in paths.into_iter().enumerate() {}
-        for (path, results) in paths.into_iter().zip(batched_results.chunks_exact(36)) {
+        for (path, results) in paths
+            .into_iter()
+            .zip(batched_results.chunks_exact(suffixes.len()))
+        {
             // let results = judge.explore(&plans);
-            // let start_index = 36 * i;
-            // let stop_index = 36 * (i + 1);
+            // let start_index = suffixes.len() * i;
+            // let stop_index = suffixes.len() * (i + 1);
             // let results = &batched_results[start_index..stop_index];
             // let plans = &batched_plans[start_index..stop_index];
             // cost += plans.len() + 1;
@@ -124,12 +128,13 @@ fn main() {
         }
     }
 
-    // senpuku
-    while cost < 88999 {
-        judge.explore(&vec![vec![]; 10000]);
-        cost += 10001;
+    if senpuku {
+        while cost < 88999 {
+            judge.explore(&vec![vec![]; 10000]);
+            cost += 10001;
+        }
+        judge.explore(&vec![vec![]; 100000 - cost - 1]);
     }
-    judge.explore(&vec![vec![]; 100000 - cost - 1]);
 
     let start = 0;
     let rooms = room_to_res.iter().map(|r| r[0][0]).collect::<Vec<_>>();
