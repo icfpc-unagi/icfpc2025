@@ -1501,7 +1501,6 @@ dependencies = [
  "resvg",
  "rustc-hash",
  "rustsat",
- "rustsat-cadical",
  "rustsat-glucose",
  "rustsat-kissat",
  "rustsat-minisat",
@@ -2713,22 +2712,6 @@ dependencies = [
  "nom",
  "rustc-hash",
  "tempfile",
- "thiserror",
-]
-
-[[package]]
-name = "rustsat-cadical"
-version = "0.7.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4179739f9f8358f45bbde22c28089cf99deb0ec648ff5e92d047959b37da761d"
-dependencies = [
- "anyhow",
- "bindgen",
- "cc",
- "chrono",
- "cpu-time",
- "glob",
- "rustsat",
  "thiserror",
 ]
 
