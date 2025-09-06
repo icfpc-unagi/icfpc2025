@@ -35,7 +35,7 @@ pub struct JsonIn {
     pub results: Option<Vec<Vec<usize>>>,
 }
 
-type Step = (Option<usize>, usize); // (newlabel, door)
+pub type Step = (Option<usize>, usize); // (newlabel, door)
 
 fn format_step(step: Step) -> String {
     match step.0 {
