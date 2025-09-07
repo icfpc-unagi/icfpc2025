@@ -134,10 +134,10 @@ fn main() {
 
             for ui in 0..6 * D {
                 for tj in 0..6 * D {
-                    // 時刻 t に (u,i) にいて、ドア e を選ぶと、時刻 t+1 には (v,j) にいる
-                    // V[t][ui] & E[u * D + ui][e][v * D + tj][f] -> V[t+1][tj]
+                    // 時刻 t に (u,i) にいて、ドア e を選ぶと、時刻 t+1 には (t,j) にいる
                     for f in 0..6 {
-                        cnf.clause([-V[t][ui], -E[u * D + ui][e][v * D + tj][f], V[t + 1][tj]]);
+                        // V[t][ui] -> E[ui][e][tj][f] -> V[t+1][tj]
+                        cnf.clause([-V[t][ui], -E[ui][e][tj][f], V[t + 1][tj]]);
                     }
                 }
             }
