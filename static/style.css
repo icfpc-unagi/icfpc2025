@@ -263,7 +263,10 @@ article tbody > tr:nth-child(even) {
 
 article table {
     border-collapse: collapse;
-	width: 100%;
+}
+
+article table.table {
+    width: 100%;
 }
 
 article table td {
