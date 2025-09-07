@@ -192,6 +192,7 @@ fn main() {
                     if c != new_c {
                         cnf.clause([-V[t][ui], -C[t + 1][ui][c]]);
                     }
+
                     // 正色の持ち上げ
                     cnf.clause([V[t][ui], -C[t][ui][c], C[t + 1][ui][c]]);
                     // 反色の持ち上げ
