@@ -98,6 +98,9 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
         String::new()
     };
 
+    // Fetch all scores.
+    let scores = api::scores()?;
+
     // Build problem navigation links for the top of the page.
     let mut nav_links: Vec<String> = Vec::new();
     if problem == "global" {
@@ -106,12 +109,16 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
         nav_links.push("[<a href=\"/leaderboard/global\">Global</a>]".to_string());
     }
     for p in crate::problems::all_problems() {
+        let score = scores
+            .get(&p.problem)
+            .map_or("-".to_string(), |s| s.to_string());
         nav_links.push(if p.problem == problem {
-            format!("<b>[{}]</b>", p.problem)
+            format!("<b>[{}]({})</b>", p.problem, score)
         } else {
             format!(
-                "[<a href=\"/leaderboard/{problem_name}\">{problem_name}</a>]",
-                problem_name = p.problem
+                "[<a href=\"/leaderboard/{problem_name}\">{problem_name}</a>]({score})",
+                problem_name = p.problem,
+                score = score
             )
         });
     }
@@ -376,7 +383,19 @@ async fn fetch_snapshots(problem: &str) -> Result<Vec<Snapshot>> {
         picked
     };
     let mut set = tokio::task::JoinSet::new();
+    const KNOWN_INVALID_STAMPS: [&str; 7] = [
+        "20250906-100118",
+        "20250906-102610",
+        "20250906-105114",
+        "20250906-111608",
+        "20250906-114110",
+        "20250906-120611",
+        "20250906-123110",
+    ];
     for ts in stamps {
+        if KNOWN_INVALID_STAMPS.binary_search(&ts.as_str()).is_ok() {
+            continue;
+        }
         let object = format!("history/{}/{}.json", ts, problem);
         let ts_clone = object.clone();
         set.spawn(async move {
