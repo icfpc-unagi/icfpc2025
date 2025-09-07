@@ -15,7 +15,6 @@ use serde::Deserialize;
 use std::fmt::Write;
 use tokio::time::Duration;
 
-const BUCKET: &str = "icfpc2025-data";
 const _TZ: chrono::FixedOffset = chrono::FixedOffset::east_opt(9 * 3600).unwrap();
 
 #[derive(Deserialize)]
@@ -352,7 +351,7 @@ document.getElementById('lb-table').addEventListener('click', (ev) => {{
 pub struct LeaderboardEntry {
     #[serde(rename = "teamName")]
     pub team_name: String,
-    #[serde(rename = "teamPl")]
+    #[serde(rename = "teamPl", default)]
     pub team_pl: String,
     pub score: Option<i64>,
 }
@@ -372,79 +371,55 @@ struct Snapshot {
     sync_writes = "by_key"
 )]
 async fn fetch_snapshots(problem: &str) -> Result<Vec<Snapshot>> {
-    let (dirs, _files) = crate::gcp::gcs::list_dir(BUCKET, "history").await?;
-    let mut stamps: Vec<String> = dirs
-        .into_iter()
-        .map(|d| d.trim_end_matches('/').to_string())
-        .collect();
-    stamps.sort();
-    let stamps = if stamps.len() <= 100 {
-        stamps
-    } else {
-        let n = stamps.len();
-        let stride = n.div_ceil(100);
-        let mut picked: Vec<String> = Vec::new();
-        for (i, ts) in stamps.iter().enumerate() {
-            if i % stride == 0 {
-                picked.push(ts.clone());
-            }
-        }
-        // Ensure the latest timestamp is included
-        if picked.last() != stamps.last()
-            && let Some(last) = stamps.last()
-        {
-            picked.push(last.clone());
-        }
-        picked
-    };
-    let mut set = tokio::task::JoinSet::new();
-    const KNOWN_INVALID_STAMPS: [&str; 7] = [
-        "20250906-100118",
-        "20250906-102610",
-        "20250906-105114",
-        "20250906-111608",
-        "20250906-114110",
-        "20250906-120611",
-        "20250906-123110",
-    ];
-    for ts in stamps {
-        if KNOWN_INVALID_STAMPS.binary_search(&ts.as_str()).is_ok() {
-            continue;
-        }
-        let object = format!("history/{}/{}.json", ts, problem);
-        let ts_clone = object.clone();
-        set.spawn(async move {
-            match crate::gcp::gcs::download_object(BUCKET, &object).await {
-                Ok(bytes) => Ok((ts_clone, bytes)),
-                Err(_e) => {
-                    // eprintln!("Error downloading object {ts_clone}: {e}");
-                    Err(())
-                }
-            }
+    // scores テーブルから履歴取得
+    let rows = sql::select(
+        r#"
+        SELECT timestamp, team_name, score
+        FROM scores
+        WHERE problem = :problem
+        ORDER BY timestamp ASC
+        "#,
+        params! { "problem" => problem },
+    )?;
+
+    use std::collections::BTreeMap;
+    let mut map: BTreeMap<chrono::NaiveDateTime, Vec<LeaderboardEntry>> = BTreeMap::new();
+    for row in rows {
+        let ts = row.at::<chrono::NaiveDateTime>(0)?;
+        let team_name = row.at::<String>(1)?;
+        let score = row.at::<i64>(2).ok();
+        map.entry(ts).or_default().push(LeaderboardEntry {
+            team_name,
+            team_pl: String::new(), // 空文字で埋める
+            score,
         });
     }
-    let mut snaps: Vec<(String, Vec<u8>)> = Vec::new();
-    while let Some(res) = set.join_next().await {
-        if let Ok(Ok((object_path, bytes))) = res {
-            // extract timestamp from path: "history/{ts}/..." -> "ts"
-            let ts = object_path
-                .strip_prefix("history/")
-                .and_then(|s| s.split('/').next())
-                .unwrap_or("")
-                .to_string();
-            snaps.push((ts, bytes));
+    // Downsample: 100件程度に間引き
+    let keys: Vec<chrono::NaiveDateTime> = map.keys().cloned().collect();
+    let n = keys.len();
+    let keys = if n <= 100 {
+        keys
+    } else {
+        let stride = n.div_ceil(100);
+        let mut picked = Vec::new();
+        for (i, k) in keys.iter().enumerate() {
+            if i % stride == 0 {
+                picked.push(*k);
+            }
         }
+        if picked.last() != keys.last()
+            && let Some(last) = keys.last() {
+                picked.push(*last);
+            }
+        picked
+    };
+    let mut snapshots = Vec::new();
+    for k in keys {
+        let ts_str = k.format("%Y%m%d-%H%M%S").to_string();
+        let data = map.get(&k).cloned().unwrap_or_default();
+        snapshots.push(Snapshot { ts: ts_str, data });
     }
-    snaps.sort_by(|a, b| a.0.cmp(&b.0));
-    Ok(snaps
-        .into_iter()
-        .map(|(ts, bytes)| {
-            let data = serde_json::from_slice::<Vec<LeaderboardEntry>>(&bytes)
-                .inspect_err(|e| eprintln!("Failed to parse snapshot JSON for {}: {}", ts, e))
-                .unwrap_or_default();
-            Snapshot { ts, data }
-        })
-        .collect())
+    Ok(snapshots)
 }
 
 /// 最近の提出（guess）を取得してHTMLとして返す関数
