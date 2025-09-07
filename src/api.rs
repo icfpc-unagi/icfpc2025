@@ -23,6 +23,8 @@ use serde::{Deserialize, Serialize};
 const API_REQUEST_TIMEOUT_SECS: u64 = 120;
 #[cfg(feature = "reqwest")]
 use std::time::Duration;
+#[cfg(feature = "reqwest")]
+use std::time::Instant;
 
 /// Creates a new reqwest HTTP client with a default timeout.
 #[cfg(feature = "reqwest")]
@@ -110,6 +112,70 @@ fn log_unagi_header(res: &reqwest::blocking::Response) {
     }
 }
 
+/// Returns a retry window for the given HTTP status if it should be retried.
+///
+/// - 5xx: retry up to 30 minutes
+/// - 4xx: retry up to 1 minute
+/// - otherwise: not retryable
+#[cfg(feature = "reqwest")]
+fn retry_window_for_status(status: reqwest::StatusCode) -> Option<Duration> {
+    if status.is_server_error() {
+        Some(Duration::from_secs(30 * 60))
+    } else if status.is_client_error() {
+        Some(Duration::from_secs(60))
+    } else {
+        None
+    }
+}
+
+/// Performs a POST with JSON body and retries on transient failures.
+///
+/// Backoff waits 1, 2, 4, ..., up to 32 seconds between attempts, then keeps
+/// retrying every 32 seconds until 30 minutes have elapsed since the first
+/// attempt. If it still hasn't succeeded by then, the function panics.
+#[cfg(feature = "reqwest")]
+fn post_json_with_retry<T: Serialize + ?Sized>(
+    client: &Client,
+    url: &str,
+    body: &T,
+    context: &str,
+) -> Result<reqwest::blocking::Response> {
+    let start = Instant::now();
+    let network_deadline = Duration::from_secs(30 * 60);
+    let mut delay = Duration::from_secs(1);
+    loop {
+        match client.post(url).json(body).send() {
+            Ok(res) => {
+                let status = res.status();
+                log_unagi_header(&res);
+                if status.is_success() {
+                    return Ok(res);
+                }
+                if let Some(limit) = retry_window_for_status(status) {
+                    if start.elapsed() >= limit {
+                        panic!("{} failed for over {:?} — aborting", context, limit);
+                    }
+                    // transient error: fallthrough to sleep and retry
+                } else {
+                    let body = res.text().unwrap_or_default();
+                    anyhow::bail!("{} returned {}: {}", context, status, body);
+                }
+            }
+            Err(err) => {
+                // Network/timeout errors: retry until deadline
+                eprintln!("{} request error: {} — will retry", context, err);
+                if start.elapsed() >= network_deadline {
+                    panic!("{} failed for over 30 minutes — aborting", context);
+                }
+            }
+        }
+        std::thread::sleep(delay);
+        if delay < Duration::from_secs(32) {
+            delay = std::cmp::min(delay.saturating_mul(2), Duration::from_secs(32));
+        }
+    }
+}
+
 // ---------------- Lock renewal thread (select/guess lifecycle) ----------------
 
 #[cfg(feature = "reqwest")]
@@ -161,17 +227,7 @@ pub fn select(problem_name: &str) -> Result<String> {
         id: id.as_str(),
         problem_name,
     };
-    let res = client
-        .post(url)
-        .json(&req)
-        .send()
-        .context("Failed to POST /select")?;
-    let status = res.status();
-    log_unagi_header(&res);
-    if !status.is_success() {
-        let body = res.text().unwrap_or_default();
-        anyhow::bail!("/select returned {}: {}", status, body);
-    }
+    let res = post_json_with_retry(&client, &url, &req, "/select")?;
 
     let body: SelectResponse = res.json().context("Failed to parse /select response")?;
     Ok(body.problem_name)
@@ -228,17 +284,7 @@ where
         plans: &plans_vec,
     };
 
-    let res = client
-        .post(url)
-        .json(&req)
-        .send()
-        .context("Failed to POST /explore")?;
-    let status = res.status();
-    log_unagi_header(&res);
-    if !status.is_success() {
-        let body = res.text().unwrap_or_default();
-        anyhow::bail!("/explore returned {}: {}", status, body);
-    }
+    let res = post_json_with_retry(&client, &url, &req, "/explore")?;
 
     let body: ExploreResponse = res.json().context("Failed to parse /explore response")?;
     Ok(body)
@@ -319,17 +365,7 @@ pub fn guess(map: &Map) -> Result<bool> {
         map,
     };
 
-    let res = client
-        .post(url)
-        .json(&req)
-        .send()
-        .context("Failed to POST /guess")?;
-    let status = res.status();
-    log_unagi_header(&res);
-    if !status.is_success() {
-        let body = res.text().unwrap_or_default();
-        anyhow::bail!("/guess returned {}: {}", status, body);
-    }
+    let res = post_json_with_retry(&client, &url, &req, "/guess")?;
 
     let body: GuessResponse = res.json().context("Failed to parse /guess response")?;
     // Stop renewal and unlock immediately after a guess is made.
