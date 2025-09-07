@@ -1,3 +1,6 @@
+#![cfg_attr(feature = "skip_lint", allow(clippy::all, clippy::pedantic, warnings))]
+#![allow(non_snake_case, unused_imports, dead_code)]
+
 use itertools::Itertools;
 use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
@@ -15,6 +18,9 @@ fn balanced_plan_len(len: usize, rng: &mut ChaCha12Rng) -> Vec<usize> {
 }
 
 fn main() {
+    // マージ失敗により関数が消滅したので一旦コメントアウト
+
+    /*
     let mut judge = icfpc2025::judge::get_judge_from_stdin();
     let n = judge.num_rooms();
 
@@ -86,4 +92,5 @@ fn main() {
         dimacs_path,
     );
     judge.guess(&guess);
+    */
 }
