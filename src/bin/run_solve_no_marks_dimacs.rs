@@ -1,3 +1,6 @@
+#![cfg_attr(feature = "skip_lint", allow(clippy::all, clippy::pedantic, warnings))]
+#![allow(non_snake_case, unused_imports, dead_code)]
+
 use itertools::Itertools;
 use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
@@ -15,6 +18,9 @@ fn balanced_plan_len(len: usize, rng: &mut ChaCha12Rng) -> Vec<usize> {
 }
 
 fn main() {
+    // マージ失敗により関数が消滅したので一旦コメントアウト
+
+    /*
     let mut judge = icfpc2025::judge::get_judge_from_stdin();
     let n = judge.num_rooms();
 
@@ -38,8 +44,6 @@ fn main() {
     let labels: Vec<Vec<usize>> = judge.explore(&steps);
 
     // ソルバ設定（環境変数で上書き可能）
-    // let solver_bin = "/home/iwiwi/tmp/kissat-4.0.3-linux-amd64";
-    // let solver_args = [];
     let solver_bin = "/home/iwiwi/tmp/cryptominisat5";
     // let solver_args = ["--threads=63"];
     let solver_args = [
@@ -69,8 +73,14 @@ fn main() {
         "--autodisablegauss=true",
         "--bva=1",
     ];
+    let solver_bin = "/home/iwiwi/tmp/kissat-4.0.3-linux-amd64";
+    let solver_args = [];
 
-    let dimacs_path = Path::new("tmp.cnf");
+    let dimacs_path = format!("sat_cnfs/tmp/{}.cnf", std::process::id());
+    let dimacs_path = Path::new(&dimacs_path);
+    if let Some(parent) = dimacs_path.parent() {
+        std::fs::create_dir_all(parent).unwrap();
+    }
 
     let solver_path = Path::new(&solver_bin);
     let guess = icfpc2025::solve_no_marks::solve_via_external_dimacs_streaming(
@@ -82,4 +92,5 @@ fn main() {
         dimacs_path,
     );
     judge.guess(&guess);
+    */
 }

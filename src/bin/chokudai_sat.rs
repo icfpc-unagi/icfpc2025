@@ -23,8 +23,8 @@ fn main() {
     let mut rng = rand::rng();
     let mut judge = icfpc2025::judge::get_judge_from_stdin();
     let D = 2; // 倍化率
-    let K = 3; // 全体のクエリ数
-    let F = judge.num_rooms() * 2; // 前半パートの長さ
+    let K = 1; // 全体のクエリ数
+    let F = judge.num_rooms() * 3; // 前半パートの長さ
     let n = judge.num_rooms() / D;
     let (plans, labels) = {
         let mut plans = vec![];
@@ -85,8 +85,9 @@ fn main() {
         // 時刻 t にはどれか一つの (u,i) にいる
         cnf.choose_one(&V[t]);
     }
-    // 最初の部屋は labels[0] * 2 で決まっている
-    let first_room = labels[0] * 2;
+
+    // 最初の部屋は labels[0] * D で決まっている
+    let first_room = labels[0] * D;
     cnf.clause([V[0][first_room]]);
 
     // E[u][e][v][f] := 頂点uのe番目のドアが頂点vのf番目のドアに繋がっている
@@ -114,6 +115,19 @@ fn main() {
 
             // u の e 番目のドアはどれか一つの (v,j) と結ぶ
             cnf.choose_one(&tmp);
+        }
+    }
+
+    // v の f 番目のドアに結ぶ u の e 番目のドアはどれか一つ
+    for v in 0..n * D {
+        for f in 0..6 {
+            let mut col = vec![];
+            for u in 0..n * D {
+                for e in 0..6 {
+                    col.push(E[u][e][v][f]);
+                }
+            }
+            cnf.choose_one(&col);
         }
     }
 
@@ -149,8 +163,14 @@ fn main() {
     for ui in 0..n * D {
         for c in 0..4 {
             C[0][ui][c] = cnf.var();
+            if c == ui / D % 4 {
+                // 最初の部屋の色は ui/D%4 で決まっている
+                cnf.clause([C[0][ui][c]]);
+            } else {
+                // 最初の部屋の色は ui/D%4 で決まっている
+                cnf.clause([-C[0][ui][c]]);
+            }
         }
-        cnf.clause([C[0][ui][ui / 2 % 4]]);
     }
 
     // 各ターンの色の更新
@@ -172,6 +192,11 @@ fn main() {
                     if c != new_c {
                         cnf.clause([-V[t][ui], -C[t + 1][ui][c]]);
                     }
+
+                    // 正色の持ち上げ
+                    cnf.clause([V[t][ui], -C[t][ui][c], C[t + 1][ui][c]]);
+                    // 反色の持ち上げ
+                    cnf.clause([V[t][ui], C[t][ui][c], -C[t + 1][ui][c]]);
                 }
             }
         } else {
@@ -205,6 +230,7 @@ fn main() {
 
     // 解けたらうれしいな
     assert_eq!(cnf.sat.solve(), Some(true));
+
     let mut guess = Guess {
         start: first_room,
         graph: vec![[(!0, !0); 6]; judge.num_rooms()],
@@ -230,5 +256,30 @@ fn main() {
             }
         }
     }
+
+    // labels[i]と一致した答えが出ているか、実際にシミュレーションしてみる
+    let mut now_room = first_room;
+    let mut now_room_color = guess.rooms.clone();
+
+    eprintln!("色チェックをするよ");
+    for t in 0..plans.len() {
+        let now_color = now_room_color[now_room];
+        if now_color != labels[t] {
+            eprintln!(
+                "色が合わないよ: t = {}, now_room = {}, now_color = {}, labels[t] = {}",
+                t, now_room, now_color, labels[t]
+            );
+        }
+
+        let (new_c, e) = plans[t];
+        if new_c.is_some() {
+            // 色が決まっている場合
+            let new_c = new_c.unwrap();
+            now_room_color[now_room] = new_c;
+        }
+        // ドアを通る
+        now_room = guess.graph[now_room][e].0;
+    }
+
     assert!(judge.guess(&guess));
 }

@@ -1,6 +1,9 @@
 #![cfg_attr(feature = "skip_lint", allow(clippy::all, clippy::pedantic, warnings))]
 #![allow(non_snake_case)]
 
+use itertools::Itertools;
+use std::path::Path;
+
 use crate::{
     judge::{Guess, check_explore},
     mat,
@@ -600,9 +603,13 @@ fn extract_guess(
     guess
 }
 
-// ------------------------------ Public solve ------------------------------
+// -------------------------- CNF construction wrapper ---------------------
 
-pub fn solve(num_rooms: usize, plans: &Vec<Vec<usize>>, labels: &Vec<Vec<usize>>) -> Guess {
+fn build_cnf_for_plans(
+    num_rooms: usize,
+    plans: &Vec<Vec<usize>>,
+    labels: &Vec<Vec<usize>>,
+) -> (PlanInfo, Buckets, Cnf, Candidates, EdgeVars) {
     // 1) Build flattened info from provided plans and labels
     let info = build_info(num_rooms, plans, labels);
 
@@ -622,10 +629,14 @@ pub fn solve(num_rooms: usize, plans: &Vec<Vec<usize>>, labels: &Vec<Vec<usize>>
     // 4.5) Unify starting room across all plans
     add_start_room_unification(&mut cnf, &info, &buckets, &cand);
 
+    (info, buckets, cnf, cand, edges)
+}
+
+pub fn solve(num_rooms: usize, plans: &Vec<Vec<usize>>, labels: &Vec<Vec<usize>>) -> Guess {
+    let (info, buckets, mut cnf, cand, edges) = build_cnf_for_plans(num_rooms, plans, labels);
+
     // 5) Solve
     assert_eq!(cnf.sat.solve(), Some(true));
-
-    // 6) Extract and verify
     let guess = extract_guess(&cnf, &info, &buckets, &cand, &edges);
     assert!(check_explore(&guess, plans, labels));
     guess
@@ -682,226 +693,118 @@ pub fn solve_with_edge_prefix_fixed(
     }
 }
 
-// ------------------------------ External DIMACS solve ---------------------
+// ------------------------------ Portfolio Solver -------------------------------------
 
-/*
-// 外部ソルバを使って DIMACS を解かせ、その解を CaDiCaL に単位節で伝えてから
-// 既存の extract_guess で Guess を復元する。
-// 注意: ソルバの標準出力に DIMACS モデル（v ... 0 形式）が出るよう、呼び出し側で
-// 適切なフラグを args に含めてください（例: kissat の --print-solution=1 等）。
-pub fn solve_via_external_dimacs(
-    num_rooms: usize,
-    plans: &Vec<Vec<usize>>,
-    labels: &Vec<Vec<usize>>,
-    solver: &std::path::Path,
-    args: &[&str],
-    dimacs_path: &std::path::Path,
-) -> Guess {
-    use std::collections::HashSet;
-    use std::process::Command;
-
-    // 1) CNF 構築（solve と同一）
-    let info = build_info(num_rooms, plans, labels);
-    let buckets = build_buckets(&info);
-    let mut cnf = Cnf::new();
-    let cand = build_candidates(&mut cnf, &info, &buckets);
-    add_diff_pruning(&mut cnf, &info, &buckets, &cand);
-    add_sbp(&mut cnf, &info, &buckets, &cand);
-    add_same_door_equalization(&mut cnf, &info, &buckets, &cand);
-    let edges = build_edge_vars(&mut cnf, &info);
-    add_plan_constraints(&mut cnf, &info, &buckets, &cand, &edges);
-    add_start_room_unification(&mut cnf, &info, &buckets, &cand);
-
-    // 2) DIMACS 書き出し
-    //cnf.sat
-    //.write_dimacs(dimacs_path)
-    //.expect("failed to write DIMACS");
-    cnf.sat
-        .write_dimacs(dimacs_path)
-        .expect("failed to write DIMACS");
-
-    cnf.sat = cadical::Solver::with_config("sat").unwrap(); // DELETE ME LATER!!!!!!!wefojawefjapojfepaowiej
-
-    // 3) 外部ソルバ呼び出し（最後の引数として DIMACS パスを付与）
-    let output = Command::new(solver)
-        .args(args)
-        .arg(dimacs_path)
-        .output()
-        .expect("failed to spawn external solver");
-
-    // 4) 出力をパースして、正リテラル集合（真の変数）を集める
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let all = format!("{}\n{}", stdout, stderr);
-
-    let mut pos: HashSet<i32> = HashSet::new();
-    let mut saw_unsat = false;
-    let mut saw_v = false;
-    for line in all.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        // UNSAT 検出（s 行）
-        if trimmed.starts_with('s') || trimmed.starts_with('S') {
-            let l = trimmed.to_ascii_lowercase();
-            if l.contains("unsat") {
-                saw_unsat = true;
-            }
-            continue;
-        }
-        // モデルは v 行のみパース
-        if trimmed.starts_with('v') || trimmed.starts_with('V') {
-            saw_v = true;
-            for tok in trimmed.split_whitespace() {
-                if tok == "v" || tok == "V" {
-                    continue;
-                }
-                if let Ok(x) = tok.parse::<i32>() {
-                    if x == 0 {
-                        break;
-                    }
-                    if x > 0 {
-                        pos.insert(x);
-                    }
-                }
-            }
-        }
-    }
-    assert!(!saw_unsat, "external solver reported UNSAT");
-    assert!(
-        saw_v,
-        "external solver did not print any 'v' model lines; pass appropriate flags (e.g., --print-solution=1)"
-    );
-    assert!(!pos.is_empty(), "no assignment parsed from 'v' lines");
-
-    // 5) モデルを単位節として注入 → CaDiCaL で充足化
-    for &v in &pos {
-        cnf.clause([v]);
-    }
-    assert_eq!(cnf.sat.solve(), Some(true));
-
-    // 6) 既存の抽出ロジックをそのまま利用
-    let guess = extract_guess(&cnf, &info, &buckets, &cand, &edges);
-    assert!(check_explore(&guess, plans, labels));
-    guess
+pub struct SATSolver {
+    pub path: String,
+    pub args: Vec<String>,
 }
-*/
 
-// ストリーミング版: 外部ソルバの標準出力/標準エラーを逐次画面に流しつつ、
-// v 行（モデル）だけをバッファに取り込み、終了後にパースして解を復元する。
-pub fn solve_via_external_dimacs_streaming(
-    num_rooms: usize,
-    plans: &Vec<Vec<usize>>,
-    labels: &Vec<Vec<usize>>,
-    solver: &std::path::Path,
-    args: &[&str],
+pub fn launch_portfolio(
     dimacs_path: &std::path::Path,
-) -> Guess {
+    solvers: &[SATSolver],
+) -> std::collections::HashSet<i32> {
     use std::collections::HashSet;
-    use std::io::{BufRead, BufReader};
-    use std::process::{Command, Stdio};
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::{Arc, Mutex};
+    use std::io::{BufRead, BufReader, Write};
+    use std::process::{Child, Command, Stdio};
+    use std::sync::{Arc, Mutex, mpsc};
+    use std::thread;
 
-    // 1) CNF 構築（solve と同一）
-    let info = build_info(num_rooms, plans, labels);
-    let buckets = build_buckets(&info);
-    let mut cnf = Cnf::new();
-    let cand = build_candidates(&mut cnf, &info, &buckets);
-    add_diff_pruning(&mut cnf, &info, &buckets, &cand);
-    add_sbp(&mut cnf, &info, &buckets, &cand);
-    add_same_door_equalization(&mut cnf, &info, &buckets, &cand);
-    let edges = build_edge_vars(&mut cnf, &info);
-    add_plan_constraints(&mut cnf, &info, &buckets, &cand, &edges);
-    add_start_room_unification(&mut cnf, &info, &buckets, &cand);
+    assert!(!solvers.is_empty(), "no solvers provided");
 
-    // 2) DIMACS 書き出し
-    // cnf.sat
-    //.write_dimacs(dimacs_path)
-    // .expect("failed to write DIMACS");
-    cnf.write_dimacs(dimacs_path)
-        .expect("failed to write DIMACS");
+    // Spawn all solvers
+    let mut children: Vec<Arc<Mutex<Child>>> = Vec::with_capacity(solvers.len());
+    let (tx, rx) = mpsc::channel();
+    let mut handles = Vec::with_capacity(solvers.len());
 
-    eprintln!(
-        "Original: num_clauses={}, num_variables={}, clauses={}",
-        cnf.sat.num_clauses(),
-        cnf.sat.num_variables(),
-        cnf.clauses.len(),
-    );
+    for (idx, s) in solvers.iter().enumerate() {
+        let mut child = Command::new(&s.path)
+            .args(&s.args)
+            .arg(dimacs_path)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .expect("failed to spawn portfolio solver");
 
-    // 3) 外部ソルバをストリーム実行
-    let mut child = Command::new(solver)
-        .args(args)
-        .arg(dimacs_path)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .expect("failed to spawn external solver");
+        let stdout = child
+            .stdout
+            .take()
+            .expect("failed to capture solver stdout");
+        let child = Arc::new(Mutex::new(child));
+        children.push(Arc::clone(&child));
 
-    let stdout = child.stdout.take().expect("failed to capture stdout");
+        let tx = tx.clone();
+        handles.push(thread::spawn(move || {
+            let mut saw_v = false;
+            let mut saw_unsat = false;
+            let mut buf = String::new();
 
-    let model_buf = Arc::new(Mutex::new(String::new()));
-    let saw_v = Arc::new(AtomicBool::new(false));
-    let saw_unsat = Arc::new(AtomicBool::new(false));
-
-    // stdout スレッド（stderr は親プロセスにそのまま継承して表示）
-    let stdout_handle = {
-        let model_buf = Arc::clone(&model_buf);
-        let saw_v = Arc::clone(&saw_v);
-        let saw_unsat = Arc::clone(&saw_unsat);
-        std::thread::spawn(move || {
             let reader = BufReader::new(stdout);
             for line in reader.lines() {
                 let line = match line {
                     Ok(l) => l,
                     Err(_) => break,
                 };
-                eprintln!("{}", line);
+                // Mirror child stdout to our stdout for real-time progress.
+                // println!("{}", line);
+                let _ = std::io::stdout().flush();
                 if line.starts_with('s') || line.starts_with('S') {
                     if line.to_ascii_lowercase().contains("unsat") {
-                        saw_unsat.store(true, Ordering::Relaxed);
+                        saw_unsat = true;
                     }
                 } else if line.starts_with('v') || line.starts_with('V') {
-                    saw_v.store(true, Ordering::Relaxed);
-                    let mut buf = model_buf.lock().unwrap();
+                    saw_v = true;
                     buf.push_str(&line);
                     buf.push('\n');
                 }
             }
-        })
-    };
 
-    let status = child.wait().expect("failed to wait on solver");
-    // 多くの SAT ソルバは終了コード 10(SAT), 20(UNSAT) を返す（MiniSAT 互換）。
-    // 0 で終了する実装もあるため、0 と 10 を成功扱いにする。
-    if let Some(code) = status.code() {
-        assert!(
-            code == 0 || code == 10,
-            "external solver exited with code {}",
-            code
-        );
-    } else {
-        panic!("external solver terminated by signal");
+            // Wait for exit after stdout closed
+            let status = child.lock().unwrap().wait();
+            let code = status.ok().and_then(|s| s.code());
+            let _ = tx.send((idx, code, buf, saw_unsat, saw_v));
+        }));
     }
 
-    // stdout 読み取りの終了を待つ（バッファ取りこぼし防止）
-    let _ = stdout_handle.join();
+    drop(tx); // close sender in main thread
 
-    assert!(
-        !saw_unsat.load(Ordering::Relaxed),
-        "external solver reported UNSAT"
-    );
-    assert!(
-        saw_v.load(Ordering::Relaxed),
-        "external solver did not print any 'v' model lines; pass appropriate flags (e.g., --print-solution=1)"
-    );
+    // Receive first acceptable result
+    let mut winner: Option<(usize, String)> = None;
+    for received in rx.iter() {
+        let (idx, code, buf, saw_unsat, saw_v) = received;
+        if (code == Some(0) || code == Some(10)) && !saw_unsat && saw_v {
+            // Announce winner solver
+            let s = &solvers[idx];
+            eprintln!("Portfolio winner: {} {}", s.path, s.args.join(" "));
+            winner = Some((idx, buf));
+            break;
+        }
+    }
 
-    // 4) モデルをパース
-    let buf = model_buf.lock().unwrap();
-    let collected = buf.as_str();
+    // Kill all losers
+    if let Some((win_idx, _)) = &winner {
+        for (i, ch) in children.iter().enumerate() {
+            if i != *win_idx {
+                let _ = ch.lock().unwrap().kill();
+            }
+        }
+    } else {
+        // No winner found; ensure all are terminated
+        for ch in &children {
+            let _ = ch.lock().unwrap().kill();
+        }
+    }
+
+    // Join all threads to complete cleanup
+    for h in handles {
+        let _ = h.join();
+    }
+
+    let (_, buf) = winner.expect("no solver produced a satisfiable model");
+
+    // Parse 'v' lines into a model set
     let mut solution: HashSet<i32> = HashSet::new();
-    for line in collected.lines() {
+    for line in buf.lines() {
         if !(line.starts_with('v') || line.starts_with('V')) {
             continue;
         }
@@ -917,19 +820,38 @@ pub fn solve_via_external_dimacs_streaming(
             }
         }
     }
-    drop(buf);
-    assert!(!solution.is_empty(), "no assignment parsed from 'v' lines");
+    assert!(
+        !solution.is_empty(),
+        "winner solver produced no 'v' assignment lines"
+    );
+    solution
+}
 
-    // 5) モデルを単位節として注入 → CaDiCaL で充足化
-    // dbg!("DELETE ME LATER!!", cnf.var());
+// High-level: build CNF, write DIMACS, run portfolio, inject model, extract Guess
+pub fn solve_portfolio(
+    num_rooms: usize,
+    plans: &Vec<Vec<usize>>,
+    labels: &Vec<Vec<usize>>,
+    solvers: &[SATSolver],
+    dimacs_path: &std::path::Path,
+) -> Guess {
+    // 1) CNF 構築（solve と共通化）
+    let (info, buckets, mut cnf, cand, edges) = build_cnf_for_plans(num_rooms, plans, labels);
+
+    // 2) DIMACS 書き出し
+    cnf.write_dimacs(dimacs_path)
+        .expect("failed to write DIMACS");
     eprintln!(
-        "Original: num_clauses={}, num_variables={}, solutions={}",
+        "Original: num_clauses={}, num_variables={}, clauses={}",
         cnf.sat.num_clauses(),
         cnf.sat.num_variables(),
-        solution.len()
+        cnf.clauses.len(),
     );
 
-    // cnf.sat = cadical::Solver::with_config("sat").unwrap();
+    // 3) 外部ソルバを並列実行（ポートフォリオ）
+    let solution = launch_portfolio(dimacs_path, solvers);
+
+    // 4) モデルを単位節として注入 → CaDiCaL で充足化
     for &v in &solution {
         cnf.clause([v]);
     }
@@ -938,8 +860,33 @@ pub fn solve_via_external_dimacs_streaming(
         assert_eq!(cnf.sat.value(v.abs()), Some(v > 0));
     }
 
-    // 6) 既存の抽出ロジックをそのまま利用
+    // 5) 既存の抽出ロジックをそのまま利用
     let guess = extract_guess(&cnf, &info, &buckets, &cand, &edges);
     assert!(check_explore(&guess, plans, labels));
     guess
+}
+
+pub fn solve_cadical_multi(
+    num_rooms: usize,
+    plans: &Vec<Vec<usize>>,
+    labels: &Vec<Vec<usize>>,
+    n_workers: usize,
+) -> Guess {
+    let cadical_path = std::env::var("CADICAL_PATH")
+        .unwrap_or_else(|_| "/home/iwiwi/tmp/cadical-rel-2.1.3/build/cadical".to_owned());
+
+    let solvers = (0..n_workers)
+        .map(|seed| SATSolver {
+            path: cadical_path.to_owned(),
+            args: [format!("--seed={}", seed), "--sat".to_owned()].to_vec(),
+        })
+        .collect_vec();
+
+    let dimacs_path = format!("tmp/{}.cnf", std::process::id());
+    let dimacs_path = Path::new(&dimacs_path);
+    if let Some(parent) = dimacs_path.parent() {
+        std::fs::create_dir_all(parent).unwrap();
+    }
+
+    solve_portfolio(num_rooms, &plans, &labels, &solvers, dimacs_path)
 }
