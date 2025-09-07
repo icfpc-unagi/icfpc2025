@@ -447,12 +447,16 @@ mod tests {
     fn run_command_times_out_and_kills() -> Result<()> {
         // Script that sleeps longer than timeout
         let script = "echo start; sleep 3; echo done";
+        let mut opts = RunOptions::default();
+        // Make flushing and joining more aggressive to reduce flakiness
+        opts.flush_interval = Duration::from_millis(50);
+        opts.join_grace = Duration::from_secs(2);
         let (res, artifacts) = run_command_with_timeout(
             script,
             Duration::from_millis(800),
             Arc::new(AtomicBool::new(false)),
             |_| Ok(()),
-            &RunOptions::default(),
+            &opts,
         );
         let (score, status) = res?;
         assert!(!status.success());
