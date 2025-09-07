@@ -632,8 +632,7 @@ fn build_cnf_for_plans(
 // ------------------------------ Public solve ------------------------------
 
 pub fn solve(num_rooms: usize, plans: &Vec<Vec<usize>>, labels: &Vec<Vec<usize>>) -> Guess {
-    let (info, buckets, mut cnf, cand, edges) =
-        build_cnf_for_plans(num_rooms, plans, labels);
+    let (info, buckets, mut cnf, cand, edges) = build_cnf_for_plans(num_rooms, plans, labels);
 
     // 5) Solve
     assert_eq!(cnf.sat.solve(), Some(true));
@@ -661,8 +660,7 @@ pub fn solve_via_external_dimacs_streaming(
     use std::sync::{Arc, Mutex};
 
     // 1) CNF 構築（solve と共通化）
-    let (info, buckets, mut cnf, cand, edges) =
-        build_cnf_for_plans(num_rooms, plans, labels);
+    let (info, buckets, mut cnf, cand, edges) = build_cnf_for_plans(num_rooms, plans, labels);
 
     // 2) DIMACS 書き出し
     // cnf.sat
@@ -787,6 +785,179 @@ pub fn solve_via_external_dimacs_streaming(
     }
 
     // 6) 既存の抽出ロジックをそのまま利用
+    let guess = extract_guess(&cnf, &info, &buckets, &cand, &edges);
+    assert!(check_explore(&guess, plans, labels));
+    guess
+}
+
+// ------------------------------ Portfolio Solver -------------------------------------
+
+pub struct SATSolver {
+    pub path: String,
+    pub args: Vec<String>,
+}
+
+pub fn launch_portfolio(
+    dimacs_path: &std::path::Path,
+    solvers: &[SATSolver],
+) -> std::collections::HashSet<i32> {
+    use std::collections::HashSet;
+    use std::io::{BufRead, BufReader, Write};
+    use std::process::{Child, Command, Stdio};
+    use std::sync::{Arc, Mutex, mpsc};
+    use std::thread;
+
+    assert!(!solvers.is_empty(), "no solvers provided");
+
+    // Spawn all solvers
+    let mut children: Vec<Arc<Mutex<Child>>> = Vec::with_capacity(solvers.len());
+    let (tx, rx) = mpsc::channel();
+    let mut handles = Vec::with_capacity(solvers.len());
+
+    for (idx, s) in solvers.iter().enumerate() {
+        let mut child = Command::new(&s.path)
+            .args(&s.args)
+            .arg(dimacs_path)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::inherit())
+            .spawn()
+            .expect("failed to spawn portfolio solver");
+
+        let stdout = child
+            .stdout
+            .take()
+            .expect("failed to capture solver stdout");
+        let child = Arc::new(Mutex::new(child));
+        children.push(Arc::clone(&child));
+
+        let tx = tx.clone();
+        handles.push(thread::spawn(move || {
+            let mut saw_v = false;
+            let mut saw_unsat = false;
+            let mut buf = String::new();
+
+            let reader = BufReader::new(stdout);
+            for line in reader.lines() {
+                let line = match line {
+                    Ok(l) => l,
+                    Err(_) => break,
+                };
+                // Mirror child stdout to our stdout for real-time progress.
+                // println!("{}", line);
+                let _ = std::io::stdout().flush();
+                if line.starts_with('s') || line.starts_with('S') {
+                    if line.to_ascii_lowercase().contains("unsat") {
+                        saw_unsat = true;
+                    }
+                } else if line.starts_with('v') || line.starts_with('V') {
+                    saw_v = true;
+                    buf.push_str(&line);
+                    buf.push('\n');
+                }
+            }
+
+            // Wait for exit after stdout closed
+            let status = child.lock().unwrap().wait();
+            let code = status.ok().and_then(|s| s.code());
+            let _ = tx.send((idx, code, buf, saw_unsat, saw_v));
+        }));
+    }
+
+    drop(tx); // close sender in main thread
+
+    // Receive first acceptable result
+    let mut winner: Option<(usize, String)> = None;
+    for received in rx.iter() {
+        let (idx, code, buf, saw_unsat, saw_v) = received;
+        if (code == Some(0) || code == Some(10)) && !saw_unsat && saw_v {
+            // Announce winner solver
+            let s = &solvers[idx];
+            eprintln!("Portfolio winner: {} {}", s.path, s.args.join(" "));
+            winner = Some((idx, buf));
+            break;
+        }
+    }
+
+    // Kill all losers
+    if let Some((win_idx, _)) = &winner {
+        for (i, ch) in children.iter().enumerate() {
+            if i != *win_idx {
+                let _ = ch.lock().unwrap().kill();
+            }
+        }
+    } else {
+        // No winner found; ensure all are terminated
+        for ch in &children {
+            let _ = ch.lock().unwrap().kill();
+        }
+    }
+
+    // Join all threads to complete cleanup
+    for h in handles {
+        let _ = h.join();
+    }
+
+    let (_, buf) = winner.expect("no solver produced a satisfiable model");
+
+    // Parse 'v' lines into a model set
+    let mut solution: HashSet<i32> = HashSet::new();
+    for line in buf.lines() {
+        if !(line.starts_with('v') || line.starts_with('V')) {
+            continue;
+        }
+        for tok in line.split_whitespace() {
+            if tok == "v" || tok == "V" {
+                continue;
+            }
+            if let Ok(x) = tok.parse::<i32>() {
+                if x == 0 {
+                    break;
+                }
+                solution.insert(x);
+            }
+        }
+    }
+    assert!(
+        !solution.is_empty(),
+        "winner solver produced no 'v' assignment lines"
+    );
+    solution
+}
+
+// High-level: build CNF, write DIMACS, run portfolio, inject model, extract Guess
+pub fn solve_portfolio(
+    num_rooms: usize,
+    plans: &Vec<Vec<usize>>,
+    labels: &Vec<Vec<usize>>,
+    solvers: &[SATSolver],
+    dimacs_path: &std::path::Path,
+) -> Guess {
+    // 1) CNF 構築（solve と共通化）
+    let (info, buckets, mut cnf, cand, edges) = build_cnf_for_plans(num_rooms, plans, labels);
+
+    // 2) DIMACS 書き出し
+    cnf.write_dimacs(dimacs_path)
+        .expect("failed to write DIMACS");
+    eprintln!(
+        "Original: num_clauses={}, num_variables={}, clauses={}",
+        cnf.sat.num_clauses(),
+        cnf.sat.num_variables(),
+        cnf.clauses.len(),
+    );
+
+    // 3) 外部ソルバを並列実行（ポートフォリオ）
+    let solution = launch_portfolio(dimacs_path, solvers);
+
+    // 4) モデルを単位節として注入 → CaDiCaL で充足化
+    for &v in &solution {
+        cnf.clause([v]);
+    }
+    assert_eq!(cnf.sat.solve(), Some(true));
+    for &v in &solution {
+        assert_eq!(cnf.sat.value(v.abs()), Some(v > 0));
+    }
+
+    // 5) 既存の抽出ロジックをそのまま利用
     let guess = extract_guess(&cnf, &info, &buckets, &cand, &edges);
     assert!(check_explore(&guess, plans, labels));
     guess
