@@ -470,8 +470,7 @@ fn perm_self_loop(n: usize, rng: &mut impl Rng) -> Vec<(usize, usize)> {
     p2.shuffle(rng);
 
     let mut i2 = 0;
-    for i1 in 0..n {
-        let u1 = p1[i1];
+    for &u1 in p1.iter() {
         if perm[u1].is_some() {
             continue;
         }
@@ -489,7 +488,7 @@ fn perm_self_loop(n: usize, rng: &mut impl Rng) -> Vec<(usize, usize)> {
 
 pub fn generate_marks_instance(num_rooms: usize, num_layers: usize, seed: u64) -> MarksInstance {
     let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(seed);
-    assert!(num_rooms % num_layers == 0);
+    assert!(num_rooms.is_multiple_of(num_layers));
     let num_supers = num_rooms / num_layers;
 
     // super graph
@@ -520,8 +519,7 @@ pub fn generate_marks_instance(num_rooms: usize, num_layers: usize, seed: u64) -
             // permutation
             let mut perm = (0..num_layers).collect_vec();
             perm.shuffle(&mut rng);
-            for l1 in 0..num_layers {
-                let l2 = perm[l1];
+            for (l1, &l2) in perm.iter().enumerate() {
                 edges.push((
                     (super_layer_to_room(*s1, l1), *d1),
                     (super_layer_to_room(*s2, l2), *d2),
@@ -534,10 +532,10 @@ pub fn generate_marks_instance(num_rooms: usize, num_layers: usize, seed: u64) -
     let mut room_to_label = vec![!0; num_rooms];
     let mut room_to_layer = vec![!0; num_rooms];
     let mut room_to_super = vec![!0; num_rooms];
-    for s in 0..num_supers {
+    for (s, &label) in super_to_label.iter().enumerate() {
         for l in 0..num_layers {
             let r = super_layer_to_room(s, l);
-            room_to_label[r] = super_to_label[s];
+            room_to_label[r] = label;
             room_to_layer[r] = l;
             room_to_super[r] = s;
         }

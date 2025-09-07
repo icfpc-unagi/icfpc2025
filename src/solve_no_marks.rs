@@ -493,7 +493,12 @@ fn add_plan_constraints(
 
 // All plans start from the same room. For each label k that appears at plan starts,
 // unify the selected room variable across all start times with that label.
-fn add_start_room_unification(cnf: &mut Cnf, info: &PlanInfo, buckets: &Buckets, cand: &Candidates) {
+fn add_start_room_unification(
+    cnf: &mut Cnf,
+    info: &PlanInfo,
+    buckets: &Buckets,
+    cand: &Candidates,
+) {
     // Group start indices by their observed label
     let mut starts_by_label: [Vec<usize>; 4] = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
     for &i in &info.starts {
