@@ -206,7 +206,7 @@ fn main() {
             }
         }
 
-        eprintln!("door2 len: {}", door2.len());
+        eprintln!("door2 len: {} pos: {}", door2.len(), pos.len());
         let dstart = door2.len();
         let mut pre_id = pos[dstart];
 
