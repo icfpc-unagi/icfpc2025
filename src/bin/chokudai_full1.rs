@@ -247,8 +247,15 @@ fn main() {
             }
 
             let d = door2[i];
-            graph[pre_id][d] = id;
-            eprintln!("update: {} --{}--> {}", pre_id, d, id);
+            if graph[pre_id][d] != !0 && graph[pre_id][d] != id {
+                eprintln!(
+                    "error2: graph[{}][{}] == {}, but trying to set {}",
+                    pre_id, d, graph[pre_id][d], id
+                );
+            } else if graph[pre_id][d] == !0 {
+                graph[pre_id][d] = id;
+                eprintln!("update: {} --{}--> {}", pre_id, d, id);
+            }
             pre_id = id;
         }
 
