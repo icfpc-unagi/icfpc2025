@@ -14,10 +14,29 @@ fn balanced_plan(len: usize, m: usize, rng: &mut impl Rng) -> Vec<usize> {
     plan
 }
 
+fn gacha(L: &[usize], labels: &[usize]) -> f64 {
+    let mut expected = [0; 4];
+    for &c in L {
+        expected[c] += 1;
+    }
+    let mut actual = [0; 4];
+    for &c in labels {
+        actual[c] += 1;
+    }
+    let mut sum = 0.0;
+    for c in 0..4 {
+        let e = expected[c] as f64 / L.len() as f64;
+        let a = actual[c] as f64 / labels.len() as f64;
+        sum += (e - a) * (e - a);
+    }
+    dbg!(sum);
+    sum
+}
+
 fn main() {
     let mut rng = rand::rng();
     let mut judge = icfpc2025::judge::get_judge_from_stdin();
-    let H = judge.num_rooms() * 3; // 色を塗らずに動く回数
+    let H = judge.num_rooms() * 2; // 色を塗らずに動く回数
     let n = judge.num_rooms() / 3;
     let mut plans = balanced_plan(judge.num_rooms() * 6, 6, &mut rng)
         .into_iter()
@@ -34,6 +53,9 @@ fn main() {
         L[i] = i % 4;
     }
     L.sort();
+    if gacha(&L, &labels[..=H]) > 0.002 {
+        panic!("unlucky");
+    }
     let mut cnf = Cnf::new();
 
     // V[t][u] := 時刻 t の開始時点での頂点は u
