@@ -120,7 +120,7 @@ fn main() {
 
     // いる場所Vについての制約
     // V[t][u*D+i] := 時刻 t の開始時点で、存在するのは (u,i) である
-    cnf.clause([V[0][u]]);
+    cnf.clause([V[0][first_room]]);
     for t in 0..plans.len() {
         //plants[t].1 == !0 のときは区切りなので最初に戻る
         if plans[t].1 == !0 {
