@@ -154,27 +154,33 @@ fn main() {
                             eprintln!("バグ? 新しい辺を発見: {}-{} -> {}-{}", u3, e, v3, f);
                         }
 
-                        // 逆向きの辺も貼る
-                        if E[v1][f][u1][e] == !0 {
-                            E[v1][f][u1][e] = now_e;
-                        } else if E2[v1][f][u1][e] == !0 {
-                            E2[v1][f][u1][e] = now_e;
-                        } else {
-                            eprintln!("バグ? 新しい辺を発見: {}-{} -> {}-{}", v1, f, u1, e);
+                        // 逆向きの辺も張る 同一辺のときは張らない
+                        if v1 != u1 || f != e {
+                            if E[v1][f][u1][e] == !0 {
+                                E[v1][f][u1][e] = now_e;
+                            } else if E2[v1][f][u1][e] == !0 {
+                                E2[v1][f][u1][e] = now_e;
+                            } else {
+                                eprintln!("バグ? 新しい辺を発見: {}-{} -> {}-{}", v1, f, u1, e);
+                            }
                         }
-                        if E[v2][f][u2][e] == !0 {
-                            E[v2][f][u2][e] = now_e;
-                        } else if E2[v2][f][u2][e] == !0 {
-                            E2[v2][f][u2][e] = now_e;
-                        } else {
-                            eprintln!("バグ? 新しい辺を発見: {}-{} -> {}-{}", v2, f, u2, e);
+                        if v2 != u2 || f != e {
+                            if E[v2][f][u2][e] == !0 {
+                                E[v2][f][u2][e] = now_e;
+                            } else if E2[v2][f][u2][e] == !0 {
+                                E2[v2][f][u2][e] = now_e;
+                            } else {
+                                eprintln!("バグ? 新しい辺を発見: {}-{} -> {}-{}", v2, f, u2, e);
+                            }
                         }
-                        if E[v3][f][u3][e] == !0 {
-                            E[v3][f][u3][e] = now_e;
-                        } else if E2[v3][f][u3][e] == !0 {
-                            E2[v3][f][u3][e] = now_e;
-                        } else {
-                            eprintln!("バグ? 新しい辺を発見: {}-{} -> {}-{}", v3, f, u3, e);
+                        if v3 != u3 || f != e {
+                            if E[v3][f][u3][e] == !0 {
+                                E[v3][f][u3][e] = now_e;
+                            } else if E2[v3][f][u3][e] == !0 {
+                                E2[v3][f][u3][e] = now_e;
+                            } else {
+                                eprintln!("バグ? 新しい辺を発見: {}-{} -> {}-{}", v3, f, u3, e);
+                            }
                         }
                     }
                 }
