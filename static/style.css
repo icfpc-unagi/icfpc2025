@@ -263,6 +263,7 @@ article tbody > tr:nth-child(even) {
 
 article table {
     border-collapse: collapse;
+	width: 100%;
 }
 
 article table td {
@@ -296,6 +297,7 @@ article pre {
 	box-sizing: border-box;
 	padding: 1ex;
 	font-family: 'Courier New', Courier, monospace;
+	line-height: 100%;
 }
 
 article textarea {

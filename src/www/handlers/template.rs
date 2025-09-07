@@ -42,6 +42,7 @@ pub fn new_engine() -> Handlebars<'static> {
 <a href="/"></a>
 <ul>
 <li><a href="/leaderboard/global">リーダーボード</a></li>
+<li><a href="/tasks">タスク</a></li>
 </ul>
 </nav>
 <main>

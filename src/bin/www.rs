@@ -52,6 +52,7 @@ async fn main() -> std::io::Result<()> {
             )
             .route("/api/guess", web::post().to(www::handlers::api::post_guess))
             .route("/task", web::get().to(www::handlers::task::show))
+            .route("/tasks", web::get().to(www::handlers::tasks::index))
             .service(Files::new("/", "/www"))
     })
     .bind(bind_address)?
