@@ -261,10 +261,11 @@ fn main() {
     let mut now_room = first_room;
     let mut now_room_color = guess.rooms.clone();
 
+    eprintln!("色チェックをするよ");
     for t in 0..plans.len() {
         let now_color = now_room_color[now_room];
         if now_color != labels[t] {
-            panic!(
+            eprintln!(
                 "色が合わないよ: t = {}, now_room = {}, now_color = {}, labels[t] = {}",
                 t, now_room, now_color, labels[t]
             );
