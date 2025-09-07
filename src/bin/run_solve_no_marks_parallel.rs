@@ -56,12 +56,13 @@ fn main() {
 
     // Build a task list by fixing a prefix of edges starting from time 0 of plan 0.
     // Prefix depth escalates (1->2->3) until we have enough tasks to saturate threads.
+    type TaskPrefix = Vec<(usize, usize, usize, Option<usize>)>;
+    type Tasks = Vec<TaskPrefix>;
     let u0 = labels[0][0];
-    let mut tasks: Vec<Vec<(usize, usize, usize, Option<usize>)>> = Vec::new();
     // Helper to push all (v,f) pairs for a given (u,e,h) into base prefixes.
-    let expand_with = |bases: Vec<Vec<(usize, usize, usize, Option<usize>)>>, u: usize, e: usize, h: usize| {
+    let expand_with = |bases: Tasks, u: usize, e: usize, h: usize| {
         let vcands: Vec<usize> = (0..n).filter(|&v| v % 4 == h).collect();
-        let mut out = Vec::new();
+        let mut out: Tasks = Vec::new();
         for base in bases {
             for &v in &vcands {
                 for f in 0..6 {
@@ -77,7 +78,7 @@ fn main() {
     // Start with depth=1
     let e0 = plans[0][0];
     let h0 = labels[0][1];
-    tasks = expand_with(vec![Vec::new()], u0, e0, h0);
+    let mut tasks: Tasks = expand_with(vec![Vec::new()], u0, e0, h0);
     // Increase depth if we don't have enough parallel tasks
     let want = threads.saturating_mul(8).max(threads);
     if tasks.len() < want && plans[0].len() >= 2 {
@@ -109,7 +110,7 @@ fn main() {
     eprintln!(
         "prepared {} parallel tasks (prefix depth {})",
         tasks.len(),
-        tasks.get(0).map(|t| t.len()).unwrap_or(0)
+        tasks.first().map(|t| t.len()).unwrap_or(0)
     );
 
     // Use a worker pool limited by --threads.
@@ -124,20 +125,19 @@ fn main() {
         let tasks = Arc::clone(&tasks);
         let plans = Arc::clone(&plans_arc);
         let labels = Arc::clone(&labels_arc);
-        thread::spawn(move || loop {
-            let i = next.fetch_add(1, Ordering::Relaxed);
-            if i >= tasks.len() {
-                break;
-            }
-            let prefix = &tasks[i];
-            if let Some(guess) = icfpc2025::solve_no_marks::solve_with_edge_prefix_fixed(
-                n,
-                &plans,
-                &labels,
-                prefix,
-            ) {
-                let _ = tx.send(guess);
-                break; // stop after first success in this worker
+        thread::spawn(move || {
+            loop {
+                let i = next.fetch_add(1, Ordering::Relaxed);
+                if i >= tasks.len() {
+                    break;
+                }
+                let prefix = &tasks[i];
+                if let Some(guess) = icfpc2025::solve_no_marks::solve_with_edge_prefix_fixed(
+                    n, &plans, &labels, prefix,
+                ) {
+                    let _ = tx.send(guess);
+                    break; // stop after first success in this worker
+                }
             }
         });
     }
