@@ -164,15 +164,13 @@ fn main() {
         }
 
         if let Some(new_c) = plans[t].0 {
-            // 時間tに色を塗る場合
             for ui in 0..n * D {
+                // V[t][ui] => C[t+1][ui][new_c]
+                cnf.clause([-V[t][ui], C[t + 1][ui][new_c]]);
+                // V[t][ui] => !C[t+1][ui][c]  (c != new_c)
                 for c in 0..4 {
-                    if c == new_c {
-                        // V[t][ui] -> C[t][ui][new_c]
-                        cnf.clause([-V[t][ui], C[t + 1][ui][new_c]]);
-                    } else {
-                        // !V[t][ui] -> !C[t][ui][c]
-                        cnf.clause([V[t][ui], -C[t + 1][ui][c]]);
+                    if c != new_c {
+                        cnf.clause([-V[t][ui], -C[t + 1][ui][c]]);
                     }
                 }
             }
