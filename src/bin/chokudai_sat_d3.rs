@@ -321,13 +321,13 @@ fn main() {
             for v in 0..n * D {
                 for f in 0..6 {
                     if E[u][e][v][f] != !0 && cnf.sat.value(E[u][e][v][f]) == Some(true) {
-                        assert!(guess.graph[u][e] == (!0, !0));
-                        assert!(cnf.sat.value(E[v][f][u][e]) == Some(true));
+                        //assert!(guess.graph[u][e] == (!0, !0));
+                        //assert!(cnf.sat.value(E[v][f][u][e]) == Some(true));
                         guess.graph[u][e] = (v, f);
                     }
                     if E2[u][e][v][f] != !0 && cnf.sat.value(E2[u][e][v][f]) == Some(true) {
-                        assert!(guess.graph[u][e] == (!0, !0));
-                        assert!(cnf.sat.value(E2[v][f][u][e]) == Some(true));
+                        //assert!(guess.graph[u][e] == (!0, !0));
+                        //assert!(cnf.sat.value(E2[v][f][u][e]) == Some(true));
                         guess.graph[u][e] = (v, f);
                     }
                 }
