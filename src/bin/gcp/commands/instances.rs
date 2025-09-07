@@ -2,13 +2,14 @@ use anyhow::{Context, Result, bail};
 use serde_json::Value;
 
 use crate::common::{last_segment, print_table};
+use icfpc2025::client::CLIENT;
 
 pub async fn run(project_id: &str, zone: &str) -> Result<()> {
     let token = icfpc2025::gcp::get_access_token()
         .await
         .context("Failed to get access token")?;
 
-    let client = reqwest::Client::new();
+    let client = &*CLIENT;
     let url = format!(
         "https://compute.googleapis.com/compute/v1/projects/{}/zones/{}/instances",
         project_id, zone

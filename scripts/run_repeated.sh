@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+trap "kill -9 -$$" SIGINT
+
 set -Eeuo pipefail
 
 # Runs the target command, killing and retrying if it exceeds 5 minutes.
@@ -9,8 +12,9 @@ TIME_LIMIT="5m"          # Changeable via env before calling this script
 KILL_GRACE="10s"         # Grace period before SIGKILL after timeout
 
 # Command + input
-CMD=(cargo run --release --bin iwiwi_evo_gen276)
-INPUT="remote quintus"
+CMD=(cargo run --release --bin wata_sat3)
+# INPUT="local random_2layers 36 0"
+INPUT="remote he"
 
 # Ensure `timeout` exists
 if ! command -v timeout >/dev/null 2>&1; then

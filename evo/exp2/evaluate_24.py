@@ -15,8 +15,8 @@ from typing import Any
 
 TIMEOUT_SEC = 300
 MAX_TEXT_LEN = 10000  # cap stdout/stderr saved into metrics
-N_TESTS = 63
-N_WORKERS = 63
+N_TESTS = 15 #63
+N_WORKERS = 1  # 63
 N_ROOMS = 24
 
 

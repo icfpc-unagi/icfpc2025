@@ -139,6 +139,8 @@ pub fn extend(lock_token: &str, ttl: Duration) -> Result<bool> {
 /// * `lock_token` - The token for the lock. In a forced unlock, this is only for logging.
 /// * `force` - Whether to perform a forced unlock.
 pub fn unlock(lock_token: &str, force: bool) -> Result<()> {
+    eprintln!("[unlock] forced={} token={}", force, lock_token);
+
     if force {
         // Forcefully expire the lock and clear the token.
         let user = current_username();

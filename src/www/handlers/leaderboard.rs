@@ -16,7 +16,7 @@ use std::fmt::Write;
 use tokio::time::Duration;
 
 const BUCKET: &str = "icfpc2025-data";
-const TZ: chrono::FixedOffset = chrono::FixedOffset::east_opt(9 * 3600).unwrap();
+const _TZ: chrono::FixedOffset = chrono::FixedOffset::east_opt(9 * 3600).unwrap();
 
 #[derive(Deserialize)]
 pub struct LeaderboardQuery {
@@ -77,6 +77,7 @@ pub async fn show(
 async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<String> {
     // Fetch active lock
     // Build notification banner if active_lock_user exists
+    let t0 = std::time::Instant::now();
     let banner_html = if let Some(user) = sql::cell::<String>(
         r"
           SELECT lock_user
@@ -97,6 +98,12 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
     } else {
         String::new()
     };
+    let banner_ms = t0.elapsed().as_millis();
+
+    // Fetch all scores.
+    let t0 = std::time::Instant::now();
+    let scores = api::scores()?;
+    let scores_ms = t0.elapsed().as_millis();
 
     // Build problem navigation links for the top of the page.
     let mut nav_links: Vec<String> = Vec::new();
@@ -106,12 +113,16 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
         nav_links.push("[<a href=\"/leaderboard/global\">Global</a>]".to_string());
     }
     for p in crate::problems::all_problems() {
+        let score = scores
+            .get(&p.problem)
+            .map_or("-".to_string(), |s| s.to_string());
         nav_links.push(if p.problem == problem {
-            format!("<b>[{}]</b>", p.problem)
+            format!("<b>[{}]({})</b>", p.problem, score)
         } else {
             format!(
-                "[<a href=\"/leaderboard/{problem_name}\">{problem_name}</a>]",
-                problem_name = p.problem
+                "[<a href=\"/leaderboard/{problem_name}\">{problem_name}</a>]({score})",
+                problem_name = p.problem,
+                score = score
             )
         });
     }
@@ -121,9 +132,12 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
     );
 
     // Fetch recent guesses for the problem to display.
+    let t0 = std::time::Instant::now();
     let guesses_html = recent_guesses(problem).await?;
+    let recent_ms = t0.elapsed().as_millis();
 
     // Fetch the latest correct guess for the problem, optionally bypassing the cache.
+    let t0 = std::time::Instant::now();
     let map_html = if problem == "global" {
         String::new()
     } else if nocache {
@@ -131,8 +145,11 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
     } else {
         last_correct_guess(problem)?
     };
+    let last_guess_ms = t0.elapsed().as_millis();
 
+    let t0 = std::time::Instant::now();
     let snapshots = fetch_snapshots(problem).await?;
+    let fetch_ms = t0.elapsed().as_millis();
 
     // Construct the final HTML page, embedding the data and the charting JavaScript.
     let html = format!(
@@ -318,10 +335,15 @@ document.getElementById('lb-table').addEventListener('click', (ev) => {{
         count = snapshots.len(),
         snapshots = serde_json::to_string(&snapshots)?,
     );
+    // Append timing information at the end of the HTML body.
+    let timings_html = format!(
+        "\n<hr><div style=\"font:12px monospace;opacity:0.7;margin-top:8px;\">timings: fetch_snapshots={fetch_ms}ms, last_correct_guess={last_guess_ms}ms, recent_guesses={recent_ms}ms, banner_html={banner_ms}ms, api::scores={scores_ms}ms</div>",
+    );
+    let full_html = format!("{}{}", html, timings_html);
 
     Ok(html_page(
         &format!("Leaderboard - {problem}"),
-        &html,
+        &full_html,
         &banner_html,
     ))
 }
@@ -376,7 +398,19 @@ async fn fetch_snapshots(problem: &str) -> Result<Vec<Snapshot>> {
         picked
     };
     let mut set = tokio::task::JoinSet::new();
+    const KNOWN_INVALID_STAMPS: [&str; 7] = [
+        "20250906-100118",
+        "20250906-102610",
+        "20250906-105114",
+        "20250906-111608",
+        "20250906-114110",
+        "20250906-120611",
+        "20250906-123110",
+    ];
     for ts in stamps {
+        if KNOWN_INVALID_STAMPS.binary_search(&ts.as_str()).is_ok() {
+            continue;
+        }
         let object = format!("history/{}/{}.json", ts, problem);
         let ts_clone = object.clone();
         set.spawn(async move {
@@ -422,8 +456,7 @@ async fn recent_guesses(problem: &str) -> Result<String> {
         SELECT g.api_log_id AS id,
                g.api_log_created AS ts,
                s.api_log_request__problem_name AS problem,
-               JSON_VALUE(g.api_log_response, '$.correct' RETURNING UNSIGNED) AS correct,
-               JSON_EXTRACT(g.api_log_request, '$.map') AS map
+               JSON_VALUE(g.api_log_response, '$.correct' RETURNING UNSIGNED) AS correct
         FROM api_logs g
         JOIN api_logs s
           ON g.api_log_select_id = s.api_log_id
@@ -441,8 +474,7 @@ async fn recent_guesses(problem: &str) -> Result<String> {
         SELECT g.api_log_id AS id,
                g.api_log_created AS ts,
                s.api_log_request__problem_name AS problem,
-               JSON_VALUE(g.api_log_response, '$.correct' RETURNING UNSIGNED) AS correct,
-               JSON_EXTRACT(g.api_log_request, '$.map') AS map
+               JSON_VALUE(g.api_log_response, '$.correct' RETURNING UNSIGNED) AS correct
         FROM api_logs g
         JOIN api_logs s
           ON g.api_log_select_id = s.api_log_id
@@ -457,27 +489,22 @@ async fn recent_guesses(problem: &str) -> Result<String> {
 
     let mut w = String::new();
     w.push_str(
-      r#"<table style="border-collapse:collapse;font-size:13px;">
-        <tr><th>ID</th><th>Timestamp</th><th>Problem</th><th>Map (truncated)</th><th>Correct</th></tr>"#);
+        r#"<table style="border-collapse:collapse;font-size:13px;">
+        <tr><th>ID</th><th>Timestamp</th><th>Problem</th><th>Correct</th></tr>"#,
+    );
     let now = chrono::Utc::now().naive_utc();
     for row in rows {
         let id = row.at::<i64>(0)?;
         let ts = row.at::<NaiveDateTime>(1)?;
         let problem = row.at::<String>(2)?;
         let correct = row.at::<bool>(3)?;
-        let map = row.at::<String>(4)?;
-        // compact
-        let map_value: serde_json::Value = serde_json::from_str(&map)?;
-        let map = serde_json::to_string(&map_value)?;
-        let map_leading_part = &map[..100.min(map.len())];
         write!(
             w,
-            r#"<tr><td>{}</td><td title="{}">{}</td><td>{}</td><td>{}...</td><td>{}</td></tr>"#,
+            r#"<tr><td>{}</td><td title="{}">{}</td><td>{}</td><td>{}</td></tr>"#,
             id,
-            ts.and_local_timezone(TZ).unwrap().naive_local(),
+            ts.and_local_timezone(_TZ).unwrap().naive_local(),
             ts.signed_duration_since(now).humanize(),
             problem,
-            map_leading_part,
             if correct { "✅" } else { "❌" }
         )?;
     }
@@ -496,7 +523,7 @@ fn last_correct_guess(problem: &str) -> Result<String> {
     let mut w = String::new();
     if let Some(row) = sql::row(
         "
-        SELECT JSON_EXTRACT(g.api_log_request, '$.map') AS map,
+        SELECT g.api_log_request AS guess,
                g.api_log_created AS ts
         FROM api_logs g
         JOIN api_logs s
@@ -505,10 +532,12 @@ fn last_correct_guess(problem: &str) -> Result<String> {
             AND s.api_log_path = '/select'
         WHERE s.api_log_request__problem_name = :problem
           AND g.api_log_response_code = 200
-          AND JSON_EXTRACT(g.api_log_response, '$.correct') = true",
+          AND JSON_EXTRACT(g.api_log_response, '$.correct') = true
+        ORDER BY g.api_log_id DESC
+        LIMIT 1",
         params! { "problem" => problem },
     )? {
-        let map: api::Map = serde_json::from_str(&row.at::<String>(0)?)?;
+        let api::GuessRequest { map, .. } = serde_json::from_str(&row.at::<String>(0)?)?;
         let n = map.rooms.len();
         write!(
             w,
