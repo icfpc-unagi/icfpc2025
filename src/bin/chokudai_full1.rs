@@ -101,7 +101,7 @@ fn main() {
 
     let ret = update_graph(&mut graph, n);
 
-    for _ in 0..100 {
+    for _ in 0..10 {
         if ret {
             break;
         }
@@ -148,10 +148,17 @@ fn main() {
                 if visited[i] {
                     continue;
                 }
-                if dist[now][i] != !0 && (best == !0 || dist[now][i] < best) {
+                if dist[now][i] != !0
+                    && (best == !0
+                        || dist[now][i] < best
+                        || (dist[now][i] == best && rnd.random_bool(0.5)))
+                {
                     best = dist[now][i];
                     nid = i;
                 }
+            }
+            if best == !0 {
+                panic!("no path from {} to unvisited", now);
             }
             if nid == !0 {
                 break;
@@ -352,6 +359,7 @@ fn update_graph(graph: &mut Vec<Vec<usize>>, n: usize) -> bool {
                 if graph[i][d] == !0 {
                     graph[i][d] = a;
                     go_sum[i][a] += 1;
+                    eprintln!("update by sum: {} --{}--> {} (update_graph)", i, d, a);
                 }
             }
         }
