@@ -346,13 +346,8 @@ fn main() {
                     if E[u][e][v][f] != !0 && cnf.sat.value(E[u][e][v][f]) == Some(true) {
                         if guess.graph[u][e] != (!0, !0) {
                             eprintln!(
-                                "バグ? すでに辺が決まっている: {}-{} -> {:?}, but find {}-{} -> {}",
-                                u,
-                                e,
-                                guess.graph[u][e],
-                                u,
-                                e,
-                                (v, f)
+                                "バグ? すでに辺が決まっている: {}-{} -> {:?}, but find {}-{} -> {} {}",
+                                u, e, guess.graph[u][e], u, e, v, f,
                             );
                         }
                         assert!(guess.graph[u][e] == (!0, !0));
@@ -362,13 +357,8 @@ fn main() {
                     if E2[u][e][v][f] != !0 && cnf.sat.value(E2[u][e][v][f]) == Some(true) {
                         if guess.graph[u][e] != (!0, !0) {
                             eprintln!(
-                                "バグ? すでに辺が決まっている: {}-{} -> {:?}, but find {}-{} -> {}",
-                                u,
-                                e,
-                                guess.graph[u][e],
-                                u,
-                                e,
-                                (v, f)
+                                "バグ? すでに辺が決まっている: {}-{} -> {:?}, but find {}-{} -> {} {}",
+                                u, e, guess.graph[u][e], u, e, v, f,
                             );
                         }
                         assert!(guess.graph[u][e] == (!0, !0));
