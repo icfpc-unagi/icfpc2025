@@ -31,6 +31,7 @@ pub mod gcp;
 /// Task executor (DB-backed queue + runner). Requires MySQL for DB and reqwest+tokio for GCS uploads.
 #[cfg(all(feature = "mysql", feature = "reqwest", feature = "tokio"))]
 pub mod executor;
+pub mod lock_guard;
 
 /// A trait for conveniently updating a value to its minimum or maximum.
 pub trait SetMinMax {

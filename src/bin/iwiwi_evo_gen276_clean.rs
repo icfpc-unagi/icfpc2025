@@ -623,6 +623,7 @@ fn solve(judge: &mut dyn icfpc2025::judge::Judge) {
         &[info.plan.clone()],
         &[info.labels.clone()]
     ));
+    panic!("Debug");
     judge.guess(&guess);
 }
 // EVOLVE-BLOCK-END
