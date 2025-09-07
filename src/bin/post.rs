@@ -63,7 +63,7 @@ fn handle_select(json_arg: &str) -> Result<()> {
             problem_name,
             problems::all_problems()
                 .iter()
-                .map(|p| p.problem_name)
+                .map(|p| &p.problem)
                 .join(", ")
         );
     }

@@ -39,7 +39,7 @@ pub async fn index() -> impl Responder {
         .map(|p| {
             format!(
                 "<li><a href=\"/leaderboard/{}\">{}</a> (size {})</li>",
-                p.problem_name, p.problem_name, p.size
+                p.problem, p.problem, p.size
             )
         })
         .collect::<Vec<_>>()
@@ -104,12 +104,12 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
         nav_links.push("[<a href=\"/leaderboard/global\">Global</a>]".to_string());
     }
     for p in crate::problems::all_problems() {
-        nav_links.push(if p.problem_name == problem {
-            format!("<b>[{}]</b>", p.problem_name)
+        nav_links.push(if p.problem == problem {
+            format!("<b>[{}]</b>", p.problem)
         } else {
             format!(
                 "[<a href=\"/leaderboard/{problem_name}\">{problem_name}</a>]",
-                problem_name = p.problem_name
+                problem_name = p.problem
             )
         });
     }
