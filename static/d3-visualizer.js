@@ -1,9 +1,9 @@
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
 
-const chart = (guess_json) => {
+const chart = (guess_json, w = 928, h = 680) => {
   // Specify the dimensions of the chart.
-  const width = 928;
-  const height = 680;
+  const width = w;
+  const height = h;
 
   // Specify the color scale.
   const color = d3.scaleOrdinal(d3.schemeCategory10);
@@ -14,7 +14,7 @@ const chart = (guess_json) => {
   const flinks = [];
 
   for (const [id, room] of guess_json.map.rooms.entries()) {
-    const node = { id: `${id}`, color: color(room), r: 5 };
+    const node = { id: `${id}`, color: color(room), r: 5, isStart: id === guess_json.map.startingRoom };
     nodes.push(node);
     fnodes.push(node);
     for (const door of Array(6).keys()) {
@@ -95,6 +95,7 @@ const chart = (guess_json) => {
     .data(nodes)
     .join("circle")
     .attr("r", d => d.r)
+    .attr("stroke", d => d.isStart ? "#000" : null)
     .attr("fill", d => d.color);
 
   node.append("title")
