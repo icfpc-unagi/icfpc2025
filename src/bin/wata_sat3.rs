@@ -21,118 +21,84 @@ fn balanced_plan(len: usize, m: usize, rng: &mut impl Rng) -> Vec<usize> {
 fn main() {
     let mut rng = rand::rng();
     let mut judge = icfpc2025::judge::get_judge_from_stdin();
-    let D = 3;
-    let K = 1;
+    let D = 2; // 倍化率
+    let K = 4; // 全体のクエリ数
+    let F = judge.num_rooms() * 12; // 前半パートの長さ
+    let n = judge.num_rooms() / D;
     let mut plans = vec![];
-    let (super_guess, plans, labels) = match D {
-        2 => {
-            let n = judge.num_rooms() / D;
-            let default_plan_str = if n == 30 {
-                "413022551403315200442351124530532105441250342013450431221500235401332245541100524301142035531432234405215311350240015425104334025123304521120534103522445503114230032542135431452051002415012340523321554433021451132041025533014400351220440115324321342250451305502315412031045522433500142534115203442231104350310540221435132441500553020145133425523012412033443004231254411023052214500135410325345320121545042102113352405514315340154304422003355523411201445331322002514054225105033004323315550112134421441352532400511024124025405311304432221235"
-            } else if n == 24 {
-                "053421124355003145223044132102540153351203445023114200554324125133051042215014033152443520411325530244002234511032054154230134552103501221433402532514310044152332500144551240530123153410521354220330420524115043021334514011522400543355322502431104320154423513402104531230554420011342541350314220511225053310324405552341300214450322545125330150043123141012421453202513005434045013322443102352331551412002403415510035111204255404452032"
+    let (super_guess, plans, labels) = {
+        // let default_plan_str = if n == 30 {
+        //     "413022551403315200442351124530532105441250342013450431221500235401332245541100524301142035531432234405215311350240015425104334025123304521120534103522445503114230032542135431452051002415012340523321554433021451132041025533014400351220440115324321342250451305502315412031045522433500142534115203442231104350310540221435132441500553020145133425523012412033443004231254411023052214500135410325345320121545042102113352405514315340154304422003355523411201445331322002514054225105033004323315550112134421441352532400511024124025405311304432221235"
+        // } else if n == 24 {
+        //     "053421124355003145223044132102540153351203445023114200554324125133051042215014033152443520411325530244002234511032054154230134552103501221433402532514310044152332500144551240530123153410521354220330420524115043021334514011522400543355322502431104320154423513402104531230554420011342541350314220511225053310324405552341300214450322545125330150043123141012421453202513005434045013322443102352331551412002403415510035111204255404452032"
+        // } else {
+        //     ""
+        // };
+        // let mut plan = if default_plan_str.len() > 0 {
+        //     default_plan_str
+        //         .chars()
+        //         .map(|c| (None, c.to_digit(10).unwrap() as usize))
+        //         .collect::<Vec<_>>()
+        // } else {
+        //     balanced_plan(n * 18, 6, &mut rng)
+        //         .into_iter()
+        //         .map(|d| (None, d))
+        //         .collect()
+        // };
+        // plan.truncate(F); // parameter
+        let mut first = 0;
+        let mut plans0 = vec![];
+        for k in 0..K {
+            let tmp = balanced_plan(judge.num_rooms() * 6, 6, &mut rng);
+            plans.push(tmp.iter().map(|&d| (None, d)).collect_vec());
+            if first + judge.num_rooms() * 6 <= F {
+                first += judge.num_rooms() * 6;
+                plans0.push(tmp);
             } else {
-                ""
-            };
-            let plan = if default_plan_str.len() > 0 {
-                default_plan_str
-                    .chars()
-                    .map(|c| (None, c.to_digit(10).unwrap() as usize))
-                    .collect::<Vec<_>>()
-            } else {
-                balanced_plan(n * 18, 6, &mut rng)
-                    .into_iter()
-                    .map(|d| (None, d))
-                    .collect()
-            };
-            let mut plans0 = vec![];
-            plans.push(plan[..judge.num_rooms() * 6].to_vec());
-            plans.push(plan[judge.num_rooms() * 6..].to_vec());
-            while plans[1].len() < judge.num_rooms() * 6 {
-                plans[1].push((None, rng.random_range(0..6)));
-            }
-            plans0.push(plans[0].iter().map(|&(_, d)| d).collect());
-            plans0.push(plans[1].iter().map(|&(_, d)| d).collect());
-            for _ in 0..K {
-                let plan = balanced_plan(judge.num_rooms() * 6, 6, &mut rng)
-                    .into_iter()
-                    .zip(balanced_plan(judge.num_rooms() * 6, 4, &mut rng))
-                    .map(|(d, c)| (Some(c), d))
-                    .collect_vec();
-                plans.push(plan);
-            }
-            let mut labels = judge.explore(&plans);
-            let labels0 = vec![labels[0].clone(), labels[1].clone()];
-            let super_guess = solve_no_marks::solve(judge.num_rooms() / D, &plans0, &labels0);
-            eprintln!("!!!! super_guess done");
-
-            labels.remove(0);
-            plans.remove(0);
-            labels.remove(0);
-            plans.remove(0);
-            let mut flat_plans = vec![];
-            let flat_labels = labels.iter().flatten().copied().collect_vec();
-            for i in 0..plans.len() {
-                flat_plans.extend(plans[i].iter().copied());
-                if i + 1 < plans.len() {
-                    flat_plans.push((None, !0));
+                let f = F - first;
+                first += f;
+                let mut b = balanced_plan(judge.num_rooms() * 6 - f, 4, &mut rng);
+                for p in f..judge.num_rooms() * 6 {
+                    plans[k][p].0 = b.pop();
+                }
+                if f > 0 {
+                    plans0.push(tmp[..f].to_vec());
                 }
             }
-            (super_guess, flat_plans, flat_labels)
         }
-        3 => {
-            let mut plans0 = vec![vec![]];
-            let n = judge.num_rooms() / D;
-            let default_plan_str = if n == 30 {
-                "413022551403315200442351124530532105441250342013450431221500235401332245541100524301142035531432234405215311350240015425104334025123304521120534103522445503114230032542135431452051002415012340523321554433021451132041025533014400351220440115324321342250451305502315412031045522433500142534115203442231104350310540221435132441500553020145133425523012412033443004231254411023052214500135410325345320121545042102113352405514315340154304422003355523411201445331322002514054225105033004323315550112134421441352532400511024124025405311304432221235"
-            } else if n == 24 {
-                "053421124355003145223044132102540153351203445023114200554324125133051042215014033152443520411325530244002234511032054154230134552103501221433402532514310044152332500144551240530123153410521354220330420524115043021334514011522400543355322502431104320154423513402104531230554420011342541350314220511225053310324405552341300214450322545125330150043123141012421453202513005434045013322443102352331551412002403415510035111204255404452032"
+        let mut labels = judge.explore(&plans);
+        let mut labels0 = vec![];
+        let mut first = 0;
+        for k in 0..K {
+            if first + judge.num_rooms() * 6 <= F {
+                labels0.push(labels[k].clone());
+                first += judge.num_rooms() * 6;
             } else {
-                ""
-            };
-            let plan = if default_plan_str.len() > 0 {
-                default_plan_str
-                    .chars()
-                    .map(|c| (None, c.to_digit(10).unwrap() as usize))
-                    .collect::<Vec<_>>()
-            } else {
-                balanced_plan(n * 18, 6, &mut rng)
-                    .into_iter()
-                    .map(|d| (None, d))
-                    .collect()
-            };
-            plans0[0] = plan.iter().map(|&(_, d)| d).collect();
-            plans.push(plan);
-            for _ in 0..K {
-                let plan = balanced_plan(judge.num_rooms() * 6, 6, &mut rng)
-                    .into_iter()
-                    .zip(balanced_plan(judge.num_rooms() * 6, 4, &mut rng))
-                    .map(|(d, c)| (Some(c), d))
-                    .collect_vec();
-                plans.push(plan);
-            }
-            let mut labels = judge.explore(&plans);
-            let labels0 = vec![labels[0].clone()];
-            let super_guess = solve_no_marks::solve(judge.num_rooms() / D, &plans0, &labels0);
-            eprintln!("!!!! super_guess done");
-
-            labels.remove(0);
-            plans.remove(0);
-            let mut flat_plans = vec![];
-            let flat_labels = labels.iter().flatten().copied().collect_vec();
-            for i in 0..plans.len() {
-                flat_plans.extend(plans[i].iter().copied());
-                if i + 1 < plans.len() {
-                    flat_plans.push((None, !0));
+                let f = F - first;
+                first += f;
+                if f > 0 {
+                    labels0.push(labels[k][..f + 1].to_vec());
                 }
             }
-            (super_guess, flat_plans, flat_labels)
         }
-        _ => panic!("not supported D"),
+        let super_guess = solve_no_marks::solve(judge.num_rooms() / D, &plans0, &labels0);
+        eprintln!("!!!! super_guess done");
+        while plans[0].iter().all(|x| x.0.is_none()) {
+            plans.remove(0);
+            labels.remove(0);
+        }
+        let mut flat_plans = vec![];
+        let flat_labels = labels.iter().flatten().copied().collect_vec();
+        for i in 0..plans.len() {
+            flat_plans.extend(plans[i].iter().copied());
+            if i + 1 < plans.len() {
+                flat_plans.push((None, !0));
+            }
+        }
+        (super_guess, flat_plans, flat_labels)
     };
     assert_eq!(plans.len() + 1, labels.len());
     let mut cnf = Cnf::new();
-    let n = judge.num_rooms() / D;
     assert_eq!(super_guess.rooms.len(), n);
     // V[t][i] := 時刻 t に訪れたのは (u,i) である
     let mut V = mat![!0; labels.len(); D];

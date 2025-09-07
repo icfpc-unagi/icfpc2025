@@ -10,7 +10,8 @@ KILL_GRACE="10s"         # Grace period before SIGKILL after timeout
 
 # Command + input
 CMD=(cargo run --release --bin wata_sat3)
-INPUT="remote hhet"
+# INPUT="local random_2layers 36 0"
+INPUT="remote he"
 
 # Ensure `timeout` exists
 if ! command -v timeout >/dev/null 2>&1; then
