@@ -21,9 +21,9 @@ fn balanced_plan(len: usize, m: usize, rng: &mut impl Rng) -> Vec<usize> {
 fn main() {
     let mut rng = rand::rng();
     let mut judge = icfpc2025::judge::get_judge_from_stdin();
-    let D = 2; // 倍化率
-    let K = 3; // 全体のクエリ数
-    let F = judge.num_rooms() * 11; // 前半パートの長さ
+    let D = 3; // 倍化率
+    let K = 2; // 全体のクエリ数
+    let F = judge.num_rooms() * 5 + 10; // 前半パートの長さ
     let n = judge.num_rooms() / D;
     let (super_guess, plans, labels) = {
         let mut plans = vec![];
