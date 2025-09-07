@@ -197,15 +197,7 @@ fn main() {
                 }
             }
             col.sort();
-            let col_size = col.len();
             col.dedup();
-            let col_size2 = col.len();
-            if col_size != col_size2 {
-                eprintln!(
-                    "find bug? col_size != col_size2: {} != {}",
-                    col_size, col_size2
-                );
-            }
             cnf.choose_one(&col);
         }
     }
@@ -225,15 +217,7 @@ fn main() {
                 }
             }
             row.sort();
-            let row_size = row.len();
             row.dedup();
-            let row_size2 = row.len();
-            if row_size != row_size2 {
-                eprintln!(
-                    "find bug? row_size != row_size2: {} != {}",
-                    row_size, row_size2
-                );
-            }
             cnf.choose_one(&row);
         }
     }
