@@ -119,7 +119,7 @@ fn main() {
                         let v3 = vs[2];
 
                         //u == vの時は、有向グラフになっているかチェックする
-                        if u == v {
+                        if u == v && e == f {
                             //u1-v2, u2-v3, u3-v1はだめ
                             if (u1 == v2 && e == f) || (u2 == v3 && e == f) || (u3 == v1 && e == f)
                             {
@@ -328,7 +328,8 @@ fn main() {
     }
 
     // 解けたらうれしいな
-    assert_eq!(cnf.sat.solve(), Some(true));
+    //assert_eq!(cnf.sat.solve(), Some(true));
+    solve_no_marks::solve_cnf_parallel(&mut cnf, 25, 25);
 
     let mut guess = Guess {
         start: first_room,

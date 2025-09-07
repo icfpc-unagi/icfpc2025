@@ -34,7 +34,7 @@ fn base_endpoint() -> String {
         .unwrap_or_else(|| "https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.com".to_string())
 }
 
-fn insert_snapshot(ts: &NaiveDateTime, problem: &str, snapshot: &str) -> Result<()> {
+pub fn insert_snapshot(ts: &NaiveDateTime, problem: &str, snapshot: &str) -> Result<()> {
     let entries =
         serde_json::from_str::<Vec<crate::www::handlers::leaderboard::LeaderboardEntry>>(snapshot)
             .inspect_err(|e| eprintln!("Failed to parse snapshot JSON for {}: {}", ts, e))

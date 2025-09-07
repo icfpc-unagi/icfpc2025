@@ -693,6 +693,70 @@ pub fn solve_with_edge_prefix_fixed(
     }
 }
 
+/// Accepts multiple edge-prefix candidates and enforces that at least one of them
+/// holds (union of constraints). Each prefix is a list of `(u, e, v, f_opt)` and
+/// is guarded by a selector variable so the solver can satisfy any one of them.
+pub fn solve_with_edge_prefixes_any(
+    num_rooms: usize,
+    plans: &Vec<Vec<usize>>,
+    labels: &Vec<Vec<usize>>,
+    prefixes: &[Vec<(usize, usize, usize, Option<usize>)>],
+) -> Option<Guess> {
+    // 1) Build flattened info from provided plans and labels
+    let info = build_info(num_rooms, plans, labels);
+
+    // 2) Build buckets and candidates
+    let buckets = build_buckets(&info);
+    let mut cnf = Cnf::new();
+    let cand = build_candidates(&mut cnf, &info, &buckets);
+
+    // 3) Add pruning and symmetry breaking
+    add_diff_pruning(&mut cnf, &info, &buckets, &cand);
+    add_sbp(&mut cnf, &info, &buckets, &cand);
+    add_same_door_equalization(&mut cnf, &info, &buckets, &cand);
+
+    // 4) Edge layer and plan constraints
+    let edges = build_edge_vars(&mut cnf, &info);
+    // Build selector vars for each prefix and add guarded implications.
+    let mut sels: Vec<i32> = Vec::with_capacity(prefixes.len());
+    for pref in prefixes {
+        let s = cnf.var();
+        sels.push(s);
+        for &(u, e, v, f_opt) in pref.iter() {
+            if u >= info.n || v >= info.n || e >= 6 {
+                // Invalid constraint; this prefix can never hold. Make it impossible by s -> false.
+                cnf.clause([-s]);
+                continue;
+            }
+            cnf.clause([-s, edges.F[u][e][v]]);
+            if let Some(f) = f_opt {
+                if f >= 6 {
+                    cnf.clause([-s]);
+                } else {
+                    cnf.clause([-s, edges.M[u][v][e][f]]);
+                }
+            }
+        }
+    }
+    // At least one selector is true (union).
+    if !sels.is_empty() {
+        cnf.clause(sels.clone());
+    }
+
+    add_plan_constraints(&mut cnf, &info, &buckets, &cand, &edges);
+    add_start_room_unification(&mut cnf, &info, &buckets, &cand);
+
+    // 5) Solve
+    match cnf.sat.solve() {
+        Some(true) => {
+            let guess = extract_guess(&cnf, &info, &buckets, &cand, &edges);
+            assert!(check_explore(&guess, plans, labels));
+            Some(guess)
+        }
+        _ => None,
+    }
+}
+
 // ------------------------------ Portfolio Solver -------------------------------------
 
 pub struct SATSolver {

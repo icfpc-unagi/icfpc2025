@@ -4,11 +4,7 @@ use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
 use std::cmp::Reverse;
 use std::io::{self, Write};
-use std::sync::{
-    Arc,
-    atomic::{AtomicUsize, Ordering},
-    mpsc,
-};
+use std::sync::{Arc, mpsc};
 use std::thread;
 
 fn balanced_plan_len(len: usize, rng: &mut ChaCha12Rng) -> Vec<usize> {
@@ -146,46 +142,62 @@ fn main() {
         tasks.first().map(|t| t.len()).unwrap_or(0)
     );
 
-    // Use a worker pool limited by --threads.
+    // Partition tasks by thread id (index mod threads) and solve a union in each thread.
     let (tx, rx) = mpsc::channel();
-    let next = Arc::new(AtomicUsize::new(0));
-    let tasks = Arc::new(tasks);
+    let tasks_arc = Arc::new(tasks);
     let plans_arc = Arc::new(plans);
     let labels_arc: Arc<Vec<Vec<usize>>> = Arc::new(labels);
-    for _ in 0..threads {
+    for tid in 0..threads {
         let tx = tx.clone();
-        let next = Arc::clone(&next);
-        let tasks = Arc::clone(&tasks);
+        let tasks = Arc::clone(&tasks_arc);
         let plans = Arc::clone(&plans_arc);
         let labels = Arc::clone(&labels_arc);
         thread::spawn(move || {
-            loop {
-                let i = next.fetch_add(1, Ordering::Relaxed);
-                if i >= tasks.len() {
-                    break;
+            // Collect my bundle
+            let mut my_idxs = Vec::new();
+            let mut my_prefixes: Tasks = Vec::new();
+            for (i, pref) in tasks.iter().enumerate() {
+                if i % threads == tid {
+                    my_idxs.push(i);
+                    my_prefixes.push(pref.clone());
                 }
-                let prefix = &tasks[i];
-                if let Some(guess) = icfpc2025::solve_no_marks::solve_with_edge_prefix_fixed(
-                    n, &plans, &labels, prefix,
-                ) {
-                    // Log the successful prefix and its rank (1-based) among tasks
-                    let pref_str = prefix
-                        .iter()
-                        .map(|&(u, e, v, f_opt)| match f_opt {
-                            Some(f) => format!("{}-{}->{}({})", u, e, v, f),
-                            None => format!("{}-{}->{}", u, e, v),
-                        })
-                        .join(", ");
-                    eprintln!(
-                        "HIT prefix rank {}/{} (len {}): {}",
-                        i + 1,
-                        tasks.len(),
-                        prefix.len(),
-                        pref_str
-                    );
-                    let _ = tx.send(guess);
-                    break; // stop after first success in this worker
+            }
+            if my_prefixes.is_empty() {
+                return; // nothing to do for this worker
+            }
+            if let Some(guess) = icfpc2025::solve_no_marks::solve_with_edge_prefixes_any(
+                n,
+                &plans,
+                &labels,
+                &my_prefixes,
+            ) {
+                // Determine which prefix matched the resulting guess
+                for (pos, pref) in my_prefixes.iter().enumerate() {
+                    let ok = pref.iter().all(|&(u, e, v, f_opt)| match f_opt {
+                        Some(f) => guess.graph[u][e] == (v, f),
+                        None => guess.graph[u][e].0 == v,
+                    });
+                    if ok {
+                        let rank = my_idxs[pos];
+                        // Log details
+                        let pref_str = pref
+                            .iter()
+                            .map(|&(u, e, v, f_opt)| match f_opt {
+                                Some(f) => format!("{}-{}->{}({})", u, e, v, f),
+                                None => format!("{}-{}->{}", u, e, v),
+                            })
+                            .join(", ");
+                        eprintln!(
+                            "HIT prefix rank {}/{} (len {}): {}",
+                            rank + 1,
+                            tasks.len(),
+                            pref.len(),
+                            pref_str
+                        );
+                        break;
+                    }
                 }
+                let _ = tx.send(guess);
             }
         });
     }
