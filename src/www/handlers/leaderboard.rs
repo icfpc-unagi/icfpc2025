@@ -421,7 +421,7 @@ async fn recent_guesses(problem: &str) -> Result<String> {
             "
         SELECT g.api_log_id AS id,
                g.api_log_created AS ts,
-               JSON_VALUE(s.api_log_request, '$.problemName') AS problem,
+               s.api_log_request__problem_name AS problem,
                JSON_VALUE(g.api_log_response, '$.correct' RETURNING UNSIGNED) AS correct,
                JSON_EXTRACT(g.api_log_request, '$.map') AS map
         FROM api_logs g
@@ -429,7 +429,7 @@ async fn recent_guesses(problem: &str) -> Result<String> {
           ON g.api_log_select_id = s.api_log_id
             AND g.api_log_path = '/guess'
             AND s.api_log_path = '/select'
-        WHERE JSON_VALUE(s.api_log_request, '$.problemName') = :problem
+        WHERE s.api_log_request__problem_name = :problem
           AND g.api_log_response_code = 200
         ORDER BY g.api_log_id DESC
         LIMIT 20",
@@ -440,7 +440,7 @@ async fn recent_guesses(problem: &str) -> Result<String> {
             "
         SELECT g.api_log_id AS id,
                g.api_log_created AS ts,
-               JSON_VALUE(s.api_log_request, '$.problemName') AS problem,
+               s.api_log_request__problem_name AS problem,
                JSON_VALUE(g.api_log_response, '$.correct' RETURNING UNSIGNED) AS correct,
                JSON_EXTRACT(g.api_log_request, '$.map') AS map
         FROM api_logs g
@@ -503,7 +503,7 @@ fn last_correct_guess(problem: &str) -> Result<String> {
           ON g.api_log_select_id = s.api_log_id
             AND g.api_log_path = '/guess'
             AND s.api_log_path = '/select'
-        WHERE JSON_EXTRACT(s.api_log_request, '$.problemName') = :problem
+        WHERE s.api_log_request__problem_name = :problem
           AND g.api_log_response_code = 200
           AND JSON_EXTRACT(g.api_log_response, '$.correct') = true",
         params! { "problem" => problem },
