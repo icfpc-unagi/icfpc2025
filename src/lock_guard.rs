@@ -153,6 +153,8 @@ pub fn stop_lock_manager_blocking() {
             && let Err(e) = h.join()
         {
             eprintln!("Lock renewal thread panicked: {:?}", e);
+        } else {
+            eprintln!("Lock renewal thread exited cleanly.");
         }
         let _ = crate::lock::unlock(&lr.token, false);
         eprintln!("Unlock complete.");
