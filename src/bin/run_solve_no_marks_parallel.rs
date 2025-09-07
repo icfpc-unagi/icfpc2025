@@ -2,6 +2,7 @@ use clap::Parser;
 use itertools::Itertools;
 use rand::prelude::*;
 use rand_chacha::ChaCha12Rng;
+use std::cmp::Reverse;
 use std::io::{self, Write};
 use std::sync::{
     Arc,
@@ -67,6 +68,17 @@ fn main() {
     type TaskPrefix = Vec<(usize, usize, usize, Option<usize>)>;
     type Tasks = Vec<TaskPrefix>;
     let u0 = labels[0][0];
+    // Precompute earliest occurrence time for each label in the flattened timeline.
+    let mut labels_flat = Vec::new();
+    for l in &labels {
+        labels_flat.extend_from_slice(l);
+    }
+    let mut first_pos = [usize::MAX; 4];
+    for (i, &k) in labels_flat.iter().enumerate() {
+        if first_pos[k] == usize::MAX {
+            first_pos[k] = i;
+        }
+    }
     // Helper to push all (v,f) pairs for a given (u,e,h) into base prefixes.
     let expand_with = |bases: Tasks, u: usize, e: usize, h: usize| {
         let vcands: Vec<usize> = (0..n).filter(|&v| v % 4 == h).collect();
@@ -105,6 +117,29 @@ fn main() {
         tasks = next;
         k += 1;
     }
+    // Heuristic: prioritize prefixes that match SBP expectations for earliest label occurrences.
+    // Score each task: for each step s in prefix, if this is the earliest occurrence
+    // of label L across all plans (global flattened timeline), then prefer v=L (canonical smallest room).
+    // Tie-break: prefer smaller v and smaller f; longer prefixes later (to spread coverage).
+    let score_prefix = |prefix: &TaskPrefix| -> i64 {
+        let mut sc: i64 = 0;
+        for (s, &(_, _, v, f_opt)) in prefix.iter().enumerate() {
+            let l = labels[0][s + 1];
+            if first_pos[l] == s + 1 {
+                if v == l {
+                    sc += 20; // strong boost when matching canonical earliest room
+                } else {
+                    sc -= 15; // penalize likely-UNSAT choice
+                }
+            }
+            sc -= v as i64; // prefer smaller room ids generally
+            if let Some(f) = f_opt {
+                sc -= (f as i64) / 2; // slight preference for small f
+            }
+        }
+        sc
+    };
+    tasks.sort_by_key(|p| Reverse((score_prefix(p), p.len() as i64)));
     eprintln!(
         "prepared {} parallel tasks (prefix depth {})",
         tasks.len(),
@@ -133,6 +168,21 @@ fn main() {
                 if let Some(guess) = icfpc2025::solve_no_marks::solve_with_edge_prefix_fixed(
                     n, &plans, &labels, prefix,
                 ) {
+                    // Log the successful prefix and its rank (1-based) among tasks
+                    let pref_str = prefix
+                        .iter()
+                        .map(|&(u, e, v, f_opt)| match f_opt {
+                            Some(f) => format!("{}-{}->{}({})", u, e, v, f),
+                            None => format!("{}-{}->{}", u, e, v),
+                        })
+                        .join(", ");
+                    eprintln!(
+                        "HIT prefix rank {}/{} (len {}): {}",
+                        i + 1,
+                        tasks.len(),
+                        prefix.len(),
+                        pref_str
+                    );
                     let _ = tx.send(guess);
                     break; // stop after first success in this worker
                 }
