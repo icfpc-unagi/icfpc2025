@@ -629,165 +629,65 @@ fn build_cnf_for_plans(
     (info, buckets, cnf, cand, edges)
 }
 
-// ------------------------------ Public solve ------------------------------
-
 pub fn solve(num_rooms: usize, plans: &Vec<Vec<usize>>, labels: &Vec<Vec<usize>>) -> Guess {
     let (info, buckets, mut cnf, cand, edges) = build_cnf_for_plans(num_rooms, plans, labels);
 
     // 5) Solve
     assert_eq!(cnf.sat.solve(), Some(true));
-
-    // 6) Extract and verify
     let guess = extract_guess(&cnf, &info, &buckets, &cand, &edges);
     assert!(check_explore(&guess, plans, labels));
     guess
 }
 
-// ストリーミング版: 外部ソルバの標準出力/標準エラーを逐次画面に流しつつ、
-// v 行（モデル）だけをバッファに取り込み、終了後にパースして解を復元する。
-pub fn solve_via_external_dimacs_streaming(
+/// Fixes a prefix of edges in the graph irrespective of specific times.
+/// Each tuple is `(u, e, v, f_opt)` meaning force `F[u][e][v]` and optionally `M[u][v][e][f]`.
+/// Returns `None` if the resulting CNF is unsatisfiable.
+pub fn solve_with_edge_prefix_fixed(
     num_rooms: usize,
     plans: &Vec<Vec<usize>>,
     labels: &Vec<Vec<usize>>,
-    solver: &std::path::Path,
-    args: &[&str],
-    dimacs_path: &std::path::Path,
-) -> Guess {
-    use std::collections::HashSet;
-    use std::io::{BufRead, BufReader};
-    use std::process::{Command, Stdio};
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::{Arc, Mutex};
+    prefix: &[(usize, usize, usize, Option<usize>)],
+) -> Option<Guess> {
+    // 1) Build flattened info from provided plans and labels
+    let info = build_info(num_rooms, plans, labels);
 
-    // 1) CNF 構築（solve と共通化）
-    let (info, buckets, mut cnf, cand, edges) = build_cnf_for_plans(num_rooms, plans, labels);
+    // 2) Build buckets and candidates
+    let buckets = build_buckets(&info);
+    let mut cnf = Cnf::new();
+    let cand = build_candidates(&mut cnf, &info, &buckets);
 
-    // 2) DIMACS 書き出し
-    // cnf.sat
-    //.write_dimacs(dimacs_path)
-    // .expect("failed to write DIMACS");
-    cnf.write_dimacs(dimacs_path)
-        .expect("failed to write DIMACS");
+    // 3) Add pruning and symmetry breaking
+    add_diff_pruning(&mut cnf, &info, &buckets, &cand);
+    add_sbp(&mut cnf, &info, &buckets, &cand);
+    add_same_door_equalization(&mut cnf, &info, &buckets, &cand);
 
-    eprintln!(
-        "Original: num_clauses={}, num_variables={}, clauses={}",
-        cnf.sat.num_clauses(),
-        cnf.sat.num_variables(),
-        cnf.clauses.len(),
-    );
-
-    // 3) 外部ソルバをストリーム実行
-    let mut child = Command::new(solver)
-        .args(args)
-        .arg(dimacs_path)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .expect("failed to spawn external solver");
-
-    let stdout = child.stdout.take().expect("failed to capture stdout");
-
-    let model_buf = Arc::new(Mutex::new(String::new()));
-    let saw_v = Arc::new(AtomicBool::new(false));
-    let saw_unsat = Arc::new(AtomicBool::new(false));
-
-    // stdout スレッド（stderr は親プロセスにそのまま継承して表示）
-    let stdout_handle = {
-        let model_buf = Arc::clone(&model_buf);
-        let saw_v = Arc::clone(&saw_v);
-        let saw_unsat = Arc::clone(&saw_unsat);
-        std::thread::spawn(move || {
-            let reader = BufReader::new(stdout);
-            for line in reader.lines() {
-                let line = match line {
-                    Ok(l) => l,
-                    Err(_) => break,
-                };
-                eprintln!("{}", line);
-                if line.starts_with('s') || line.starts_with('S') {
-                    if line.to_ascii_lowercase().contains("unsat") {
-                        saw_unsat.store(true, Ordering::Relaxed);
-                    }
-                } else if line.starts_with('v') || line.starts_with('V') {
-                    saw_v.store(true, Ordering::Relaxed);
-                    let mut buf = model_buf.lock().unwrap();
-                    buf.push_str(&line);
-                    buf.push('\n');
-                }
-            }
-        })
-    };
-
-    let status = child.wait().expect("failed to wait on solver");
-    // 多くの SAT ソルバは終了コード 10(SAT), 20(UNSAT) を返す（MiniSAT 互換）。
-    // 0 で終了する実装もあるため、0 と 10 を成功扱いにする。
-    if let Some(code) = status.code() {
-        assert!(
-            code == 0 || code == 10,
-            "external solver exited with code {}",
-            code
-        );
-    } else {
-        panic!("external solver terminated by signal");
-    }
-
-    // stdout 読み取りの終了を待つ（バッファ取りこぼし防止）
-    let _ = stdout_handle.join();
-
-    assert!(
-        !saw_unsat.load(Ordering::Relaxed),
-        "external solver reported UNSAT"
-    );
-    assert!(
-        saw_v.load(Ordering::Relaxed),
-        "external solver did not print any 'v' model lines; pass appropriate flags (e.g., --print-solution=1)"
-    );
-
-    // 4) モデルをパース
-    let buf = model_buf.lock().unwrap();
-    let collected = buf.as_str();
-    let mut solution: HashSet<i32> = HashSet::new();
-    for line in collected.lines() {
-        if !(line.starts_with('v') || line.starts_with('V')) {
-            continue;
+    // 4) Edge layer and plan constraints
+    let edges = build_edge_vars(&mut cnf, &info);
+    // Apply prefix edge constraints
+    for &(u, e, v, f_opt) in prefix.iter() {
+        if u >= info.n || v >= info.n || e >= 6 {
+            return None;
         }
-        for tok in line.split_whitespace() {
-            if tok == "v" || tok == "V" {
-                continue;
+        cnf.clause([edges.F[u][e][v]]);
+        if let Some(f) = f_opt {
+            if f >= 6 {
+                return None;
             }
-            if let Ok(x) = tok.parse::<i32>() {
-                if x == 0 {
-                    break;
-                }
-                solution.insert(x);
-            }
+            cnf.clause([edges.M[u][v][e][f]]);
         }
     }
-    drop(buf);
-    assert!(!solution.is_empty(), "no assignment parsed from 'v' lines");
+    add_plan_constraints(&mut cnf, &info, &buckets, &cand, &edges);
+    add_start_room_unification(&mut cnf, &info, &buckets, &cand);
 
-    // 5) モデルを単位節として注入 → CaDiCaL で充足化
-    // dbg!("DELETE ME LATER!!", cnf.var());
-    eprintln!(
-        "Original: num_clauses={}, num_variables={}, solutions={}",
-        cnf.sat.num_clauses(),
-        cnf.sat.num_variables(),
-        solution.len()
-    );
-
-    // cnf.sat = cadical::Solver::with_config("sat").unwrap();
-    for &v in &solution {
-        cnf.clause([v]);
+    // 5) Solve
+    match cnf.sat.solve() {
+        Some(true) => {
+            let guess = extract_guess(&cnf, &info, &buckets, &cand, &edges);
+            assert!(check_explore(&guess, plans, labels));
+            Some(guess)
+        }
+        _ => None,
     }
-    assert_eq!(cnf.sat.solve(), Some(true));
-    for &v in &solution {
-        assert_eq!(cnf.sat.value(v.abs()), Some(v > 0));
-    }
-
-    // 6) 既存の抽出ロジックをそのまま利用
-    let guess = extract_guess(&cnf, &info, &buckets, &cand, &edges);
-    assert!(check_explore(&guess, plans, labels));
-    guess
 }
 
 // ------------------------------ Portfolio Solver -------------------------------------
