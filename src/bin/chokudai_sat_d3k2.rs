@@ -280,31 +280,44 @@ fn main() {
             cnf.choose_one(&C[t + 1][ui]);
         }
 
-        if let Some(new_c) = plans[t].0 {
+        if plans[t].1 == !0 {
+            // 区切りのときは最初の色に戻る
             for ui in 0..n * D {
-                // V[t][ui] => C[t+1][ui][new_c]
-                cnf.clause([-V[t][ui], C[t + 1][ui][new_c]]);
-                // V[t][ui] => !C[t+1][ui][c]  (c != new_c)
                 for c in 0..4 {
-                    if c != new_c {
-                        cnf.clause([-V[t][ui], -C[t + 1][ui][c]]);
+                    if c == ui / D % 4 {
+                        cnf.clause([C[t + 1][ui][c]]);
+                    } else {
+                        cnf.clause([-C[t + 1][ui][c]]);
                     }
-
-                    // 正色の持ち上げ
-                    cnf.clause([V[t][ui], -C[t][ui][c], C[t + 1][ui][c]]);
-                    // 反色の持ち上げ
-                    cnf.clause([V[t][ui], C[t][ui][c], -C[t + 1][ui][c]]);
                 }
             }
         } else {
-            // 色を塗らない場合
-            for ui in 0..n * D {
-                for c in 0..4 {
-                    // 単純に前ターンのCを引き継げばよい
-                    // C[t][ui][c] -> C[t+1][ui][c]
-                    cnf.clause([-C[t][ui][c], C[t + 1][ui][c]]);
-                    // !C[t][ui][c] -> !C[t+1][ui][c]
-                    cnf.clause([C[t][ui][c], -C[t + 1][ui][c]]);
+            if let Some(new_c) = plans[t].0 {
+                for ui in 0..n * D {
+                    // V[t][ui] => C[t+1][ui][new_c]
+                    cnf.clause([-V[t][ui], C[t + 1][ui][new_c]]);
+                    // V[t][ui] => !C[t+1][ui][c]  (c != new_c)
+                    for c in 0..4 {
+                        if c != new_c {
+                            cnf.clause([-V[t][ui], -C[t + 1][ui][c]]);
+                        }
+
+                        // 正色の持ち上げ
+                        cnf.clause([V[t][ui], -C[t][ui][c], C[t + 1][ui][c]]);
+                        // 反色の持ち上げ
+                        cnf.clause([V[t][ui], C[t][ui][c], -C[t + 1][ui][c]]);
+                    }
+                }
+            } else {
+                // 色を塗らない場合
+                for ui in 0..n * D {
+                    for c in 0..4 {
+                        // 単純に前ターンのCを引き継げばよい
+                        // C[t][ui][c] -> C[t+1][ui][c]
+                        cnf.clause([-C[t][ui][c], C[t + 1][ui][c]]);
+                        // !C[t][ui][c] -> !C[t+1][ui][c]
+                        cnf.clause([C[t][ui][c], -C[t + 1][ui][c]]);
+                    }
                 }
             }
         }
