@@ -121,8 +121,10 @@ fn kill_child_group(child: &mut std::process::Child) {
     // Kill the whole process group (-pid)
     unsafe {
         let pid = child.id() as i32;
-        libc::kill(-pid, libc::SIGKILL);
+        let _ = libc::kill(-pid, libc::SIGKILL);
     }
+    // Also attempt to kill just the child as a fallback (in case group kill is restricted)
+    let _ = child.kill();
 }
 
 #[cfg(not(unix))]
@@ -260,7 +262,7 @@ fn supervise_child(
     let mut terminated_due_to_timeout_or_cancel = false;
     let status_opt = loop {
         let timed_out = timeout.map(|t| start.elapsed() > t).unwrap_or(false);
-        if cancel.load(Ordering::Relaxed) || timed_out {
+        if cancel.load(Ordering::SeqCst) || timed_out {
             terminated_due_to_timeout_or_cancel = true;
             kill_child_group(child);
             // bounded wait: allow up to +5s for process to terminate
@@ -294,21 +296,25 @@ pub fn run_command_with_timeout<F>(
 where
     F: FnOnce(&Artifacts) -> Result<()>,
 {
-    // Use cancel flag to implement timeout
+    // Use cancel flag to implement timeout with a detached timer thread.
+    // The timer sets cancel after `timeout`; no join to avoid hangs.
     let cancel_for_timer = Arc::clone(&cancel);
-    let (tx, rx) = mpsc::channel();
     let _timer = std::thread::spawn(move || {
-        if rx.recv_timeout(timeout).is_err() {
-            cancel_for_timer.store(true, Ordering::Relaxed);
-        }
+        std::thread::sleep(timeout);
+        cancel_for_timer.store(true, Ordering::SeqCst);
     });
-
-    let result = run_command(script, cancel, prepare, opts);
-    let _ = tx.send(()); // stop timer if still waiting
-    // Do not join the timer thread here: in case of a bug that blocks the thread,
-    // joining could hang the caller. Dropping the JoinHandle lets the thread exit
-    // on its own shortly after receiving the stop signal (or the timeout).
-    result
+    let res = run_command(script, Arc::clone(&cancel), prepare, opts);
+    match res {
+        Ok((mut score, mut status, arts)) => {
+            if cancel.load(Ordering::SeqCst) && status.success() {
+                // Treat as timeout/cancel despite a zero exit code; ensure failure semantics
+                status = failure_status();
+                score = None;
+            }
+            Ok((score, status, arts))
+        }
+        Err(e) => Err(e),
+    }
 }
 
 fn join_with_timeout(h: std::thread::JoinHandle<Result<()>>, dur: Duration) {
