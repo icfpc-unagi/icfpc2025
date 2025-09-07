@@ -5,96 +5,40 @@
 //! functions for accessing this data.
 
 use once_cell::sync::Lazy;
+use serde::Deserialize;
+use serde_json;
 use std::collections::HashMap;
 
 /// Represents a single contest problem.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 pub struct Problem {
     /// The official name of the problem, e.g., "probatio".
-    pub problem_name: &'static str,
+    pub problem: String,
     /// The number of rooms in the problem's map.
     pub size: usize,
 }
 
 /// A static array containing the data for all known contest problems.
-const PROBLEMS_DATA: &[Problem] = &[
-    Problem {
-        problem_name: "probatio",
-        size: 3,
-    },
-    Problem {
-        problem_name: "primus",
-        size: 6,
-    },
-    Problem {
-        problem_name: "secundus",
-        size: 12,
-    },
-    Problem {
-        problem_name: "tertius",
-        size: 18,
-    },
-    Problem {
-        problem_name: "quartus",
-        size: 24,
-    },
-    Problem {
-        problem_name: "quintus",
-        size: 30,
-    },
-    Problem {
-        problem_name: "aleph",
-        size: 12,
-    },
-    Problem {
-        problem_name: "beth",
-        size: 24,
-    },
-    Problem {
-        problem_name: "gimel",
-        size: 36,
-    },
-    Problem {
-        problem_name: "daleth",
-        size: 48,
-    },
-    Problem {
-        problem_name: "he",
-        size: 60,
-    },
-    Problem {
-        problem_name: "vau",
-        size: 18,
-    },
-    Problem {
-        problem_name: "zain",
-        size: 36,
-    },
-    Problem {
-        problem_name: "hhet",
-        size: 54,
-    },
-    Problem {
-        problem_name: "teth",
-        size: 72,
-    },
-    Problem {
-        problem_name: "iod",
-        size: 90,
-    },
-];
+/// Run the following command to update the data:
+/// ```bash
+///   curl -L https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.com/select -o ./src/problems.json
+/// ```
+static PROBLEMS_DATA: Lazy<Vec<Problem>> = Lazy::new(|| {
+    const PROBLEMS_JSON: &str = include_str!("problems.json");
+    serde_json::from_str(PROBLEMS_JSON).expect("failed to parse problems.json")
+});
 
 /// Returns a slice containing all defined contest problems.
 pub fn all_problems() -> &'static [Problem] {
-    PROBLEMS_DATA
+    &PROBLEMS_DATA
 }
 
 /// A lazily-initialized HashMap for efficient lookup of problems by name.
 /// This avoids iterating through the `PROBLEMS_DATA` slice on every lookup.
-static PROBLEM_MAP: Lazy<HashMap<&'static str, &'static Problem>> = Lazy::new(|| {
+static PROBLEM_MAP: Lazy<HashMap<&str, &Problem>> = Lazy::new(|| {
     let mut m = HashMap::new();
     for p in PROBLEMS_DATA.iter() {
-        m.insert(p.problem_name, p);
+        m.insert(p.problem.as_str(), p);
     }
     m
 });
@@ -118,20 +62,20 @@ mod tests {
     #[test]
     fn all_problems_contains_expected_entries() {
         let all = all_problems();
-        assert_eq!(all.len(), 16);
-        let names: Vec<&str> = all.iter().map(|p| p.problem_name).collect();
-        assert_eq!(
-            names,
-            vec![
-                "probatio", "primus", "secundus", "tertius", "quartus", "quintus", "aleph", "beth",
-                "gimel", "daleth", "he", "vau", "zain", "hhet", "teth", "iod",
-            ]
-        );
-        let sizes: Vec<usize> = all.iter().map(|p| p.size).collect();
-        assert_eq!(
-            sizes,
-            vec![3, 6, 12, 18, 24, 30, 12, 24, 36, 48, 60, 18, 36, 54, 72, 90]
-        );
+        assert!(all.len() >= 16);
+        let all = all
+            .iter()
+            .map(|p| (p.problem.as_str(), p.size))
+            .collect::<Vec<_>>();
+        let expected = [("probatio", 3), ("aleph", 12), ("vau", 18)];
+        for (expected_name, expected_size) in expected {
+            assert!(
+                all.contains(&(expected_name, expected_size)),
+                "missing expected problem: {} with size {}",
+                expected_name,
+                expected_size
+            );
+        }
     }
 
     #[test]

@@ -131,6 +131,8 @@ struct PlanInfo {
     door: Vec<Option<usize>>, // door[i] is the edge used from time i to i+1, or None at plan boundaries/last
     m: usize,
     diff: Vec<Vec<bool>>,
+    // Indices in the flattened timeline that correspond to the start of each plan
+    starts: Vec<usize>,
 }
 
 fn build_info(num_rooms: usize, plans: &Vec<Vec<usize>>, labels: &Vec<Vec<usize>>) -> PlanInfo {
@@ -140,16 +142,14 @@ fn build_info(num_rooms: usize, plans: &Vec<Vec<usize>>, labels: &Vec<Vec<usize>
     // Flatten labels and doors with boundary markers (None)
     let mut labels_flat = Vec::new();
     let mut door_flat = Vec::new();
+    let mut starts = Vec::with_capacity(plans.len());
     for (p, l) in plans.iter().zip(labels.iter()) {
         assert_eq!(l.len(), p.len() + 1);
         // Append labels and doors for this plan
-        if labels_flat.is_empty() {
-            // first plan: push all labels
-            labels_flat.extend_from_slice(l);
-        } else {
-            // subsequent plans: concatenate labels directly; boundaries handled by door=None
-            labels_flat.extend_from_slice(l);
-        }
+        // record start index of this plan in the flattened timeline
+        starts.push(labels_flat.len());
+        // concatenate labels directly; boundaries handled by door=None
+        labels_flat.extend_from_slice(l);
         // Doors: for each step in plan push Some(door), and one trailing None for boundary
         for &e in p {
             door_flat.push(Some(e));
@@ -166,6 +166,7 @@ fn build_info(num_rooms: usize, plans: &Vec<Vec<usize>>, labels: &Vec<Vec<usize>
         door: door_flat,
         m,
         diff,
+        starts,
     }
 }
 
@@ -490,6 +491,33 @@ fn add_plan_constraints(
     }
 }
 
+// All plans start from the same room. For each label k that appears at plan starts,
+// unify the selected room variable across all start times with that label.
+fn add_start_room_unification(cnf: &mut Cnf, info: &PlanInfo, buckets: &Buckets, cand: &Candidates) {
+    // Group start indices by their observed label
+    let mut starts_by_label: [Vec<usize>; 4] = [Vec::new(), Vec::new(), Vec::new(), Vec::new()];
+    for &i in &info.starts {
+        let k = info.labels[i];
+        starts_by_label[k].push(i);
+    }
+    for k in 0..4 {
+        let starts = &starts_by_label[k];
+        if starts.len() <= 1 {
+            continue;
+        }
+        let s0 = starts[0];
+        for &si in &starts[1..] {
+            for &u in &buckets.rooms_by_label[k] {
+                // Enforce equivalence: V[s0,u] <-> V[si,u]
+                let v0 = cand.V_map[s0][u].unwrap();
+                let vi = cand.V_map[si][u].unwrap();
+                cnf.clause([-v0, vi]);
+                cnf.clause([-vi, v0]);
+            }
+        }
+    }
+}
+
 // -------------------------- Extraction -----------------------------------
 
 fn extract_guess(
@@ -566,6 +594,8 @@ pub fn solve(num_rooms: usize, plans: &Vec<Vec<usize>>, labels: &Vec<Vec<usize>>
     // 4) Edge layer and plan constraints
     let edges = build_edge_vars(&mut cnf, &info);
     add_plan_constraints(&mut cnf, &info, &buckets, &cand, &edges);
+    // 4.5) Unify starting room across all plans
+    add_start_room_unification(&mut cnf, &info, &buckets, &cand);
 
     // 5) Solve
     assert_eq!(cnf.sat.solve(), Some(true));

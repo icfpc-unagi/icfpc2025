@@ -55,6 +55,12 @@ fn main() {
         }
         nums[id] += 1;
     }
+    for i in 0..4 {
+        nums[i] = n / 4;
+        if n % 4 > i {
+            nums[i] += 1;
+        }
+    }
     //roomの数を出力
     eprintln!("nums: {:?}", nums);
 

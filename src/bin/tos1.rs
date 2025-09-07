@@ -23,7 +23,20 @@ fn fill_doors(graph: &[Vec<usize>]) -> Vec<[(usize, usize); 6]> {
                         break;
                     }
                 }
-                assert!(ok);
+                if !ok {
+                    // The official judge data seem containing directed loops of length 3.
+                    eprintln!("*** warning: found directed edge");
+                    eprintln!("{} --{}--> {}", u, door, v);
+                    let w = graph[v][door];
+                    eprintln!("    --{}--> {}", door, w);
+                    let x = graph[w][door];
+                    eprintln!("    --{}--> {}", door, x);
+                    assert_eq!(x, u);
+                    // 適当な値で埋めて提出してみる
+                    res[u][door].1 = door;
+                    res[v][door].1 = door;
+                    res[w][door].1 = door;
+                }
             }
         }
     }
@@ -206,6 +219,13 @@ fn main() {
         })
         .collect();
     eprintln!("graph: {:?}", graph);
+    if rooms.len() != n {
+        eprintln!(
+            "*** warning: only {} rooms found (expected {})",
+            rooms.len(),
+            n
+        );
+    }
     let graph = fill_doors(&graph);
     judge.guess(&Guess {
         start,
