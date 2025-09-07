@@ -63,7 +63,10 @@ mod tests {
     fn all_problems_contains_expected_entries() {
         let all = all_problems();
         assert!(all.len() >= 16);
-        let all = all.iter().map(|p| (p.problem.as_str(), p.size)).collect::<Vec<_>>();
+        let all = all
+            .iter()
+            .map(|p| (p.problem.as_str(), p.size))
+            .collect::<Vec<_>>();
         let expected = [("probatio", 3), ("aleph", 12), ("vau", 18)];
         for (expected_name, expected_size) in expected {
             assert!(
