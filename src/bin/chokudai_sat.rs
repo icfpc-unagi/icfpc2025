@@ -121,6 +121,7 @@ fn main() {
     // いる場所Vについての制約
     // V[t][u*D+i] := 時刻 t の開始時点で、存在するのは (u,i) である
     cnf.clause([V[0][first_room]]);
+
     for t in 0..plans.len() {
         //plants[t].1 == !0 のときは区切りなので最初に戻る
         if plans[t].1 == !0 {
@@ -129,8 +130,8 @@ fn main() {
             // 時刻tではドアeを選択する
             let (_, e) = plans[t];
 
-            for ui in 0..6 * D {
-                for tj in 0..6 * D {
+            for ui in 0..n * D {
+                for tj in 0..n * D {
                     // 時刻 t に (u,i) にいて、ドア e を選ぶと、時刻 t+1 には (t,j) にいる
                     for f in 0..6 {
                         // V[t][ui] -> E[ui][e][tj][f] -> V[t+1][tj]
