@@ -93,6 +93,10 @@ fn main() {
     for u in 0..n {
         for e in 0..6 {
             F[u][e] = cnf.var();
+        }
+    }
+    for u in 0..n {
+        for e in 0..6 {
             for v in 0..n {
                 for f in 0..6 {
                     // F[u][e] & E[u][e][v][f] -> F[v][f]
