@@ -77,13 +77,8 @@ where
     join_with_timeout(out_thread, extra);
     join_with_timeout(err_thread, extra);
 
-    // Result
-    let mut score = extract_score(&last_json);
-    if score.is_none() {
-        score = extract_score_from_log(&artifacts.stdout_file())
-            .ok()
-            .flatten();
-    }
+    // Result: use the real-time captured UNAGI score from stdout
+    let score = extract_score(&last_json);
     if terminated_due_to_timeout_or_cancel && status_opt.is_none() {
         // Could not obtain child status within the bounded wait; synthesize a failure status.
         #[cfg(unix)]
@@ -312,37 +307,13 @@ fn extract_score(last_json: &Arc<Mutex<Option<JsonValue>>>) -> Option<i64> {
         .and_then(|v| v.as_i64())
 }
 
-fn extract_score_from_log(path: &Path) -> Result<Option<i64>> {
-    let file = File::open(path).context("open stdout log for score parse")?;
-    let mut reader = BufReader::new(file);
-    let mut line = String::new();
-    let mut last: Option<i64> = None;
-    loop {
-        line.clear();
-        let n = reader.read_line(&mut line)?;
-        if n == 0 {
-            break;
-        }
-        if let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) {
-            if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
-                if let Some(rest) = text.trim_start().strip_prefix("<UNAGI>:") {
-                    if let Ok(obj) = serde_json::from_str::<serde_json::Value>(rest.trim()) {
-                        if let Some(sc) = obj.get("score").and_then(|s| s.as_i64()) {
-                            last = Some(sc);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    Ok(last)
-}
+// no log scan; scores are captured in real-time from stdout
 
 fn encode_jsonl(text: &str) -> Result<Vec<u8>> {
     let ts = chrono::Utc::now().to_rfc3339();
     let obj = serde_json::json!({
         "timestamp": ts,
-        "text": text.trim_end_matches(['\n', '\r'])
+        "text": text
     });
     let line = serde_json::to_vec(&obj)?;
     let mut out = Vec::with_capacity(line.len() + 1);
@@ -408,7 +379,7 @@ mod tests {
     #[test]
     fn run_command_captures_and_parses_unagi() -> Result<()> {
         // A script that prints to stdout/stderr and an UNAGI line
-        let script = "echo out1; echo err1 1>&2; echo '<UNAGI>: {\"score\": 123}';";
+        let script = "echo out1; echo err1 1>&2; echo \"<UNAGI>: {\\\"score\\\": 123}\";";
         let (score, status, artifacts) = run_command(
             script,
             Arc::new(AtomicBool::new(false)),
@@ -451,7 +422,7 @@ mod tests {
     #[test]
     fn run_command_prepares_files_via_callback() -> Result<()> {
         // Prepare callback to create a file under root, then cat it
-        let script = "cat prepared.txt; echo '<UNAGI>: {\"score\": 0}'";
+        let script = "cat prepared.txt; echo \"<UNAGI>: {\\\"score\\\": 0}\"";
         let (score, status, artifacts) = run_command(
             script,
             Arc::new(AtomicBool::new(false)),
@@ -509,29 +480,23 @@ mod tests {
 
     #[test]
     fn run_command_uses_last_unagi_score() -> Result<()> {
-        let script = "echo '<UNAGI>: {\\\"score\\\": 1}'; \
-                      echo '<UNAGI>: {\\\"score\\\": 2}'; \
-                      echo '<UNAGI>: {\\\"score\\\": 3}'";
-        let (score, status, artifacts) = run_command(
+        let script = "echo \"<UNAGI>: {\\\"score\\\": 1}\"; \
+                      echo \"<UNAGI>: {\\\"score\\\": 2}\"; \
+                      echo \"<UNAGI>: {\\\"score\\\": 3}\"";
+        let (score, status, _artifacts) = run_command(
             script,
             Arc::new(AtomicBool::new(false)),
             |_| Ok(()),
             &RunOptions::default(),
         )?;
         assert!(status.success());
-        let score2 = score.or_else(|| {
-            extract_score_from_log(&artifacts.stdout_file())
-                .ok()
-                .flatten()
-        });
-        assert_eq!(score2, Some(3));
+        assert_eq!(score, Some(3));
         Ok(())
     }
 
     #[test]
-    #[ignore]
     fn artifacts_cleanup_on_drop() -> Result<()> {
-        let script = "echo hello; echo '<UNAGI>: {\\\"score\\\": 0}'";
+        let script = "echo hello; echo \"<UNAGI>: {\\\"score\\\": 0}\"";
         let (score, status, artifacts) = run_command(
             script,
             Arc::new(AtomicBool::new(false)),
@@ -539,12 +504,7 @@ mod tests {
             &RunOptions::default(),
         )?;
         assert!(status.success());
-        let score2 = score.or_else(|| {
-            extract_score_from_log(&artifacts.stdout_file())
-                .ok()
-                .flatten()
-        });
-        assert_eq!(score2, Some(0));
+        assert_eq!(score, Some(0));
         let base = artifacts.base_dir().to_path_buf();
         assert!(base.exists(), "artifacts base dir should exist before drop");
         drop(artifacts);
@@ -562,7 +522,7 @@ mod tests {
         let script = "for i in $(seq 1 5000); do echo line_$i; done; \
             echo FINAL_ONE; \
             echo FINAL_TWO; \
-            echo '<UNAGI>: {\"score\": 0}'";
+            echo \"<UNAGI>: {\\\"score\\\": 0}\"";
         let mut opts = RunOptions::default();
         opts.log_max_bytes = 2048; // ~2KB cap
         opts.log_tail_bytes = 2048; // keep enough to include FINAL_* lines
@@ -584,10 +544,11 @@ mod tests {
                 saw_truncated = true;
             }
             if let Some(text) = v.get("text").and_then(|t| t.as_str()) {
-                if text == "FINAL_ONE" {
+                let t = text.trim_end_matches(['\n', '\r']);
+                if t == "FINAL_ONE" {
                     saw_final_one = true;
                 }
-                if text == "FINAL_TWO" {
+                if t == "FINAL_TWO" {
                     saw_final_two = true;
                 }
             }
