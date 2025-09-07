@@ -12,12 +12,16 @@
 
 use anyhow::{Context, Result};
 
+#[cfg(feature = "reqwest")]
+use cached::proc_macro::cached;
 use cached::proc_macro::once;
 #[cfg(feature = "reqwest")]
 use once_cell::sync::{Lazy, OnceCell};
 #[cfg(feature = "reqwest")]
 use reqwest::blocking::Client;
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "reqwest")]
+use std::collections::HashMap;
 #[cfg(feature = "reqwest")]
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(feature = "reqwest")]
@@ -483,6 +487,29 @@ pub fn guess(map: &Map) -> Result<bool> {
     // Stop renewal and unlock immediately after a guess is made.
     stop_lock_manager_blocking();
     Ok(body.correct)
+}
+
+#[cfg(feature = "reqwest")]
+#[cached(result = true, time = 300)]
+pub fn scores() -> Result<HashMap<String, i64>> {
+    let client = http_client()?;
+    // This endpoint is not proxied.
+    let url = "https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.com/";
+
+    let id = get_id()?;
+    let res = client
+        .get(url)
+        .query(&[("id", &id)])
+        .send()
+        .context("Failed to GET scores")?;
+    let status = res.status();
+    if !status.is_success() {
+        let body = res.text().unwrap_or_default();
+        anyhow::bail!("/ (scores) returned {}: {}", status, body);
+    }
+
+    let body = res.json().context("Failed to parse scores response")?;
+    Ok(body)
 }
 
 #[cfg(test)]
