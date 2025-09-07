@@ -100,7 +100,7 @@ pub trait Judge {
 }
 
 /// Represents a solver's guess for the map's structure.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Guess {
     /// The signature of each room. `rooms[i]` is the signature of room `i`.
     /// A room's signature is the number of passages connected to it.

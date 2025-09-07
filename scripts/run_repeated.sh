@@ -9,8 +9,8 @@ TIME_LIMIT="5m"          # Changeable via env before calling this script
 KILL_GRACE="10s"         # Grace period before SIGKILL after timeout
 
 # Command + input
-CMD=(cargo run --release --bin iwiwi_evo_gen276)
-INPUT="remote quintus"
+CMD=(cargo run --release --bin wata_sat3)
+INPUT="remote hhet"
 
 # Ensure `timeout` exists
 if ! command -v timeout >/dev/null 2>&1; then
