@@ -2,8 +2,6 @@
 #![cfg_attr(feature = "skip_lint", allow(clippy::all, clippy::pedantic, warnings))]
 #![allow(non_snake_case)]
 use icfpc2025::{judge::*, *};
-use rand::prelude::*;
-use rand_chacha::ChaCha12Rng;
 use std::env;
 
 // ----------------------------- CNF utilities -----------------------------
@@ -129,17 +127,17 @@ struct PlanInfo {
     m: usize,
     diff: Vec<Vec<bool>>,
 }
-fn balanced_plan(n: usize, rng: &mut ChaCha12Rng) -> Vec<usize> {
-    let len = 18 * n;
-    let mut plan = Vec::with_capacity(len);
-    for d in 0..6 {
-        for _ in 0..(len / 6) {
-            plan.push(d);
-        }
-    }
-    plan.shuffle(rng);
-    plan
-}
+// fn balanced_plan(n: usize, rng: &mut ChaCha12Rng) -> Vec<usize> {
+//     let len = 18 * n;
+//     let mut plan = Vec::with_capacity(len);
+//     for d in 0..6 {
+//         for _ in 0..(len / 6) {
+//             plan.push(d);
+//         }
+//     }
+//     plan.shuffle(rng);
+//     plan
+// }
 
 /*
 fn acquire_plan_and_labels(judge: &mut dyn icfpc2025::judge::Judge) -> PlanInfo {
@@ -219,7 +217,7 @@ struct Candidates {
     // V_map[i][u] = Some(var) if room u allowed at time i (label match).
     V_map: Vec<Vec<Option<i32>>>,
     // V_rows[i] = list of variables for time i.
-    V_rows: Vec<Vec<i32>>,
+    _V_rows: Vec<Vec<i32>>,
 }
 fn build_candidates(cnf: &mut Cnf, info: &PlanInfo, buckets: &Buckets) -> Candidates {
     let mut V_map = vec![vec![None; info.n]; info.m];
@@ -235,7 +233,10 @@ fn build_candidates(cnf: &mut Cnf, info: &PlanInfo, buckets: &Buckets) -> Candid
         }
         cnf.choose_one(&V_rows[i]);
     }
-    Candidates { V_map, V_rows }
+    Candidates {
+        V_map,
+        _V_rows: V_rows,
+    }
 }
 
 // -------------------------- Symmetry breaking ----------------------------

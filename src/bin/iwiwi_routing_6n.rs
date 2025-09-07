@@ -65,7 +65,7 @@ fn coverage(inst: &Instance, plan: &Vec<usize>) -> (f32, f32, f32) {
     let ratio_covered_undirected = total_undirected_covered as f32 / inst.edge_count as f32;
 
     // entropy over door usage per room
-    let normalized_entropy = cnt
+    let _normalized_entropy = cnt
         .iter()
         .map(|x| {
             let s = x.iter().sum::<usize>() as f32;
@@ -91,68 +91,68 @@ fn coverage(inst: &Instance, plan: &Vec<usize>) -> (f32, f32, f32) {
     )
 }
 
-fn generate_plan_v2(num_rooms: usize, n_seeds: usize) -> Vec<usize> {
-    let mut rng = rand::rng();
+// fn generate_plan_v2(num_rooms: usize, n_seeds: usize) -> Vec<usize> {
+//     let mut rng = rand::rng();
 
-    let instances = (0..n_seeds)
-        .map(|i| {
-            let edges = generate_random_edges_v2(num_rooms, i as u64);
-            build_instance(num_rooms, &edges)
-        })
-        .collect_vec();
+//     let instances = (0..n_seeds)
+//         .map(|i| {
+//             let edges = generate_random_edges_v2(num_rooms, i as u64);
+//             build_instance(num_rooms, &edges)
+//         })
+//         .collect_vec();
 
-    let mut plans = vec![];
-    let plan_len = 6 * num_rooms;
-    for i in 0..plan_len {
-        if false && rng.random_range(0..20) == 0 {
-            plans.push(rng.random_range(0..6));
-            continue;
-        }
+//     let mut plans = vec![];
+//     let plan_len = 6 * num_rooms;
+//     for i in 0..plan_len {
+//         if false && rng.random_range(0..20) == 0 {
+//             plans.push(rng.random_range(0..6));
+//             continue;
+//         }
 
-        let mut best = (OrderedFloat(0.0), OrderedFloat(0.0), OrderedFloat(0.0), !0);
-        let mut order = (0..6).collect_vec();
-        order.shuffle(&mut rng);
-        for &d in &order {
-            for d2 in 0..6 {
-                let mut tmp_plans = plans.clone();
-                tmp_plans.push(d);
-                tmp_plans.push(d2);
-                let evals = instances
-                    .iter()
-                    .map(|inst| coverage(inst, &tmp_plans))
-                    .collect_vec();
-                let tmp_cov_vtx = evals.iter().map(|(a, _, _)| a).sum::<f32>() / n_seeds as f32;
-                let tmp_cov_uni = evals.iter().map(|(_, b, _)| b).sum::<f32>() / n_seeds as f32;
-                let tmp_cov_dir = evals.iter().map(|(_, _, c)| c).sum::<f32>() / n_seeds as f32;
+//         let mut best = (OrderedFloat(0.0), OrderedFloat(0.0), OrderedFloat(0.0), !0);
+//         let mut order = (0..6).collect_vec();
+//         order.shuffle(&mut rng);
+//         for &d in &order {
+//             for d2 in 0..6 {
+//                 let mut tmp_plans = plans.clone();
+//                 tmp_plans.push(d);
+//                 tmp_plans.push(d2);
+//                 let evals = instances
+//                     .iter()
+//                     .map(|inst| coverage(inst, &tmp_plans))
+//                     .collect_vec();
+//                 let tmp_cov_vtx = evals.iter().map(|(a, _, _)| a).sum::<f32>() / n_seeds as f32;
+//                 let tmp_cov_uni = evals.iter().map(|(_, b, _)| b).sum::<f32>() / n_seeds as f32;
+//                 let tmp_cov_dir = evals.iter().map(|(_, _, c)| c).sum::<f32>() / n_seeds as f32;
 
-                best = best.max((
-                    OrderedFloat(tmp_cov_vtx),
-                    OrderedFloat(tmp_cov_uni),
-                    OrderedFloat(tmp_cov_dir),
-                    d,
-                ));
-            }
-        }
-        /*
-        eprintln!(
-            "Step {} best: cov_vtx={} cov_uni={} cov_dir={}",
-            i, best.0, best.1, best.2
-        );
-        */
-        plans.push(best.3);
-    }
+//                 best = best.max((
+//                     OrderedFloat(tmp_cov_vtx),
+//                     OrderedFloat(tmp_cov_uni),
+//                     OrderedFloat(tmp_cov_dir),
+//                     d,
+//                 ));
+//             }
+//         }
+//         /*
+//         eprintln!(
+//             "Step {} best: cov_vtx={} cov_uni={} cov_dir={}",
+//             i, best.0, best.1, best.2
+//         );
+//         */
+//         plans.push(best.3);
+//     }
 
-    // 各数字の出てくる回数を表示
-    let mut cnt = [0; 6];
-    for &d in &plans {
-        cnt[d] += 1;
-    }
-    // eprintln!("Count: {}", cnt.iter().map(|&c| c.to_string()).join(" "));
+//     // 各数字の出てくる回数を表示
+//     let mut cnt = [0; 6];
+//     for &d in &plans {
+//         cnt[d] += 1;
+//     }
+//     // eprintln!("Count: {}", cnt.iter().map(|&c| c.to_string()).join(" "));
 
-    eprintln!("{}", plans.iter().map(|d| d.to_string()).join(""));
+//     eprintln!("{}", plans.iter().map(|d| d.to_string()).join(""));
 
-    plans
-}
+//     plans
+// }
 
 fn generate_plan_v3(num_rooms: usize, n_seeds: usize) -> Vec<usize> {
     let mut rng = rand::rng();

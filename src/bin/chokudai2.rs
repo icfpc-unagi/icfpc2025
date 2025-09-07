@@ -3,7 +3,6 @@
 use clap::Parser;
 use icfpc2025::judge::*;
 use rand::prelude::*;
-use sha1::digest::typenum::Same;
 use std::collections::VecDeque;
 
 struct Moves {
@@ -193,7 +192,7 @@ fn dfs2(list: &Vec<usize>, m: &Moves, step: usize, need: usize, st: &mut SameTab
 }
 
 fn main() {
-    let mut judge = get_judge_from_stdin_with(true);
+    let judge = get_judge_from_stdin_with(true);
     let n = judge.num_rooms();
     let mut m = Moves {
         label: vec![],
@@ -269,8 +268,7 @@ fn main() {
     eprintln!("after initial: {}", st.cnt_origin());
 
     let mut tekitou_merge = 0;
-    while (st.cnt_origin() > n) {
-        let mut made_progress = false;
+    while st.cnt_origin() > n {
         let i = rnd.random_range(0..m.label.len());
         let j = rnd.random_range(0..m.label.len());
         if i != j {
