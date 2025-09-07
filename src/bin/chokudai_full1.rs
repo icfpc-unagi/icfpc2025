@@ -26,7 +26,7 @@ fn main() {
     let mut q_perf = 12;
     while q_perf < q_limit {
         qnum += 1;
-        q_perf = (1 << (2 * qnum)) - 4;
+        q_perf = (1 << (2 * (qnum - 1))) - 4;
     }
     for i in 0..qnum {
         steps.push(vec![]);
