@@ -90,8 +90,8 @@ fn main() {
 
         if graph[id1][door] != !0 && graph[id1][door] != id2 {
             eprintln!(
-                "error: graph[{}][{}] == {}, but trying to set {}",
-                id1, door, graph[id1][door], id2
+                "at {}, error: graph[{}][{}] == {}, but trying to set {}",
+                i, id1, door, graph[id1][door], id2
             );
         }
 
