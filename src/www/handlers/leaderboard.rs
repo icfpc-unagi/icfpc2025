@@ -9,12 +9,14 @@ use actix_web::{HttpResponse, Responder, web};
 use anyhow::Result;
 use cached::proc_macro::cached;
 use chrono::NaiveDateTime;
+use chrono_humanize::Humanize;
 use mysql::params;
 use serde::Deserialize;
 use std::fmt::Write;
 use tokio::time::Duration;
 
 const BUCKET: &str = "icfpc2025-data";
+const TZ: chrono::FixedOffset = chrono::FixedOffset::east_opt(9 * 3600).unwrap();
 
 #[derive(Deserialize)]
 pub struct LeaderboardQuery {
@@ -249,6 +251,8 @@ let lastRank = 0;
 latest.forEach((r, i) => {{
   const rank = (lastScore === r.score) ? lastRank : (i + 1);
   lastScore = r.score; lastRank = rank;
+  // Skip zero scores.
+  if (r.score == 0) return;
   const nameHtml = r.team === 'Unagi' ? `<strong>${{esc(r.team)}}</strong>` : esc(r.team);
   const teamAttr = esc(r.team);
   const nameLink = `<a href='#' data-team=\"${{teamAttr}}\">${{nameHtml}}</a>`;
@@ -328,7 +332,7 @@ struct LeaderboardEntry {
     team_name: String,
     #[serde(rename = "teamPl")]
     team_pl: String,
-    score: i64,
+    score: Option<i64>,
 }
 // Build JSON structure for the client side: [{ts, data: <json>}]
 #[derive(serde::Serialize, Clone)]
@@ -402,7 +406,8 @@ async fn fetch_snapshots(problem: &str) -> Result<Vec<Snapshot>> {
         .into_iter()
         .map(|(ts, bytes)| Snapshot {
             ts,
-            data: serde_json::from_slice::<Vec<LeaderboardEntry>>(&bytes).unwrap_or_default(),
+            data: serde_json::from_slice::<Vec<LeaderboardEntry>>(&bytes)
+                .expect("Failed to parse leaderboard snapshot JSON"),
         })
         .collect())
 }
@@ -452,7 +457,8 @@ async fn recent_guesses(problem: &str) -> Result<String> {
     let mut w = String::new();
     w.push_str(
       r#"<table style="border-collapse:collapse;font-size:13px;">
-        <tr><th>ID</th><th>Timestamp (UTC)</th><th>Problem</th><th>Map (truncated)</th><th>Correct</th></tr>"#);
+        <tr><th>ID</th><th>Timestamp</th><th>Problem</th><th>Map (truncated)</th><th>Correct</th></tr>"#);
+    let now = chrono::Utc::now().naive_utc();
     for row in rows {
         let id = row.at::<i64>(0)?;
         let ts = row.at::<NaiveDateTime>(1)?;
@@ -465,9 +471,10 @@ async fn recent_guesses(problem: &str) -> Result<String> {
         let map_leading_part = &map[..100.min(map.len())];
         write!(
             w,
-            "<tr><td>{}</td><td>{}</td><td>{}</td><td>{}...</td><td>{}</td></tr>",
+            r#"<tr><td>{}</td><td title="{}">{}</td><td>{}</td><td>{}...</td><td>{}</td></tr>"#,
             id,
-            ts,
+            ts.and_local_timezone(TZ).unwrap().naive_local(),
+            ts.signed_duration_since(now).humanize(),
             problem,
             map_leading_part,
             if correct { "✅" } else { "❌" }
@@ -537,12 +544,16 @@ fn last_correct_guess(problem: &str) -> Result<String> {
         }
         for (i, row) in adj.iter().enumerate() {
             write!(w, "<tr><th style=\"width:24px; text-align:center;\">{i}")?;
-            for &val in row.iter() {
+            for (j, &val) in row.iter().enumerate() {
                 write!(
                     w,
                     "<td style=\"background:{};text-align:center;\">{}",
-                    if val == 0 { "#faa" } else { "#aaf" },
-                    val
+                    if i == j { "#faa" } else { "#aaf" },
+                    if val != 0 {
+                        val.to_string()
+                    } else {
+                        String::new()
+                    }
                 )?;
             }
         }
