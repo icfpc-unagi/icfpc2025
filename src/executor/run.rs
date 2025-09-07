@@ -69,8 +69,7 @@ where
     let err_thread = spawn_log_thread(err_pipe, stderr_file, None, opts.clone());
 
     // Supervise
-    let (terminated_due_to_timeout_or_cancel, status_opt) =
-        supervise_child(&mut child, None, cancel)?;
+    let (terminated_due_to_timeout_or_cancel, status_opt) = supervise_child(&mut child, cancel)?;
 
     // Join readers with bounded wait
     let extra = opts.join_grace;
@@ -255,14 +254,11 @@ fn spawn_log_thread<R: std::io::Read + Send + 'static>(
 
 fn supervise_child(
     child: &mut Child,
-    timeout: Option<Duration>,
     cancel: Arc<AtomicBool>,
 ) -> Result<(bool, Option<ExitStatus>)> {
-    let start = Instant::now();
     let mut terminated_due_to_timeout_or_cancel = false;
     let status_opt = loop {
-        let timed_out = timeout.map(|t| start.elapsed() > t).unwrap_or(false);
-        if cancel.load(Ordering::SeqCst) || timed_out {
+        if cancel.load(Ordering::SeqCst) {
             terminated_due_to_timeout_or_cancel = true;
             kill_child_group(child);
             // bounded wait: allow up to +5s for process to terminate
