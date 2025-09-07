@@ -77,9 +77,9 @@ fn main() {
     let mut cnf = Cnf::new();
 
     // V[t][i] := 時刻 t に訪れたのは (u,i) である
-    let mut V = mat![!0; labels.len(); D];
+    let mut V = mat![!0; labels.len(); n * D];
     for t in 0..labels.len() {
-        for d in 0..D {
+        for d in 0..n * D {
             V[t][d] = cnf.var();
         }
         // 時刻 t にはどれか一つの (u,i) にいる
