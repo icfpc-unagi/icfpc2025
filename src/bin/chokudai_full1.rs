@@ -87,6 +87,14 @@ fn main() {
         let id1 = vec_id[i];
         let id2 = vec_id[i + 1];
         let door = iwi_vec[i];
+
+        if graph[id1][door] != !0 && graph[id1][door] != id2 {
+            eprintln!(
+                "error: graph[{}][{}] == {}, but trying to set {}",
+                id1, door, graph[id1][door], id2
+            );
+        }
+
         graph[id1][door] = id2;
     }
 
