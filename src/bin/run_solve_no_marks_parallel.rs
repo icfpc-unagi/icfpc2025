@@ -25,10 +25,18 @@ fn balanced_plan_len(len: usize, rng: &mut ChaCha12Rng) -> Vec<usize> {
 struct Args {
     #[clap(long, short = 'j', default_value_t = 5)]
     threads: usize,
+    #[clap(long, default_value_t = 8192)]
+    min_tasks: usize,
+    #[clap(long, default_value_t = 4)]
+    max_depth: usize,
 }
 
 fn main() {
-    let Args { mut threads } = Args::parse();
+    let Args {
+        mut threads,
+        min_tasks,
+        max_depth,
+    } = Args::parse();
     if threads == 0 {
         threads = 1;
     }
@@ -79,33 +87,23 @@ fn main() {
     let e0 = plans[0][0];
     let h0 = labels[0][1];
     let mut tasks: Tasks = expand_with(vec![Vec::new()], u0, e0, h0);
-    // Increase depth if we don't have enough parallel tasks
-    let want = threads.saturating_mul(8).max(threads);
-    if tasks.len() < want && plans[0].len() >= 2 {
-        let e1 = plans[0][1];
-        let h1 = labels[0][2];
+    // Increase depth until we have enough tasks or hit limits
+    let want = min_tasks.max(threads.saturating_mul(64));
+    let max_k = plans[0].len().min(max_depth);
+    let mut k = 1usize;
+    while tasks.len() < want && k < max_k {
+        let e_k = plans[0][k];
+        let h_k = labels[0][k + 1];
         let mut bases = Vec::new();
         std::mem::swap(&mut bases, &mut tasks);
         let mut next = Vec::new();
         for base in bases {
-            let v1 = base.last().unwrap().2;
-            let mut expanded = expand_with(vec![base], v1, e1, h1);
+            let u_cur = base.last().unwrap().2;
+            let mut expanded = expand_with(vec![base], u_cur, e_k, h_k);
             next.append(&mut expanded);
         }
         tasks = next;
-    }
-    if tasks.len() < want && plans[0].len() >= 3 {
-        let e2 = plans[0][2];
-        let h2 = labels[0][3];
-        let mut bases = Vec::new();
-        std::mem::swap(&mut bases, &mut tasks);
-        let mut next = Vec::new();
-        for base in bases {
-            let v2 = base.last().unwrap().2;
-            let mut expanded = expand_with(vec![base], v2, e2, h2);
-            next.append(&mut expanded);
-        }
-        tasks = next;
+        k += 1;
     }
     eprintln!(
         "prepared {} parallel tasks (prefix depth {})",
