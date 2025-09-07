@@ -349,12 +349,12 @@ document.getElementById('lb-table').addEventListener('click', (ev) => {{
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
-struct LeaderboardEntry {
+pub struct LeaderboardEntry {
     #[serde(rename = "teamName")]
-    team_name: String,
+    pub team_name: String,
     #[serde(rename = "teamPl")]
-    team_pl: String,
-    score: Option<i64>,
+    pub team_pl: String,
+    pub score: Option<i64>,
 }
 // Build JSON structure for the client side: [{ts, data: <json>}]
 #[derive(serde::Serialize, Clone)]

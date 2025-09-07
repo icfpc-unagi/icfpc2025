@@ -4,11 +4,13 @@
 //! job or a similar scheduling service.
 
 use crate::client;
+use crate::sql;
 use actix_web::{HttpResponse, Responder};
 
 use anyhow::{Context, Result};
-use chrono::Utc;
+use chrono::{NaiveDateTime, Utc};
 
+use mysql::params;
 use serde::Deserialize;
 use tokio::task::JoinSet;
 
@@ -32,6 +34,25 @@ fn base_endpoint() -> String {
         .unwrap_or_else(|| "https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.com".to_string())
 }
 
+fn insert_snapshot(ts: &NaiveDateTime, problem: &str, snapshot: &str) -> Result<()> {
+    let entries =
+        serde_json::from_str::<Vec<crate::www::handlers::leaderboard::LeaderboardEntry>>(snapshot)
+            .inspect_err(|e| eprintln!("Failed to parse snapshot JSON for {}: {}", ts, e))
+            .unwrap_or_default();
+    sql::exec_batch(
+        "INSERT IGNORE INTO scores (timestamp, problem, team_name, score) VALUES (:timestamp, :problem, :team_name, :score)",
+        entries.iter().map(|e| {
+            params! {
+                "timestamp" => ts,
+                "problem" => problem,
+                "team_name" => &e.team_name,
+                "score" => e.score,
+            }
+        }),
+    )?;
+    Ok(())
+}
+
 /// The core implementation of the leaderboard archiving cron job.
 ///
 /// This function performs the following steps:
@@ -50,9 +71,11 @@ async fn run_impl() -> Result<serde_json::Value> {
     let client = &*client::CLIENT;
     let base = base_endpoint();
 
-    let ts = Utc::now().format("%Y%m%d-%H%M%S").to_string();
+    let ts_str = Utc::now().format("%Y%m%d-%H%M%S").to_string();
+    let ts_dt = NaiveDateTime::parse_from_str(&ts_str, "%Y%m%d-%H%M%S")
+        .context("Failed to parse timestamp for DB")?;
     let bucket = "icfpc2025-data";
-    let prefix = format!("history/{}/", ts);
+    let prefix = format!("history/{}/", ts_str);
 
     // 1. Fetch problem list.
     let probs: Vec<ProblemEntry> = client
@@ -88,6 +111,10 @@ async fn run_impl() -> Result<serde_json::Value> {
             crate::gcp::gcs::upload_object(&bucket, &object, body.as_bytes(), "application/json")
                 .await
                 .with_context(|| format!("Failed to upload {}", object))?;
+
+            insert_snapshot(&ts_dt, &problem, &body)
+                .with_context(|| format!("Failed to insert snapshot for {}", &problem))?;
+
             Ok(object)
         });
     }
@@ -107,10 +134,14 @@ async fn run_impl() -> Result<serde_json::Value> {
                 .text()
                 .await
                 .context("Failed to read leaderboard/global body")?;
+
             let object = format!("{}global.json", prefix);
             crate::gcp::gcs::upload_object(&bucket, &object, body.as_bytes(), "application/json")
                 .await
                 .context("Failed to upload global.json")?;
+
+            insert_snapshot(&ts_dt, "global", &body).context("Failed to insert global snapshot")?;
+
             Ok(object)
         });
     }
@@ -125,7 +156,7 @@ async fn run_impl() -> Result<serde_json::Value> {
     }
 
     Ok(serde_json::json!({
-        "timestamp": ts,
+        "timestamp": ts_str,
         "saved": saved,
     }))
 }
@@ -140,5 +171,31 @@ pub async fn run() -> impl Responder {
             .content_type("application/json")
             .body(v.to_string()),
         Err(e) => HttpResponse::InternalServerError().body(e.to_string()),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[ignore]
+    fn insert_snapshot_handles_global_json() {
+        let ts: NaiveDateTime =
+            NaiveDateTime::parse_from_str("20250907-152610", "%Y%m%d-%H%M%S").unwrap();
+        // NOTE: These are example entries from actual data. It's safe to insert them to verify the query works, and using IGNORE ensures the test passes even if they already exist in the database.
+        const GLOBAL_JSON: &str = r#"[{"teamName":"Unagi","teamPl":"Rust","score":4882},{"teamName":"Purely Functional Networks","teamPl":"C++","score":4872}]"#;
+        let res = insert_snapshot(&ts, "global", GLOBAL_JSON);
+        assert!(res.is_ok(), "insert_snapshot should succeed");
+    }
+
+    #[test]
+    #[ignore]
+    fn insert_snapshot_handles_invalid_json() {
+        let ts: NaiveDateTime =
+            NaiveDateTime::parse_from_str("20250906-100118", "%Y%m%d-%H%M%S").unwrap();
+        const INVALID_JSON: &str = r#"{"error":"Error: Invalid KeyConditionExpression: Attribute name is a reserved keyword; reserved keyword: time"}"#;
+        let res = insert_snapshot(&ts, "primus", INVALID_JSON);
+        assert!(res.is_ok(), "insert_snapshot should not raise an error");
     }
 }
