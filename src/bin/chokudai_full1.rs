@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "skip_lint", allow(clippy::all, clippy::pedantic, warnings))]
+#![allow(non_snake_case)]
 use icfpc2025::judge::*;
 use rand::Rng;
 
