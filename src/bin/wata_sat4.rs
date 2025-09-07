@@ -14,10 +14,36 @@ fn balanced_plan(len: usize, m: usize, rng: &mut impl Rng) -> Vec<usize> {
     plan
 }
 
+fn gacha(n: usize, plan: &[(Option<usize>, usize)], labels: &[usize]) -> f64 {
+    let mut label_door = mat![0; 4; 6];
+    for i in 0..labels.len() {
+        let door = plan[i].1;
+        if door == !0 {
+            continue;
+        }
+        let label = labels[i];
+        label_door[label][door] += 1;
+    }
+    let mut sum = 0.0;
+    let mut num = vec![0; 4];
+    for i in 0..n {
+        num[i % 4] += 1;
+    }
+    for i in 0..4 {
+        for j in 0..6 {
+            let expected = num[i] as f64 / n as f64 / 6.0;
+            sum += (expected - label_door[i][j] as f64 / labels.len() as f64).powi(2);
+        }
+    }
+    dbg!(sum);
+    sum
+}
+
 fn main() {
     let mut rng = rand::rng();
     let mut judge = icfpc2025::judge::get_judge_from_stdin();
-    let H = judge.num_rooms() * 3; // 色を塗らずに動く回数
+    let H = judge.num_rooms() * 5 / 2; // 色を塗らずに動く回数
+    // let H = rng.random_range(judge.num_rooms()..=judge.num_rooms() * 3);
     let n = judge.num_rooms() / 2;
     let mut plans = balanced_plan(judge.num_rooms() * 6, 6, &mut rng)
         .into_iter()
@@ -34,6 +60,9 @@ fn main() {
         L[i] = i % 4;
     }
     L.sort();
+    if gacha(n, &plans, &labels[..=H]) > 0.0050 {
+        panic!("unlucky");
+    }
     let mut cnf = Cnf::new();
 
     // V[t][u] := 時刻 t の開始時点での頂点は u
