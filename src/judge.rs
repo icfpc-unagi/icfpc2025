@@ -730,8 +730,7 @@ pub fn check_explore2(
     results: &[Vec<usize>],
 ) -> bool {
     assert_eq!(plans.len(), results.len());
-    let mut id = 0;
-    for (plan, result) in plans.iter().zip(results.iter()) {
+    for (id, (plan, result)) in plans.iter().zip(results.iter()).enumerate() {
         // Simulate the plan on the guessed map.
         let mut labels = guess.rooms.clone();
         let mut u = guess.start;
@@ -750,7 +749,6 @@ pub fn check_explore2(
             eprintln!("actual  : {}", route.iter().join(""));
             return false;
         }
-        id += 1;
     }
     true
 }
