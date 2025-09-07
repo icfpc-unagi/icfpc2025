@@ -172,9 +172,9 @@ fn main() {
                 // !V[t][ui] -> !C[t][ui][c]
                 for c in 0..4 {
                     if c == new_c {
-                        cnf.clause([-V[t][ui], C[t][ui][new_c]]);
+                        cnf.clause([-V[t][ui], C[t + 1][ui][new_c]]);
                     } else {
-                        cnf.clause([V[t][ui], -C[t][ui][c]]);
+                        cnf.clause([V[t][ui], -C[t + 1][ui][c]]);
                     }
                 }
             }
@@ -184,9 +184,9 @@ fn main() {
                 for c in 0..4 {
                     // 単純に前ターンのCを引き継げばよい
                     // C[t-1][ui][c] -> C[t][ui][c]
-                    cnf.clause([-C[t - 1][ui][c], C[t][ui][c]]);
+                    cnf.clause([-C[t][ui][c], C[t + 1][ui][c]]);
                     // !C[t-1][ui][c] -> !C[t][ui][c]
-                    cnf.clause([C[t - 1][ui][c], -C[t][ui][c]]);
+                    cnf.clause([C[t][ui][c], -C[t + 1][ui][c]]);
                 }
             }
         }
