@@ -112,6 +112,24 @@ pub struct Guess {
     pub graph: Vec<[(usize, usize); 6]>,
 }
 
+impl From<crate::api::Map> for Guess {
+    fn from(map: crate::api::Map) -> Self {
+        let n = map.rooms.len();
+        let mut graph = vec![[(!0, !0); 6]; n];
+        for c in &map.connections {
+            let fr = &c.from;
+            let to = &c.to;
+            graph[fr.room][fr.door] = (to.room, to.door);
+            graph[to.room][to.door] = (fr.room, fr.door);
+        }
+        Self {
+            rooms: map.rooms,
+            start: map.starting_room,
+            graph,
+        }
+    }
+}
+
 /// A record of an exploration query and its result.
 #[derive(Clone, Debug)]
 pub struct Explored {
