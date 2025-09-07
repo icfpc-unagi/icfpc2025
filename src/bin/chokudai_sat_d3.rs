@@ -356,6 +356,9 @@ fn main() {
                                 u, e, guess.graph[u][e], u, e, v, f,
                             );
                         }
+                        if u == v && e == f {
+                            eprintln!("自己ループを確認 at E {} {} -> {} {}", u, e, v, f);
+                        }
                         assert!(guess.graph[u][e] == (!0, !0));
                         assert!(cnf.sat.value(E[v][f][u][e]) == Some(true));
                         guess.graph[u][e] = (v, f);
@@ -366,6 +369,9 @@ fn main() {
                                 "バグ? すでに辺が決まっている: {}-{} -> {:?}, but find {}-{} -> {} {}",
                                 u, e, guess.graph[u][e], u, e, v, f,
                             );
+                        }
+                        if u == v && e == f {
+                            eprintln!("自己ループを確認 at E2 {} {} -> {} {}", u, e, v, f);
                         }
                         assert!(guess.graph[u][e] == (!0, !0));
                         assert!(cnf.sat.value(E2[v][f][u][e]) == Some(true));
