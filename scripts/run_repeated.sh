@@ -12,8 +12,8 @@ TIME_LIMIT="5m"          # Changeable via env before calling this script
 KILL_GRACE="10s"         # Grace period before SIGKILL after timeout
 
 # Command + input
-CMD=(cargo run --release --bin wata_sat6)
-INPUT="local random_2layers 48 0"
+CMD=(cargo run --release --bin wata_sat4)
+INPUT="local random_2layers 24 0"
 # INPUT="remote teth"
 
 # Ensure `timeout` exists
