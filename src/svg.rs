@@ -225,12 +225,13 @@ pub fn render(map: &api::Map) -> String {
         pos.1 = (pos.1 - min_y) * scale + radius;
     }
 
-    let mut document = Document::new()
-        .set("width", width + 20.0)
-        .set("height", height + 20.0)
-        .set("viewBox", (-10.0, -10.0, width + 10.0, height + 10.0));
+    let mut document = Document::new();
 
     // Draw connections (passages) as curved paths.
+    let mut min_x = f64::MAX;
+    let mut min_y = f64::MAX;
+    let mut max_x = f64::MIN;
+    let mut max_y = f64::MIN;
     for conn in &map.connections {
         // Only draw each edge once for an undirected graph.
         if conn.from.room >= conn.to.room {
@@ -248,14 +249,17 @@ pub fn render(map: &api::Map) -> String {
         let dist = ((p1.0 - p2.0).powi(2) + (p1.1 - p2.1).powi(2)).sqrt();
 
         // Use a cubic Bezier curve for a nice arc.
-        let data = Data::new().move_to((c1.0, c1.1)).cubic_curve_to((
-            c1.0 + (c1.0 - p1.0) / radius * dist * 0.4,
-            c1.1 + (c1.1 - p1.1) / radius * dist * 0.4,
-            c2.0 + (c2.0 - p2.0) / radius * dist * 0.4,
-            c2.1 + (c2.1 - p2.1) / radius * dist * 0.4,
-            c2.0,
-            c2.1,
-        ));
+        let a1x = c1.0 + (c1.0 - p1.0) / radius * dist * 0.4;
+        let a1y = c1.1 + (c1.1 - p1.1) / radius * dist * 0.4;
+        let a2x = c2.0 + (c2.0 - p2.0) / radius * dist * 0.4;
+        let a2y = c2.1 + (c2.1 - p2.1) / radius * dist * 0.4;
+        let data = Data::new()
+            .move_to((c1.0, c1.1))
+            .cubic_curve_to((a1x, a1y, a2x, a2y, c2.0, c2.1));
+        min_x = min_x.min(c1.0).min(c2.0).min(a1x).min(a2x);
+        min_y = min_y.min(c1.1).min(c2.1).min(a1y).min(a2y);
+        max_x = max_x.max(c1.0).max(c2.0).max(a1x).max(a2x);
+        max_y = max_y.max(c1.1).max(c2.1).max(a1y).max(a2y);
 
         let path = Path::new()
             .set("fill", "none")
@@ -272,10 +276,10 @@ pub fn render(map: &api::Map) -> String {
     // Draw rooms as circles.
     for (i, pos) in positions.iter().enumerate() {
         let color = match map.rooms[i] {
-            0 => "#ff8080",
-            1 => "#80ff80",
-            2 => "#8080ff",
-            _ => "#ffff80",
+            0 => "#1f77b4",
+            1 => "#ff7f0e",
+            2 => "#2ca02c",
+            _ => "#d62728",
         };
 
         let circle = svg::node::element::Circle::new()
@@ -296,6 +300,10 @@ pub fn render(map: &api::Map) -> String {
             .set("font-size", "20px");
         document = document.add(text);
     }
+    document = document
+        .set("width", max_x - min_x)
+        .set("height", max_y - min_y)
+        .set("viewBox", (min_x, min_y, max_x - min_x, max_y - min_y));
 
     document.to_string()
 }
