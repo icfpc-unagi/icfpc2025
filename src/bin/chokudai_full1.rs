@@ -101,7 +101,7 @@ fn main() {
 
     let ret = false; //update_graph(&mut graph, n);
 
-    while !ret {
+    for _ in 0..100 {
         //second phase
         //warshall floyd
         let mut dist = vec![vec![!0; n]; n];
@@ -238,7 +238,7 @@ fn main() {
 
         let r2 = judge.explore(&step2);
 
-        let mut pre_id = pos[dstart - 1];
+        let mut pre_id = pos[dstart];
 
         //graphの更新
         for i in dstart..q_limit {
@@ -259,8 +259,8 @@ fn main() {
             }
             pre_id = id;
         }
-
-        let ret2 = update_graph(&mut graph, n);
+        let ret2 = false;
+        //let ret2 = update_graph(&mut graph, n);
         if ret2 {
             break;
         }
