@@ -133,8 +133,7 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
 
     // Fetch recent guesses for the problem to display.
     let t0 = std::time::Instant::now();
-    // let guesses_html = recent_guesses(problem).await?;
-    let guesses_html = "".to_string();
+    let guesses_html = recent_guesses(problem).await?;
     let recent_ms = t0.elapsed().as_millis();
 
     // Fetch the latest correct guess for the problem, optionally bypassing the cache.
@@ -449,7 +448,7 @@ async fn fetch_snapshots(problem: &str) -> Result<Vec<Snapshot>> {
 }
 
 /// 最近の提出（guess）を取得してHTMLとして返す関数
-async fn _recent_guesses(problem: &str) -> Result<String> {
+async fn recent_guesses(problem: &str) -> Result<String> {
     // 直近の提出（guess）を取得
     let rows = if problem != "global" {
         sql::select(
@@ -457,8 +456,7 @@ async fn _recent_guesses(problem: &str) -> Result<String> {
         SELECT g.api_log_id AS id,
                g.api_log_created AS ts,
                s.api_log_request__problem_name AS problem,
-               JSON_VALUE(g.api_log_response, '$.correct' RETURNING UNSIGNED) AS correct,
-               JSON_EXTRACT(g.api_log_request, '$.map') AS map
+               JSON_VALUE(g.api_log_response, '$.correct' RETURNING UNSIGNED) AS correct
         FROM api_logs g
         JOIN api_logs s
           ON g.api_log_select_id = s.api_log_id
@@ -476,8 +474,7 @@ async fn _recent_guesses(problem: &str) -> Result<String> {
         SELECT g.api_log_id AS id,
                g.api_log_created AS ts,
                s.api_log_request__problem_name AS problem,
-               JSON_VALUE(g.api_log_response, '$.correct' RETURNING UNSIGNED) AS correct,
-               JSON_EXTRACT(g.api_log_request, '$.map') AS map
+               JSON_VALUE(g.api_log_response, '$.correct' RETURNING UNSIGNED) AS correct
         FROM api_logs g
         JOIN api_logs s
           ON g.api_log_select_id = s.api_log_id
@@ -500,19 +497,13 @@ async fn _recent_guesses(problem: &str) -> Result<String> {
         let ts = row.at::<NaiveDateTime>(1)?;
         let problem = row.at::<String>(2)?;
         let correct = row.at::<bool>(3)?;
-        let map = row.at::<String>(4)?;
-        // compact
-        let map_value: serde_json::Value = serde_json::from_str(&map)?;
-        let map = serde_json::to_string(&map_value)?;
-        let map_leading_part = &map[..100.min(map.len())];
         write!(
             w,
-            r#"<tr><td>{}</td><td title="{}">{}</td><td>{}</td><td>{}...</td><td>{}</td></tr>"#,
+            r#"<tr><td>{}</td><td title="{}">{}</td><td>{}</td><td>{}</td></tr>"#,
             id,
             ts.and_local_timezone(_TZ).unwrap().naive_local(),
             ts.signed_duration_since(now).humanize(),
             problem,
-            map_leading_part,
             if correct { "✅" } else { "❌" }
         )?;
     }
@@ -531,7 +522,7 @@ fn last_correct_guess(problem: &str) -> Result<String> {
     let mut w = String::new();
     if let Some(row) = sql::row(
         "
-        SELECT JSON_EXTRACT(g.api_log_request, '$.map') AS map,
+        SELECT g.api_log_request AS guess,
                g.api_log_created AS ts
         FROM api_logs g
         JOIN api_logs s
@@ -540,10 +531,12 @@ fn last_correct_guess(problem: &str) -> Result<String> {
             AND s.api_log_path = '/select'
         WHERE s.api_log_request__problem_name = :problem
           AND g.api_log_response_code = 200
-          AND JSON_EXTRACT(g.api_log_response, '$.correct') = true",
+          AND JSON_EXTRACT(g.api_log_response, '$.correct') = true
+        ORDER BY g.api_log_id DESC
+        LIMIT 1",
         params! { "problem" => problem },
     )? {
-        let map: api::Map = serde_json::from_str(&row.at::<String>(0)?)?;
+        let api::GuessRequest { map, .. } = serde_json::from_str(&row.at::<String>(0)?)?;
         let n = map.rooms.len();
         write!(
             w,

@@ -331,12 +331,12 @@ pub struct Map {
 
 /// Represents the JSON request body for the `/guess` endpoint.
 #[cfg(feature = "reqwest")]
-#[derive(Serialize)]
-struct GuessRequest<'a> {
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GuessRequest {
     /// The team ID.
-    id: &'a str,
+    pub id: String,
     /// The proposed map of the Aedificium.
-    map: &'a Map,
+    pub map: Map,
 }
 
 /// Represents the JSON response from the `/guess` endpoint.
@@ -366,8 +366,8 @@ pub fn guess(map: &Map) -> Result<bool> {
 
     let id = get_id()?;
     let req = GuessRequest {
-        id: id.as_str(),
-        map,
+        id,
+        map: map.clone(),
     };
 
     let res = post_json_with_retry(&client, &url, &req, "/guess")?;
