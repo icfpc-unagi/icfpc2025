@@ -24,7 +24,7 @@ fn main() {
     let mut judge = icfpc2025::judge::get_judge_from_stdin();
     let D = 2; // 倍化率
     let K = 1; // 全体のクエリ数
-    let F = judge.num_rooms() * 6; // 前半パートの長さ
+    let F = judge.num_rooms() * 3; // 前半パートの長さ
     let n = judge.num_rooms() / D;
     let (plans, labels) = {
         let mut plans = vec![];
@@ -230,6 +230,7 @@ fn main() {
 
     // 解けたらうれしいな
     assert_eq!(cnf.sat.solve(), Some(true));
+
     let mut guess = Guess {
         start: first_room,
         graph: vec![[(!0, !0); 6]; judge.num_rooms()],
@@ -255,5 +256,29 @@ fn main() {
             }
         }
     }
+
+    // labels[i]と一致した答えが出ているか、実際にシミュレーションしてみる
+    let mut now_room = first_room;
+    let mut now_room_color = guess.rooms.clone();
+
+    for t in 0..plans.len() {
+        let now_color = now_room_color[now_room];
+        if now_color != labels[t] {
+            panic!(
+                "色が合わないよ: t = {}, now_room = {}, now_color = {}, labels[t] = {}",
+                t, now_room, now_color, labels[t]
+            );
+        }
+
+        let (new_c, e) = plans[t];
+        if new_c.is_some() {
+            // 色が決まっている場合
+            let new_c = new_c.unwrap();
+            now_room_color[now_room] = new_c;
+        }
+        // ドアを通る
+        now_room = guess.graph[now_room][e].0;
+    }
+
     assert!(judge.guess(&guess));
 }
