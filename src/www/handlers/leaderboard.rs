@@ -39,7 +39,7 @@ pub async fn index() -> impl Responder {
         .map(|p| {
             format!(
                 "<li><a href=\"/leaderboard/{}\">{}</a> (size {})</li>",
-                p.problem_name, p.problem_name, p.size
+                p.problem, p.problem, p.size
             )
         })
         .collect::<Vec<_>>()
@@ -86,7 +86,7 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
         params::Params::Empty,
     )? {
         format!(
-            r#"<div style="width:100vw;position:relative;left:50%;right:50%;margin-left:-50vw;margin-right:-50vw;background-color:#66bb6a;color:white;font-weight:bold;padding:4px 0;text-align:center;font-size:1.2em;box-shadow:0 2px 8px rgba(0,0,0,0.08);z-index:1000;">
+            r#"<div style="width:100vw;position:relative;left:50%;right:50%;margin-left:-50vw;margin-right:-50vw;background-color:#66bb6a;color:white;font-weight:bold;padding:4px 0;text-align:center;font-size:2.4em;box-shadow:0 2px 8px rgba(0,0,0,0.08);z-index:1000;">
       <a href="/unlock"><img style="height:1em;vertical-align:text-bottom;" src="/static/sansho.png" alt="Lock icon">
       {user}
       🔒️</a>
@@ -98,14 +98,18 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
 
     // Build problem navigation links for the top of the page.
     let mut nav_links: Vec<String> = Vec::new();
-    nav_links.push("[<a href=\"/leaderboard/global\">Global</a>]".to_string());
+    if problem == "global" {
+        nav_links.push("<b>[Global]</b>".to_string());
+    } else {
+        nav_links.push("[<a href=\"/leaderboard/global\">Global</a>]".to_string());
+    }
     for p in crate::problems::all_problems() {
-        nav_links.push(if p.problem_name == problem {
-            format!("<b>[{}]</b>", p.problem_name)
+        nav_links.push(if p.problem == problem {
+            format!("<b>[{}]</b>", p.problem)
         } else {
             format!(
                 "[<a href=\"/leaderboard/{problem_name}\">{problem_name}</a>]",
-                problem_name = p.problem_name
+                problem_name = p.problem
             )
         });
     }
@@ -518,7 +522,7 @@ fn last_correct_guess(problem: &str) -> Result<String> {
             write!(w, "<th style=\"width:24px; text-align:center;\">{j}")?;
         }
         for i in 0..6 {
-            write!(w, "<tr><td>{i}")?;
+            write!(w, "<tr><th>{i}")?;
             for d in doors.iter() {
                 write!(
                     w,
@@ -532,11 +536,12 @@ fn last_correct_guess(problem: &str) -> Result<String> {
             write!(w, "<th style=\"width:24px; text-align:center;\">{i}")?;
         }
         for (i, row) in adj.iter().enumerate() {
-            write!(w, "<tr><td style=\"width:24px; text-align:center;\">{i}")?;
+            write!(w, "<tr><th style=\"width:24px; text-align:center;\">{i}")?;
             for &val in row.iter() {
                 write!(
                     w,
-                    "<td style=\"background:#aaf; text-align:center;\">{}",
+                    "<td style=\"background:{};text-align:center;\">{}",
+                    if val == 0 { "#faa" } else { "#aaf" },
                     val
                 )?;
             }
