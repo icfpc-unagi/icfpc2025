@@ -135,6 +135,9 @@ pub struct Explored {
 /// This is used for testing solvers without interacting with the remote server.
 pub struct LocalJudge {
     problem_name: String,
+    /// Original problem arguments when constructed via `new`.
+    /// Format: "{problem_type} {num_rooms} {seed}". May be empty for other constructors.
+    problem_args: String,
     /// The signature of each room.
     rooms: Vec<usize>,
     /// The index of the starting room.
@@ -156,12 +159,11 @@ impl Judge for LocalJudge {
         &self.problem_name
     }
     fn explore(&mut self, plans: &[Vec<Step>]) -> Vec<Vec<usize>> {
-        println!("explore {}", plans.len());
+        eprintln!("explore {}", plans.len());
         self.cost += plans.len() + 1;
         let mut ret = vec![];
         for plan in plans {
             let mut labels = self.rooms.clone();
-            println!("{}", plan.iter().map(|&step| format_step(step)).join(""));
             let mut u = self.starting_room;
             let mut route = vec![labels[u]];
             for &(newlabel, door) in plan {
@@ -188,9 +190,6 @@ impl Judge for LocalJudge {
             }))
             .unwrap()
         );
-        for r in &ret {
-            println!("{}", r.iter().join(""));
-        }
         self.explored_log.plans.extend(plans.to_vec());
         self.explored_log.results.extend(ret.clone());
         ret
@@ -304,22 +303,9 @@ impl Judge for LocalJudge {
             }
         }
 
-        // Use the same SEED convention as LocalJudge::new_json for reproducibility.
-        let seed_val: i64 = std::env::var("SEED")
-            .ok()
-            .and_then(|s| {
-                let t = s.trim();
-                if t.is_empty() {
-                    None
-                } else {
-                    t.parse::<i64>().ok()
-                }
-            })
-            .unwrap_or(0);
-
         serde_json::json!({
             "problemName": self.problem_name,
-            "seed": seed_val,
+            "problemArgs": self.problem_args,
             "rooms": self.rooms,
             "startingRoom": self.starting_room,
             "connections": connections,
@@ -648,6 +634,7 @@ impl LocalJudge {
     /// Creates a new `LocalJudge` with a randomly generated map.
     pub fn new(problem_type: &str, num_rooms: usize, seed: u64) -> Self {
         let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(seed);
+        let problem_args = format!("{} {} {}", problem_type, num_rooms, seed);
         let j = match problem_type {
             "random" => {
                 // Generate room signatures.
@@ -670,6 +657,7 @@ impl LocalJudge {
                 }
                 Self {
                     problem_name: problem_type.to_string(),
+                    problem_args: problem_args.clone(),
                     rooms,
                     starting_room: 0, // Start at room 0 (the fixed starting room in the problem spec)
                     graph,
@@ -695,6 +683,7 @@ impl LocalJudge {
                 }
                 Self {
                     problem_name: problem_type.to_string(),
+                    problem_args: problem_args.clone(),
                     rooms,
                     starting_room: 0, // Start at room 0 (the fixed starting room in the problem spec)
                     graph,
@@ -722,6 +711,7 @@ impl LocalJudge {
 
                 Self {
                     problem_name: problem_type.to_string(),
+                    problem_args: problem_args.clone(),
                     rooms: instance.room_to_label,
                     starting_room: 0, // Start at room 0 (the fixed starting room in the problem spec)
                     graph,
@@ -786,6 +776,7 @@ impl LocalJudge {
         }
         let j = Self {
             problem_name: problem_name.unwrap_or_else(|| "json".to_string()),
+            problem_args: String::new(),
             starting_room: map.starting_room,
             rooms: map.rooms.clone(),
             graph,
@@ -866,6 +857,7 @@ pub fn get_judge_from_stdin_with(explored: bool) -> Box<dyn Judge> {
                     };
                     Box::new(LocalJudge {
                         problem_name: parsed.problem_name.unwrap_or_else(|| "json".to_string()),
+                        problem_args: String::new(),
                         rooms: vec![0; num_rooms], // True room signatures are unknown
                         starting_room: 0, // Start at room 0 (the fixed starting room in the problem spec)
                         graph: vec![[0; 6]; num_rooms], // True graph is unknown
