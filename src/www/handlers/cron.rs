@@ -71,9 +71,9 @@ async fn run_impl() -> Result<serde_json::Value> {
     let client = &*client::CLIENT;
     let base = base_endpoint();
 
-    let ts_str = Utc::now().format("%Y%m%d-%H%M%S").to_string();
-    let ts_dt = NaiveDateTime::parse_from_str(&ts_str, "%Y%m%d-%H%M%S")
-        .context("Failed to parse timestamp for DB")?;
+    let now = Utc::now();
+    let ts_str = now.format("%Y%m%d-%H%M%S").to_string();
+    let ts_dt = now.naive_utc();
     let bucket = "icfpc2025-data";
     let prefix = format!("history/{}/", ts_str);
 
