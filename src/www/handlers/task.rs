@@ -114,12 +114,10 @@ async fn render_task_page(task_id: i64) -> Result<String> {
     html.push_str("</table>\n");
 
     // 実行コード（複数行のシェルスクリプト）
-    if let Some(code) = agent_code {
-        if !code.is_empty() {
-            html.push_str("<h2>実行コード</h2><pre><code>");
-            html.push_str(&escape_html(&code));
-            html.push_str("</code></pre>");
-        }
+    if let Some(code) = agent_code.filter(|c| !c.is_empty()) {
+        html.push_str("<h2>実行コード</h2><pre><code>");
+        html.push_str(&escape_html(&code));
+        html.push_str("</code></pre>");
     }
 
     // Logs from GCS
