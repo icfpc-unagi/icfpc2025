@@ -128,7 +128,7 @@ fn main() -> Result<()> {
     }
 
     loop {
-        let mut new_eq = eq.iter().map(|row| row.to_vec()).collect::<Vec<_>>();
+        let mut new_eq = eq.clone();
         for i in 0..n {
             for j in 0..n {
                 for d in 0..6 {
