@@ -97,14 +97,14 @@ fn main() {
                 for f in 0..6 {
                     if E[vj][f][ui][e] == !0 {
                         E[vj][f][ui][e] = cnf.var();
+                        // 反対の辺は同じもの
+                        E[ui][e][vj][f] = E[vj][f][ui][e];
+                        // D = 2 決め打ちだと、E[u][i][v][j] が有効な時、 E[v^1][i][u^1][j] も有効
+                        // つまり同じものだと見做せる
+                        E[vj ^ 1][e][ui ^ 1][f] = E[vj][f][ui][e];
+                        // 逆向きも同じもの
+                        E[ui ^ 1][f][vj ^ 1][e] = E[vj][f][ui][e];
                     }
-                    // 反対の辺は同じもの
-                    E[ui][e][vj][f] = E[vj][f][ui][e];
-                    // D = 2 決め打ちだと、E[u][i][v][j] が有効な時、 E[v^1][i][u^1][j] も有効
-                    // つまり同じものだと見做せる
-                    E[vj ^ 1][e][ui ^ 1][f] = E[vj][f][ui][e];
-                    // 逆向きも同じもの
-                    E[ui ^ 1][f][vj ^ 1][e] = E[vj][f][ui][e];
                 }
             }
 
@@ -164,12 +164,12 @@ fn main() {
         if let Some(new_c) = plans[t].0 {
             // 時間tに色を塗る場合
             for ui in 0..n * D {
-                // V[t][ui] -> C[t][ui][new_c]
-                // !V[t][ui] -> !C[t][ui][c]
                 for c in 0..4 {
                     if c == new_c {
+                        // V[t][ui] -> C[t][ui][new_c]
                         cnf.clause([-V[t][ui], C[t + 1][ui][new_c]]);
                     } else {
+                        // !V[t][ui] -> !C[t][ui][c]
                         cnf.clause([V[t][ui], -C[t + 1][ui][c]]);
                     }
                 }
@@ -192,9 +192,13 @@ fn main() {
     for t in 0..labels.len() {
         for ui in 0..n * D {
             for c in 0..4 {
-                // 時刻 t に (u,i) にいるなら、その色は C[t][ui][c] である
-                // V[t][ui] -> C[t][ui][c]
-                cnf.clause([-V[t][ui], C[t][ui][c]]);
+                if c != labels[t] {
+                    // V[t][ui] -> !C[t][ui][c]
+                    cnf.clause([-V[t][ui], -C[t][ui][c]]);
+                } else {
+                    // V[t][ui] -> C[t][ui][c]
+                    cnf.clause([-V[t][ui], C[t][ui][c]]);
+                }
             }
         }
     }
