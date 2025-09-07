@@ -11,6 +11,19 @@ use icfpc2025::{
     judge::{Guess, JsonIn},
 };
 
+fn from_const_vec<T>(v: Vec<T>) -> T
+where
+    T: PartialEq + std::fmt::Debug,
+{
+    assert!(!v.is_empty());
+    let mut v = v.into_iter();
+    let first = v.next().unwrap();
+    for x in v {
+        assert_eq!(&x, &first);
+    }
+    first
+}
+
 fn main() -> Result<()> {
     let mut input = String::new();
     std::io::stdin().read_to_string(&mut input).unwrap();
@@ -25,20 +38,14 @@ fn main() -> Result<()> {
         graph,
     } = map.into();
     let n = rooms.len();
-    // let graph = (0..n)
-    //     .map(|i| {
-    //         (0..6)
-    //             .map(|d| graph[i][d].0)
-    //             .collect::<Vec<_>>()
-    //     })
-    //     .collect::<Vec<_>>();
-    let graph = graph
-        .into_iter()
-        .map(|v| v.into_iter().map(|(r, _)| r).collect::<Vec<_>>())
-        .collect::<Vec<_>>();
+
     eprintln!("start = {}", start);
     eprintln!("rooms = {:?}", rooms);
-    eprintln!("graph = {:?}", graph);
+    let transition = graph
+        .iter()
+        .map(|v| v.iter().map(|(r, _)| *r).collect::<Vec<_>>())
+        .collect::<Vec<_>>();
+    eprintln!("transition = {:?}", transition);
 
     let mut eq = vec![vec![true; n]; n];
     for i in 0..n {
@@ -52,8 +59,8 @@ fn main() -> Result<()> {
         for i in 0..n {
             for j in 0..n {
                 for d in 0..6 {
-                    let ni = graph[i][d];
-                    let nj = graph[j][d];
+                    let ni = transition[i][d];
+                    let nj = transition[j][d];
                     new_eq[i][j].setmin(eq[ni][nj]);
                 }
             }
@@ -95,22 +102,34 @@ fn main() -> Result<()> {
     assert_eq!(m * k, n);
     assert!(k <= 3);
 
-    let mut edges = vec![vec![(!0, vec![]); 6]; m];
+    let mut new_graph = vec![vec![(!0, !0); 6]; m];
+    let mut permutations = vec![vec![vec![]; 6]; m];
     for from in 0..m {
         for d in 0..6 {
-            let (to, p) = renamed[graph[classes[from][0]][d]];
-            let mut perm = vec![p];
-            for j in 1..k {
-                let (to_j, p) = renamed[graph[classes[from][j]][d]];
-                assert_eq!(to_j, to);
+            let mut to = vec![];
+            let mut back_d = vec![];
+            let mut perm = vec![];
+            for j in 0..k {
+                let (to_orig, b) = graph[classes[from][j]][d];
+                let (t, p) = renamed[to_orig];
+                to.push(t);
+                back_d.push(b);
                 perm.push(p);
             }
-            edges[from][d] = (to, perm);
+            let to = from_const_vec(to);
+            let back_d = from_const_vec(back_d);
+            new_graph[from][d] = (to, back_d);
+            permutations[from][d] = perm;
         }
     }
 
-    for (i, edges) in edges.iter().enumerate() {
-        eprintln!("{}: {:?}", i, edges);
+    for (i, g) in new_graph.iter().enumerate() {
+        eprint!("{}:", i);
+        for d in 0..6 {
+            let (to, back_d) = g[d];
+            eprint!(" {}->{}({})", d, to, back_d);
+            eprintln!();
+        }
     }
     Ok(())
 }
