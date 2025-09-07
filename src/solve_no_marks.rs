@@ -600,9 +600,13 @@ fn extract_guess(
     guess
 }
 
-// ------------------------------ Public solve ------------------------------
+// -------------------------- CNF construction wrapper ---------------------
 
-pub fn solve(num_rooms: usize, plans: &Vec<Vec<usize>>, labels: &Vec<Vec<usize>>) -> Guess {
+fn build_cnf_for_plans(
+    num_rooms: usize,
+    plans: &Vec<Vec<usize>>,
+    labels: &Vec<Vec<usize>>,
+) -> (PlanInfo, Buckets, Cnf, Candidates, EdgeVars) {
     // 1) Build flattened info from provided plans and labels
     let info = build_info(num_rooms, plans, labels);
 
@@ -622,6 +626,15 @@ pub fn solve(num_rooms: usize, plans: &Vec<Vec<usize>>, labels: &Vec<Vec<usize>>
     // 4.5) Unify starting room across all plans
     add_start_room_unification(&mut cnf, &info, &buckets, &cand);
 
+    (info, buckets, cnf, cand, edges)
+}
+
+// ------------------------------ Public solve ------------------------------
+
+pub fn solve(num_rooms: usize, plans: &Vec<Vec<usize>>, labels: &Vec<Vec<usize>>) -> Guess {
+    let (info, buckets, mut cnf, cand, edges) =
+        build_cnf_for_plans(num_rooms, plans, labels);
+
     // 5) Solve
     assert_eq!(cnf.sat.solve(), Some(true));
 
@@ -630,112 +643,6 @@ pub fn solve(num_rooms: usize, plans: &Vec<Vec<usize>>, labels: &Vec<Vec<usize>>
     assert!(check_explore(&guess, plans, labels));
     guess
 }
-
-// ------------------------------ External DIMACS solve ---------------------
-
-/*
-// 外部ソルバを使って DIMACS を解かせ、その解を CaDiCaL に単位節で伝えてから
-// 既存の extract_guess で Guess を復元する。
-// 注意: ソルバの標準出力に DIMACS モデル（v ... 0 形式）が出るよう、呼び出し側で
-// 適切なフラグを args に含めてください（例: kissat の --print-solution=1 等）。
-pub fn solve_via_external_dimacs(
-    num_rooms: usize,
-    plans: &Vec<Vec<usize>>,
-    labels: &Vec<Vec<usize>>,
-    solver: &std::path::Path,
-    args: &[&str],
-    dimacs_path: &std::path::Path,
-) -> Guess {
-    use std::collections::HashSet;
-    use std::process::Command;
-
-    // 1) CNF 構築（solve と同一）
-    let info = build_info(num_rooms, plans, labels);
-    let buckets = build_buckets(&info);
-    let mut cnf = Cnf::new();
-    let cand = build_candidates(&mut cnf, &info, &buckets);
-    add_diff_pruning(&mut cnf, &info, &buckets, &cand);
-    add_sbp(&mut cnf, &info, &buckets, &cand);
-    add_same_door_equalization(&mut cnf, &info, &buckets, &cand);
-    let edges = build_edge_vars(&mut cnf, &info);
-    add_plan_constraints(&mut cnf, &info, &buckets, &cand, &edges);
-    add_start_room_unification(&mut cnf, &info, &buckets, &cand);
-
-    // 2) DIMACS 書き出し
-    //cnf.sat
-    //.write_dimacs(dimacs_path)
-    //.expect("failed to write DIMACS");
-    cnf.sat
-        .write_dimacs(dimacs_path)
-        .expect("failed to write DIMACS");
-
-    cnf.sat = cadical::Solver::with_config("sat").unwrap(); // DELETE ME LATER!!!!!!!wefojawefjapojfepaowiej
-
-    // 3) 外部ソルバ呼び出し（最後の引数として DIMACS パスを付与）
-    let output = Command::new(solver)
-        .args(args)
-        .arg(dimacs_path)
-        .output()
-        .expect("failed to spawn external solver");
-
-    // 4) 出力をパースして、正リテラル集合（真の変数）を集める
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let all = format!("{}\n{}", stdout, stderr);
-
-    let mut pos: HashSet<i32> = HashSet::new();
-    let mut saw_unsat = false;
-    let mut saw_v = false;
-    for line in all.lines() {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            continue;
-        }
-        // UNSAT 検出（s 行）
-        if trimmed.starts_with('s') || trimmed.starts_with('S') {
-            let l = trimmed.to_ascii_lowercase();
-            if l.contains("unsat") {
-                saw_unsat = true;
-            }
-            continue;
-        }
-        // モデルは v 行のみパース
-        if trimmed.starts_with('v') || trimmed.starts_with('V') {
-            saw_v = true;
-            for tok in trimmed.split_whitespace() {
-                if tok == "v" || tok == "V" {
-                    continue;
-                }
-                if let Ok(x) = tok.parse::<i32>() {
-                    if x == 0 {
-                        break;
-                    }
-                    if x > 0 {
-                        pos.insert(x);
-                    }
-                }
-            }
-        }
-    }
-    assert!(!saw_unsat, "external solver reported UNSAT");
-    assert!(
-        saw_v,
-        "external solver did not print any 'v' model lines; pass appropriate flags (e.g., --print-solution=1)"
-    );
-    assert!(!pos.is_empty(), "no assignment parsed from 'v' lines");
-
-    // 5) モデルを単位節として注入 → CaDiCaL で充足化
-    for &v in &pos {
-        cnf.clause([v]);
-    }
-    assert_eq!(cnf.sat.solve(), Some(true));
-
-    // 6) 既存の抽出ロジックをそのまま利用
-    let guess = extract_guess(&cnf, &info, &buckets, &cand, &edges);
-    assert!(check_explore(&guess, plans, labels));
-    guess
-}
-*/
 
 // ストリーミング版: 外部ソルバの標準出力/標準エラーを逐次画面に流しつつ、
 // v 行（モデル）だけをバッファに取り込み、終了後にパースして解を復元する。
@@ -753,17 +660,9 @@ pub fn solve_via_external_dimacs_streaming(
     use std::sync::atomic::{AtomicBool, Ordering};
     use std::sync::{Arc, Mutex};
 
-    // 1) CNF 構築（solve と同一）
-    let info = build_info(num_rooms, plans, labels);
-    let buckets = build_buckets(&info);
-    let mut cnf = Cnf::new();
-    let cand = build_candidates(&mut cnf, &info, &buckets);
-    add_diff_pruning(&mut cnf, &info, &buckets, &cand);
-    add_sbp(&mut cnf, &info, &buckets, &cand);
-    add_same_door_equalization(&mut cnf, &info, &buckets, &cand);
-    let edges = build_edge_vars(&mut cnf, &info);
-    add_plan_constraints(&mut cnf, &info, &buckets, &cand, &edges);
-    add_start_room_unification(&mut cnf, &info, &buckets, &cand);
+    // 1) CNF 構築（solve と共通化）
+    let (info, buckets, mut cnf, cand, edges) =
+        build_cnf_for_plans(num_rooms, plans, labels);
 
     // 2) DIMACS 書き出し
     // cnf.sat
