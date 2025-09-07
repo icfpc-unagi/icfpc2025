@@ -10,7 +10,7 @@ KILL_GRACE="10s"         # Grace period before SIGKILL after timeout
 
 # Command + input
 CMD=(cargo run --release --bin wata_sat3)
-INPUT="remote zain"
+INPUT="remote hhet"
 
 # Ensure `timeout` exists
 if ! command -v timeout >/dev/null 2>&1; then
@@ -23,7 +23,6 @@ echo "[run_repeated] starting loop at $(date)"
 echo "[run_repeated] time limit: ${TIME_LIMIT} (grace ${KILL_GRACE})"
 
 while true; do
-  ./run unlock -f
   echo "[run_repeated] launching at $(date)"
   # Use a subshell via bash -lc so we can use here-string and 'time'.
   # timeout exit codes: 124 on timeout, otherwise child's exit status.

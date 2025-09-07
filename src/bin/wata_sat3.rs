@@ -22,7 +22,7 @@ fn main() {
     let mut rng = rand::rng();
     let mut judge = icfpc2025::judge::get_judge_from_stdin();
     let D = 3;
-    let K = 2;
+    let K = 1;
     let mut plans = vec![];
     let (super_guess, plans, labels) = match D {
         2 => {
@@ -161,16 +161,6 @@ fn main() {
                     }
                 }
             }
-            // for i in 0..D {
-            //     for j in 0..D {
-            //         if (u, e, i, j) <= (v, f, j, i) {
-            //             E[u][e][i][j] = cnf.var();
-            //         } else {
-            //             E[u][e][i][j] = E[v][f][j][i];
-            //         }
-            //     }
-            //     cnf.choose_one(&E[u][e][i]);
-            // }
         }
     }
     for ui in 0..n * D {
@@ -184,6 +174,38 @@ fn main() {
                 }
             }
             cnf.choose_one(&tmp);
+        }
+    }
+    for u in 0..n {
+        for e in 0..6 {
+            for v in 0..n {
+                for f in 0..6 {
+                    if E[u * D][e][v * D][f] == !0 {
+                        continue;
+                    }
+                    for i1 in 0..D {
+                        for i2 in 0..D {
+                            if i1 == i2 {
+                                continue;
+                            }
+                            for j1 in 0..D {
+                                for j2 in 0..D {
+                                    for f2 in 0..6 {
+                                        if f == f2 {
+                                            continue;
+                                        }
+                                        // E[u * D + i1][e][v * D + j1][f] -> !E[u * D + i2][e][v * D + j2][f2]
+                                        cnf.clause([
+                                            -E[u * D + i1][e][v * D + j1][f],
+                                            -E[u * D + i2][e][v * D + j2][f2],
+                                        ]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
     let mut u = super_guess.start;
