@@ -489,8 +489,9 @@ async fn recent_guesses(problem: &str) -> Result<String> {
 
     let mut w = String::new();
     w.push_str(
-      r#"<table style="border-collapse:collapse;font-size:13px;">
-        <tr><th>ID</th><th>Timestamp</th><th>Problem</th><th>Correct</th></tr>"#);
+        r#"<table style="border-collapse:collapse;font-size:13px;">
+        <tr><th>ID</th><th>Timestamp</th><th>Problem</th><th>Correct</th></tr>"#,
+    );
     let now = chrono::Utc::now().naive_utc();
     for row in rows {
         let id = row.at::<i64>(0)?;
