@@ -40,25 +40,47 @@ pub fn run_command<F>(
     cancel: Arc<AtomicBool>,
     prepare: F,
     opts: &RunOptions,
-) -> Result<(Option<i64>, std::process::ExitStatus, Artifacts)>
+) -> (Result<(Option<i64>, std::process::ExitStatus)>, Artifacts)
 where
     F: FnOnce(&Artifacts) -> Result<()>,
 {
     // Prepare artifacts and directories
-    let artifacts = create_artifacts_dir()?;
-    fs::create_dir_all(artifacts.root_dir())?;
-    fs::create_dir_all(artifacts.log_dir())?;
+    let artifacts = make_artifacts_paths();
+    if let Err(e) = fs::create_dir_all(artifacts.base_dir()) {
+        return (Err(e.into()), artifacts);
+    }
+    if let Err(e) = fs::create_dir_all(artifacts.root_dir()) {
+        return (Err(e.into()), artifacts);
+    }
+    if let Err(e) = fs::create_dir_all(artifacts.log_dir()) {
+        return (Err(e.into()), artifacts);
+    }
 
     // Allow caller to prepare files under the temp directory before execution
-    prepare(&artifacts)?;
+    if let Err(e) = prepare(&artifacts) {
+        return (Err(e), artifacts);
+    }
 
     // Open logs and spawn child using root as cwd
-    let (stdout_file, stderr_file) = open_logs(&artifacts.stdout_file(), &artifacts.stderr_file())?;
-    let mut child = spawn_bash(script, artifacts.root_dir())?;
+    let (stdout_file, stderr_file) =
+        match open_logs(&artifacts.stdout_file(), &artifacts.stderr_file()) {
+            Ok(v) => v,
+            Err(e) => return (Err(e), artifacts),
+        };
+    let mut child = match spawn_bash(script, artifacts.root_dir()) {
+        Ok(c) => c,
+        Err(e) => return (Err(e), artifacts),
+    };
 
     // Take pipes and spawn reader threads
-    let out_pipe = child.stdout.take().context("child missing stdout pipe")?;
-    let err_pipe = child.stderr.take().context("child missing stderr pipe")?;
+    let out_pipe = match child.stdout.take() {
+        Some(p) => p,
+        None => return (Err(anyhow::anyhow!("child missing stdout pipe")), artifacts),
+    };
+    let err_pipe = match child.stderr.take() {
+        Some(p) => p,
+        None => return (Err(anyhow::anyhow!("child missing stderr pipe")), artifacts),
+    };
     let last_json: Arc<Mutex<Option<JsonValue>>> = Arc::new(Mutex::new(None));
     let out_thread = spawn_log_thread(
         out_pipe,
@@ -69,7 +91,11 @@ where
     let err_thread = spawn_log_thread(err_pipe, stderr_file, None, opts.clone());
 
     // Supervise
-    let (terminated_due_to_timeout_or_cancel, status_opt) = supervise_child(&mut child, cancel)?;
+    let (terminated_due_to_timeout_or_cancel, status_opt) =
+        match supervise_child(&mut child, cancel) {
+            Ok(v) => v,
+            Err(e) => return (Err(e), artifacts),
+        };
 
     // Join readers with bounded wait
     let extra = opts.join_grace;
@@ -85,7 +111,7 @@ where
     } else {
         status_opt.expect("status should be present unless cancelled")
     };
-    Ok((score, status, artifacts))
+    (Ok((score, status)), artifacts)
 }
 
 #[cfg(unix)]
@@ -288,7 +314,7 @@ pub fn run_command_with_timeout<F>(
     cancel: Arc<AtomicBool>,
     prepare: F,
     opts: &RunOptions,
-) -> Result<(Option<i64>, std::process::ExitStatus, Artifacts)>
+) -> (Result<(Option<i64>, std::process::ExitStatus)>, Artifacts)
 where
     F: FnOnce(&Artifacts) -> Result<()>,
 {
@@ -299,18 +325,15 @@ where
         std::thread::sleep(timeout);
         cancel_for_timer.store(true, Ordering::SeqCst);
     });
-    let res = run_command(script, Arc::clone(&cancel), prepare, opts);
-    match res {
-        Ok((mut score, mut status, arts)) => {
-            if cancel.load(Ordering::SeqCst) && status.success() {
-                // Treat as timeout/cancel despite a zero exit code; ensure failure semantics
-                status = failure_status();
-                score = None;
-            }
-            Ok((score, status, arts))
+    let (res, arts) = run_command(script, Arc::clone(&cancel), prepare, opts);
+    let res = res.map(|(score, status)| {
+        if cancel.load(Ordering::SeqCst) && status.success() {
+            (None, failure_status())
+        } else {
+            (score, status)
         }
-        Err(e) => Err(e),
-    }
+    });
+    (res, arts)
 }
 
 fn join_with_timeout(h: std::thread::JoinHandle<Result<()>>, dur: Duration) {
@@ -368,7 +391,7 @@ fn parse_unagi_line(line: &str) -> Option<JsonValue> {
     }
 }
 
-fn create_artifacts_dir() -> Result<Artifacts> {
+fn make_artifacts_paths() -> Artifacts {
     let now = chrono::Utc::now();
     let ts = format!(
         "{:04}{:02}{:02}_{:02}{:02}{:02}_{:06}",
@@ -386,12 +409,11 @@ fn create_artifacts_dir() -> Result<Artifacts> {
     let base = std::env::temp_dir().join(format!("executor_run_{}_{}_{}", ts, pid, c));
     let root = base.join("root");
     let log = base.join("log");
-    fs::create_dir_all(&base)?;
-    Ok(Artifacts {
+    Artifacts {
         base_dir: base,
         root_dir: root,
         log_dir: log,
-    })
+    }
 }
 
 #[cfg(test)]
@@ -404,13 +426,13 @@ mod tests {
     fn run_command_captures_and_parses_unagi() -> Result<()> {
         // A script that prints to stdout/stderr and an UNAGI line
         let script = "echo out1; echo err1 1>&2; echo \"<UNAGI>: {\\\"score\\\": 123}\";";
-        let (score, status, artifacts) = run_command(
+        let (res, artifacts) = run_command(
             script,
             Arc::new(AtomicBool::new(false)),
             |_| Ok(()),
             &RunOptions::default(),
-        )?;
-
+        );
+        let (score, status) = res?;
         assert!(status.success());
         assert_eq!(score, Some(123));
         let out = fs::read_to_string(artifacts.stdout_file())?;
@@ -425,17 +447,15 @@ mod tests {
     fn run_command_times_out_and_kills() -> Result<()> {
         // Script that sleeps longer than timeout
         let script = "echo start; sleep 3; echo done";
-        let (score, status, artifacts) = run_command_with_timeout(
+        let (res, artifacts) = run_command_with_timeout(
             script,
             Duration::from_millis(800),
             Arc::new(AtomicBool::new(false)),
             |_| Ok(()),
             &RunOptions::default(),
-        )?;
-
-        // Should have timed out and been killed; not success
+        );
+        let (score, status) = res?;
         assert!(!status.success());
-        // No UNAGI score expected
         assert_eq!(score, None);
         // Ensure at least the initial output got captured before timeout
         let out = fs::read_to_string(artifacts.stdout_file())?;
@@ -447,7 +467,7 @@ mod tests {
     fn run_command_prepares_files_via_callback() -> Result<()> {
         // Prepare callback to create a file under root, then cat it
         let script = "cat prepared.txt; echo \"<UNAGI>: {\\\"score\\\": 0}\"";
-        let (score, status, artifacts) = run_command(
+        let (res, artifacts) = run_command(
             script,
             Arc::new(AtomicBool::new(false)),
             |arts| {
@@ -456,8 +476,8 @@ mod tests {
                 Ok(())
             },
             &RunOptions::default(),
-        )?;
-
+        );
+        let (score, status) = res?;
         assert!(status.success());
         assert_eq!(score, Some(0));
         let out = fs::read_to_string(artifacts.stdout_file())?;
@@ -468,12 +488,13 @@ mod tests {
     #[test]
     fn run_command_nonexistent_command() -> Result<()> {
         let script = "definitely_nonexistent_command_xyz_123";
-        let (score, status, artifacts) = run_command(
+        let (res, artifacts) = run_command(
             script,
             Arc::new(AtomicBool::new(false)),
             |_| Ok(()),
             &RunOptions::default(),
-        )?;
+        );
+        let (score, status) = res?;
         assert!(!status.success());
         assert_eq!(score, None);
         let err = fs::read_to_string(artifacts.stderr_file())?;
@@ -491,14 +512,14 @@ mod tests {
             cancel_set.store(true, std::sync::atomic::Ordering::Relaxed);
         });
         let script = "sleep 5; echo should_not_happen";
-        let res = run_command(
+        let (res, _arts) = run_command(
             script,
             Arc::clone(&cancel),
             |_| Ok(()),
             &RunOptions::default(),
         );
         match res {
-            Ok((score, status, _arts)) => {
+            Ok((score, status)) => {
                 assert!(!status.success());
                 assert_eq!(score, None);
                 Ok(())
@@ -512,12 +533,13 @@ mod tests {
         let script = "echo \"<UNAGI>: {\\\"score\\\": 1}\"; \
                       echo \"<UNAGI>: {\\\"score\\\": 2}\"; \
                       echo \"<UNAGI>: {\\\"score\\\": 3}\"";
-        let (score, status, _artifacts) = run_command(
+        let (res, _arts) = run_command(
             script,
             Arc::new(AtomicBool::new(false)),
             |_| Ok(()),
             &RunOptions::default(),
-        )?;
+        );
+        let (score, status) = res?;
         assert!(status.success());
         assert_eq!(score, Some(3));
         Ok(())
@@ -526,12 +548,13 @@ mod tests {
     #[test]
     fn artifacts_cleanup_on_drop() -> Result<()> {
         let script = "echo hello; echo \"<UNAGI>: {\\\"score\\\": 0}\"";
-        let (score, status, artifacts) = run_command(
+        let (res, artifacts) = run_command(
             script,
             Arc::new(AtomicBool::new(false)),
             |_| Ok(()),
             &RunOptions::default(),
-        )?;
+        );
+        let (score, status) = res?;
         assert!(status.success());
         assert_eq!(score, Some(0));
         let base = artifacts.base_dir().to_path_buf();
@@ -545,6 +568,7 @@ mod tests {
         );
         Ok(())
     }
+
     #[test]
     fn run_command_respects_options_truncates_and_tail() -> Result<()> {
         // Emit many lines plus a final marker; use small caps to force truncation
@@ -557,9 +581,9 @@ mod tests {
         opts.log_tail_bytes = 2048; // keep enough to include FINAL_* lines
         opts.flush_interval = Duration::from_millis(50);
         opts.join_grace = Duration::from_secs(2);
-        let (score, status, artifacts) =
-            run_command(script, Arc::new(AtomicBool::new(false)), |_| Ok(()), &opts)?;
-
+        let (res, artifacts) =
+            run_command(script, Arc::new(AtomicBool::new(false)), |_| Ok(()), &opts);
+        let (score, status) = res?;
         assert!(status.success());
         assert_eq!(score, Some(0));
         let out = std::fs::read_to_string(artifacts.stdout_file())?;

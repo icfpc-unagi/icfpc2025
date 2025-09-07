@@ -202,37 +202,34 @@ pub fn run_task(task: &Task) -> Result<(Option<i64>, i32, u128)> {
 
     // Execute the script (execution only)
     let start = Instant::now();
-    let (score, status, artifacts_opt): (
-        Option<i64>,
-        std::process::ExitStatus,
-        Option<run::Artifacts>,
-    ) = match run::run_command_with_timeout(
-        &script,
-        Duration::from_secs(600),
-        Arc::clone(&cancel),
-        |_| Ok(()),
-        &run::RunOptions::default(),
-    ) {
-        Ok((s, st, arts)) => (s, st, Some(arts)),
-        Err(e) => {
-            eprintln!(
-                "[executor] run_command failed for task_id={} (treat as timeout/cancel): {}",
-                task.task_id, e
-            );
-            #[cfg(unix)]
-            {
-                (None, std::process::ExitStatus::from_raw(1 << 8), None)
+    let (score, status, artifacts): (Option<i64>, std::process::ExitStatus, run::Artifacts) =
+        match run::run_command_with_timeout(
+            &script,
+            Duration::from_secs(600),
+            Arc::clone(&cancel),
+            |_| Ok(()),
+            &run::RunOptions::default(),
+        ) {
+            (Ok((s, st)), arts) => (s, st, arts),
+            (Err(e), arts) => {
+                eprintln!(
+                    "[executor] run_command failed for task_id={} (treat as timeout/cancel): {}",
+                    task.task_id, e
+                );
+                #[cfg(unix)]
+                {
+                    (None, std::process::ExitStatus::from_raw(1 << 8), arts)
+                }
+                #[cfg(not(unix))]
+                {
+                    let status = std::process::Command::new("cmd")
+                        .args(["/C", "exit", "1"])
+                        .status()
+                        .unwrap_or_else(|_| std::process::ExitStatus::from_raw(1));
+                    (None, status, arts)
+                }
             }
-            #[cfg(not(unix))]
-            {
-                let status = std::process::Command::new("cmd")
-                    .args(["/C", "exit", "1"])
-                    .status()
-                    .unwrap_or_else(|_| std::process::ExitStatus::from_raw(1));
-                (None, status, None)
-            }
-        }
-    };
+        };
 
     let duration_ms = start.elapsed().as_millis();
     let exit_code: i32 = {
@@ -259,19 +256,12 @@ pub fn run_task(task: &Task) -> Result<(Option<i64>, i32, u128)> {
     );
 
     // Upload logs to GCS (only if artifacts exist)
-    if let Some(ref arts) = artifacts_opt {
-        eprintln!(
-            "[executor] uploading logs for task_id={} to gs://icfpc2025-data/logs/{}/",
-            task.task_id, task.task_id
-        );
-        upload_logs(task.task_id, arts)?;
-        eprintln!("[executor] uploaded logs for task_id={}", task.task_id);
-    } else {
-        eprintln!(
-            "[executor] no artifacts; skipping log upload for task_id={}",
-            task.task_id
-        );
-    }
+    eprintln!(
+        "[executor] uploading logs for task_id={} to gs://icfpc2025-data/logs/{}/",
+        task.task_id, task.task_id
+    );
+    upload_logs(task.task_id, &artifacts)?;
+    eprintln!("[executor] uploaded logs for task_id={}", task.task_id);
 
     if let Some(s) = score {
         eprintln!(
