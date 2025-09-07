@@ -360,7 +360,7 @@ fn update_graph(graph: &mut Vec<Vec<usize>>, n: usize) -> bool {
                 a = j;
             }
         }
-        if cnt >= 2 {
+        if cnt >= 1 {
             eprintln!("error: cnt[{}] == {}", i, cnt);
             ret = false;
             continue;
