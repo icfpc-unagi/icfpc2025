@@ -33,10 +33,7 @@ fn main() {
         for k in 0..K {
             let tmp = balanced_plan(judge.num_rooms() * 6, 6, &mut rng);
             plans.push(tmp.iter().map(|&d| (None, d)).collect_vec());
-            if first + judge.num_rooms() * 6 <= F {
-                first += judge.num_rooms() * 6;
-                plans0.push(tmp);
-            } else {
+            {
                 let f = FF;
                 first += f;
                 let mut b = balanced_plan(judge.num_rooms() * 6 - f, 4, &mut rng);
@@ -52,11 +49,8 @@ fn main() {
         let mut labels0 = vec![];
         let mut first = 0;
         for k in 0..K {
-            if first + judge.num_rooms() * 6 <= F {
-                labels0.push(labels[k].clone());
-                first += judge.num_rooms() * 6;
-            } else {
-                let f = F - first;
+            {
+                let f = FF;
                 first += f;
                 if f > 0 {
                     labels0.push(labels[k][..f + 1].to_vec());
