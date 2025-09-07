@@ -29,10 +29,6 @@ use std::time::Instant;
 
 use crate::client;
 
-/// Timeout for API requests in seconds.
-#[cfg(feature = "reqwest")]
-const API_REQUEST_TIMEOUT_SECS: u64 = 120;
-
 /// Fetches `id.json` from the contest's Google Cloud Storage bucket.
 ///
 /// The path is constructed using the `UNAGI_PASSWORD` environment variable:
@@ -226,7 +222,7 @@ pub fn select(problem_name: &str) -> Result<String> {
         id: id.as_str(),
         problem_name,
     };
-    let res = post_json_with_retry(&client, &url, &req, "/select")?;
+    let res = post_json_with_retry(client, &url, &req, "/select")?;
 
     let body: SelectResponse = res.json().context("Failed to parse /select response")?;
     Ok(body.problem_name)
@@ -283,7 +279,7 @@ where
         plans: &plans_vec,
     };
 
-    let res = post_json_with_retry(&client, &url, &req, "/explore")?;
+    let res = post_json_with_retry(client, &url, &req, "/explore")?;
 
     let body: ExploreResponse = res.json().context("Failed to parse /explore response")?;
     Ok(body)
@@ -364,7 +360,7 @@ pub fn guess(map: &Map) -> Result<bool> {
         map,
     };
 
-    let res = post_json_with_retry(&client, &url, &req, "/guess")?;
+    let res = post_json_with_retry(client, &url, &req, "/guess")?;
 
     let body: GuessResponse = res.json().context("Failed to parse /guess response")?;
     // Stop renewal and unlock immediately after a guess is made.
