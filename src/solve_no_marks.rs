@@ -1,6 +1,9 @@
 #![cfg_attr(feature = "skip_lint", allow(clippy::all, clippy::pedantic, warnings))]
 #![allow(non_snake_case)]
 
+use itertools::Itertools;
+use std::path::Path;
+
 use crate::{
     judge::{Guess, check_explore},
     mat,
@@ -861,4 +864,29 @@ pub fn solve_portfolio(
     let guess = extract_guess(&cnf, &info, &buckets, &cand, &edges);
     assert!(check_explore(&guess, plans, labels));
     guess
+}
+
+pub fn solve_cadical_multi(
+    num_rooms: usize,
+    plans: &Vec<Vec<usize>>,
+    labels: &Vec<Vec<usize>>,
+    n_workers: usize,
+) -> Guess {
+    let cadical_path = std::env::var("CADICAL_PATH")
+        .unwrap_or_else(|_| "/home/iwiwi/tmp/cadical-rel-2.1.3/build/cadical".to_owned());
+
+    let solvers = (0..n_workers)
+        .map(|seed| SATSolver {
+            path: cadical_path.to_owned(),
+            args: [format!("--seed={}", seed), "--sat".to_owned()].to_vec(),
+        })
+        .collect_vec();
+
+    let dimacs_path = format!("tmp/{}.cnf", std::process::id());
+    let dimacs_path = Path::new(&dimacs_path);
+    if let Some(parent) = dimacs_path.parent() {
+        std::fs::create_dir_all(parent).unwrap();
+    }
+
+    solve_portfolio(num_rooms, &plans, &labels, &solvers, dimacs_path)
 }
