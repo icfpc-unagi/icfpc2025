@@ -189,19 +189,23 @@ fn main() {
             for u in 0..n * D {
                 for e in 0..6 {
                     if E[u][e][v][f] != !0 {
-                        if !col.contains(&E[u][e][v][f]) {
-                            col.push(E[u][e][v][f]);
-                        }
+                        col.push(E[u][e][v][f]);
                     }
                     if E2[u][e][v][f] != !0 {
-                        if !col.contains(&E2[u][e][v][f]) {
-                            col.push(E2[u][e][v][f]);
-                        }
+                        col.push(E2[u][e][v][f]);
                     }
                 }
             }
             col.sort();
+            let col_size = col.len();
             col.dedup();
+            let col_size2 = col.len();
+            if col_size != col_size2 {
+                eprintln!(
+                    "find bug? col_size != col_size2: {} != {}",
+                    col_size, col_size2
+                );
+            }
             cnf.choose_one(&col);
         }
     }
@@ -213,19 +217,23 @@ fn main() {
             for v in 0..n * D {
                 for f in 0..6 {
                     if E[u][e][v][f] != !0 {
-                        if !row.contains(&E[u][e][v][f]) {
-                            row.push(E[u][e][v][f]);
-                        }
+                        row.push(E[u][e][v][f]);
                     }
                     if E2[u][e][v][f] != !0 {
-                        if !row.contains(&E2[u][e][v][f]) {
-                            row.push(E2[u][e][v][f]);
-                        }
+                        row.push(E2[u][e][v][f]);
                     }
                 }
             }
             row.sort();
+            let row_size = row.len();
             row.dedup();
+            let row_size2 = row.len();
+            if row_size != row_size2 {
+                eprintln!(
+                    "find bug? row_size != row_size2: {} != {}",
+                    row_size, row_size2
+                );
+            }
             cnf.choose_one(&row);
         }
     }
