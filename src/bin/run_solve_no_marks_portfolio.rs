@@ -120,15 +120,26 @@ fn main() {
         })
         .collect_vec();
 
+    let solvers = (0..25)
+        .map(|seed| SATSolver {
+            path: "/home/iwiwi/tmp/cadical-rel-2.1.3/build/cadical".to_owned(),
+            args: [format!("--seed={}", seed), "--sat".to_owned()].to_vec(),
+        })
+        .chain((0..25).map(|seed| SATSolver {
+            path: "/home/iwiwi/tmp/kissat-4.0.3-linux-amd64".to_owned(),
+            args: [format!("--seed={}", seed), "--sat".to_owned()].to_vec(),
+        }))
+        .collect_vec();
+
     let dimacs_path = format!("sat_cnfs/tmp/{}.cnf", std::process::id());
     let dimacs_path = Path::new(&dimacs_path);
     if let Some(parent) = dimacs_path.parent() {
         std::fs::create_dir_all(parent).unwrap();
     }
 
-    let guess = solve_cadical_multi(judge.num_rooms(), &plans, &labels, 100);
-    judge.guess(&guess);
-    return;
+    // let guess = solve_cadical_multi(judge.num_rooms(), &plans, &labels, 100);
+    // judge.guess(&guess);
+    // return;
 
     let guess = icfpc2025::solve_no_marks::solve_portfolio(
         judge.num_rooms(),

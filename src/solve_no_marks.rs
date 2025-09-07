@@ -890,3 +890,35 @@ pub fn solve_cadical_multi(
 
     solve_portfolio(num_rooms, &plans, &labels, &solvers, dimacs_path)
 }
+
+pub fn solve_cnf_parallel(cnf: &mut Cnf, n_cadical_workers: usize, n_kissat_workers: usize) {
+    let cadical_path = std::env::var("CADICAL_PATH")
+        .unwrap_or_else(|_| "/home/iwiwi/tmp/cadical-rel-2.1.3/build/cadical".to_owned());
+
+    let kissat_path = std::env::var("KISSAT_PATH")
+        .unwrap_or_else(|_| "/home/iwiwi/tmp/kissat-4.0.3-linux-amd64".to_owned());
+
+    let solvers: Vec<SATSolver> = (0..n_cadical_workers)
+        .map(|seed| SATSolver {
+            path: cadical_path.to_owned(),
+            args: [format!("--seed={}", seed), "--sat".to_owned()].to_vec(),
+        })
+        .chain((0..n_kissat_workers).map(|seed| SATSolver {
+            path: kissat_path.to_owned(),
+            args: [format!("--seed={}", seed), "--sat".to_owned()].to_vec(),
+        }))
+        .collect_vec();
+
+    let dimacs_path = format!("tmp/{}.cnf", std::process::id());
+    let dimacs_path = Path::new(&dimacs_path);
+    if let Some(parent) = dimacs_path.parent() {
+        std::fs::create_dir_all(parent).unwrap();
+    }
+    cnf.write_dimacs(dimacs_path).unwrap();
+    let solution = launch_portfolio(dimacs_path, &solvers);
+
+    for &v in &solution {
+        cnf.clause([v]);
+    }
+    assert_eq!(cnf.sat.solve(), Some(true));
+}
