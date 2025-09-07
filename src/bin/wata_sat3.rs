@@ -92,7 +92,7 @@ fn main() {
             }
         }
         let mut labels = judge.explore(&plans);
-        if gacha(n, &plans[0], &labels[0]) > 0.0012 {
+        if gacha(n, &plans[0], &labels[0]) > 0.0015 {
             panic!("unlucky");
         }
 

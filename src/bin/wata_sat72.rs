@@ -61,7 +61,7 @@ fn main() {
         }
         let plans0 = vec![plans[0].iter().map(|a| a.1).collect_vec()];
         let mut labels = judge.explore(&plans);
-        if gacha(n, &plans[0], &labels[0]) > 0.0012 {
+        if gacha(n, &plans[0], &labels[0]) > 0.0015 {
             panic!("unlucky");
         }
         let mut labels0 = vec![];
