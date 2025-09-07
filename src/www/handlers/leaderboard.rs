@@ -16,7 +16,7 @@ use std::fmt::Write;
 use tokio::time::Duration;
 
 const BUCKET: &str = "icfpc2025-data";
-const TZ: chrono::FixedOffset = chrono::FixedOffset::east_opt(9 * 3600).unwrap();
+const _TZ: chrono::FixedOffset = chrono::FixedOffset::east_opt(9 * 3600).unwrap();
 
 #[derive(Deserialize)]
 pub struct LeaderboardQuery {
@@ -77,6 +77,7 @@ pub async fn show(
 async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<String> {
     // Fetch active lock
     // Build notification banner if active_lock_user exists
+    let t0 = std::time::Instant::now();
     let banner_html = if let Some(user) = sql::cell::<String>(
         r"
           SELECT lock_user
@@ -97,9 +98,12 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
     } else {
         String::new()
     };
+    let banner_ms = t0.elapsed().as_millis();
 
     // Fetch all scores.
+    let t0 = std::time::Instant::now();
     let scores = api::scores()?;
+    let scores_ms = t0.elapsed().as_millis();
 
     // Build problem navigation links for the top of the page.
     let mut nav_links: Vec<String> = Vec::new();
@@ -128,9 +132,13 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
     );
 
     // Fetch recent guesses for the problem to display.
-    let guesses_html = recent_guesses(problem).await?;
+    let t0 = std::time::Instant::now();
+    // let guesses_html = recent_guesses(problem).await?;
+    let guesses_html = "".to_string();
+    let recent_ms = t0.elapsed().as_millis();
 
     // Fetch the latest correct guess for the problem, optionally bypassing the cache.
+    let t0 = std::time::Instant::now();
     let map_html = if problem == "global" {
         String::new()
     } else if nocache {
@@ -138,8 +146,11 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
     } else {
         last_correct_guess(problem)?
     };
+    let last_guess_ms = t0.elapsed().as_millis();
 
+    let t0 = std::time::Instant::now();
     let snapshots = fetch_snapshots(problem).await?;
+    let fetch_ms = t0.elapsed().as_millis();
 
     // Construct the final HTML page, embedding the data and the charting JavaScript.
     let html = format!(
@@ -325,10 +336,15 @@ document.getElementById('lb-table').addEventListener('click', (ev) => {{
         count = snapshots.len(),
         snapshots = serde_json::to_string(&snapshots)?,
     );
+    // Append timing information at the end of the HTML body.
+    let timings_html = format!(
+        "\n<hr><div style=\"font:12px monospace;opacity:0.7;margin-top:8px;\">timings: fetch_snapshots={fetch_ms}ms, last_correct_guess={last_guess_ms}ms, recent_guesses={recent_ms}ms, banner_html={banner_ms}ms, api::scores={scores_ms}ms</div>",
+    );
+    let full_html = format!("{}{}", html, timings_html);
 
     Ok(html_page(
         &format!("Leaderboard - {problem}"),
-        &html,
+        &full_html,
         &banner_html,
     ))
 }
@@ -433,7 +449,7 @@ async fn fetch_snapshots(problem: &str) -> Result<Vec<Snapshot>> {
 }
 
 /// 最近の提出（guess）を取得してHTMLとして返す関数
-async fn recent_guesses(problem: &str) -> Result<String> {
+async fn _recent_guesses(problem: &str) -> Result<String> {
     // 直近の提出（guess）を取得
     let rows = if problem != "global" {
         sql::select(
@@ -493,7 +509,7 @@ async fn recent_guesses(problem: &str) -> Result<String> {
             w,
             r#"<tr><td>{}</td><td title="{}">{}</td><td>{}</td><td>{}...</td><td>{}</td></tr>"#,
             id,
-            ts.and_local_timezone(TZ).unwrap().naive_local(),
+            ts.and_local_timezone(_TZ).unwrap().naive_local(),
             ts.signed_duration_since(now).humanize(),
             problem,
             map_leading_part,
