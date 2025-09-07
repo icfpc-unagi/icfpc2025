@@ -101,6 +101,9 @@ fn main() {
         for v in 0..n {
             for e in 0..6 {
                 for f in 0..6 {
+                    if u > v || (u == v && e > f) {
+                        continue;
+                    }
                     //u/vについてD=3種類の候補を作る
                     let us = vec![u * 3, u * 3 + 1, u * 3 + 2];
                     let vs = vec![v * 3, v * 3 + 1, v * 3 + 2];
