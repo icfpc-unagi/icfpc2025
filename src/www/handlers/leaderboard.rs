@@ -434,9 +434,10 @@ async fn fetch_snapshots(problem: &str) -> Result<Vec<Snapshot>> {
             }
         }
         if picked.last() != keys.last()
-            && let Some(last) = keys.last() {
-                picked.push(*last);
-            }
+            && let Some(last) = keys.last()
+        {
+            picked.push(*last);
+        }
         picked
     };
     let mut snapshots = Vec::new();

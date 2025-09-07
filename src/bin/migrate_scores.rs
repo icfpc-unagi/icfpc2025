@@ -10,12 +10,17 @@ async fn main() -> anyhow::Result<()> {
         .into_iter()
         .inspect(|d| eprintln!("Found directory: {}", d))
         .map(|d| d.trim_end_matches('/').to_string());
+    let problems = all_problems()
+        .iter()
+        .map(|Problem { problem, .. }| problem.as_str())
+        .chain(std::iter::once("global"))
+        .collect::<Vec<_>>();
     for ts_str in stamps {
         eprintln!("Processing timestamp {}... ", ts_str);
         // ts は "%Y%m%d-%H%M%S" 形式の文字列なのでパースして NaiveDateTime を得る
         let ts = NaiveDateTime::parse_from_str(&ts_str, "%Y%m%d-%H%M%S")
             .map_err(|e| anyhow::anyhow!("Failed to parse timestamp '{}': {}", ts_str, e))?;
-        for Problem { problem, .. } in all_problems() {
+        for &problem in &problems {
             eprintln!("  Problem {}...", problem);
             let object = format!("history/{}/{}.json", ts_str, problem);
             match crate::gcp::gcs::download_object(BUCKET, &object).await {
