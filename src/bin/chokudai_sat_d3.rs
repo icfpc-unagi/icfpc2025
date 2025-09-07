@@ -24,7 +24,7 @@ fn main() {
     let mut judge = icfpc2025::judge::get_judge_from_stdin();
     let D = 3; // 倍化率
     let K = 1; // 全体のクエリ数
-    let F = judge.num_rooms() * 2; // 前半パートの長さ
+    let FF = judge.num_rooms() * 2; // 前半パートの長さ
     let n = judge.num_rooms() / D;
     let (plans, labels) = {
         let mut plans = vec![];
@@ -33,11 +33,8 @@ fn main() {
         for k in 0..K {
             let tmp = balanced_plan(judge.num_rooms() * 6, 6, &mut rng);
             plans.push(tmp.iter().map(|&d| (None, d)).collect_vec());
-            if first + judge.num_rooms() * 6 <= F {
-                first += judge.num_rooms() * 6;
-                plans0.push(tmp);
-            } else {
-                let f = F - first;
+            {
+                let f = FF;
                 first += f;
                 let mut b = balanced_plan(judge.num_rooms() * 6 - f, 4, &mut rng);
                 for p in f..judge.num_rooms() * 6 {
@@ -52,11 +49,8 @@ fn main() {
         let mut labels0 = vec![];
         let mut first = 0;
         for k in 0..K {
-            if first + judge.num_rooms() * 6 <= F {
-                labels0.push(labels[k].clone());
-                first += judge.num_rooms() * 6;
-            } else {
-                let f = F - first;
+            {
+                let f = FF;
                 first += f;
                 if f > 0 {
                     labels0.push(labels[k][..f + 1].to_vec());
@@ -108,7 +102,7 @@ fn main() {
                     let us = vec![u * 3, u * 3 + 1, u * 3 + 2];
                     let vs = vec![v * 3, v * 3 + 1, v * 3 + 2];
                     //6通りの組み合わせについて、E/E2の空いているほうに割り当てる
-
+                    //6つのpermにおいて、D=2のとき各辺はちょうど2度現れる。(u=vかつe=fを除く)
                     for perm in (0..3).permutations(3) {
                         //全permutationを列挙
                         let u1 = us[perm[0]];
@@ -118,20 +112,22 @@ fn main() {
                         let v2 = vs[1];
                         let v3 = vs[2];
 
-                        //u == vの時は、有向グラフになっているかチェックする
+                        //u == vの時は、入口＝出口になっているかチェックする
+                        //問題で与えられる隠されたグラフは無向グラフ（入口＝出口になっている）であり、
+                        //u==v, e==fの時は、u1-v2, u2-v3, u3-v1のような辺を貼ると入口と出口が対応しない
+                        //これがダメなのは2種類のみ。自己ループは良いので(0,1,2)や(2,1,0)はOK
                         if u == v && e == f {
                             //u1-v2, u2-v3, u3-v1はだめ
-                            if (u1 == v2 && e == f) || (u2 == v3 && e == f) || (u3 == v1 && e == f)
-                            {
+                            if (u1 == v2) || (u2 == v3) || (u3 == v1) {
                                 continue;
                             }
                             //u1-v3, u2-v1, u3-v2はだめ
-                            if (u1 == v3 && e == f) || (u2 == v1 && e == f) || (u3 == v2 && e == f)
-                            {
+                            if (u1 == v3) || (u2 == v1) || (u3 == v2) {
                                 continue;
                             }
                         }
 
+                        //u1<->v1を結ぶとき、u2<->v2, u3<->v3も結ぶため、3つの辺をまとめて一つの変数にする
                         let now_e = cnf.var();
 
                         if E[u1][e][v1][f] == !0 {
@@ -193,42 +189,46 @@ fn main() {
             for u in 0..n * D {
                 for e in 0..6 {
                     if E[u][e][v][f] != !0 {
-                        col.push(E[u][e][v][f]);
+                        if !col.contains(&E[u][e][v][f]) {
+                            col.push(E[u][e][v][f]);
+                        }
                     }
                     if E2[u][e][v][f] != !0 {
-                        col.push(E2[u][e][v][f]);
+                        if !col.contains(&E2[u][e][v][f]) {
+                            col.push(E2[u][e][v][f]);
+                        }
                     }
                 }
             }
             cnf.choose_one(&col);
         }
     }
+
+    // u の e 番目のドアはどれか一つに結ぶ
     for u in 0..n * D {
         for e in 0..6 {
             let mut row = vec![];
             for v in 0..n * D {
                 for f in 0..6 {
                     if E[u][e][v][f] != !0 {
-                        row.push(E[u][e][v][f]);
+                        if !row.contains(&E[u][e][v][f]) {
+                            row.push(E[u][e][v][f]);
+                        }
                     }
                     if E2[u][e][v][f] != !0 {
-                        row.push(E2[u][e][v][f]);
+                        if !row.contains(&E2[u][e][v][f]) {
+                            row.push(E2[u][e][v][f]);
+                        }
                     }
                 }
             }
-            assert!(
-                !row.is_empty(),
-                "no outgoing candidates for (u={}, e={})",
-                u,
-                e
-            );
             cnf.choose_one(&row);
         }
     }
 
     //各時間について解く
-    //色は001122330011....のように2つずつ並ぶ
-    //なので最初の部屋は色labels[0]なので、最初の部屋はlabels[0]*2と決め打って良い
+    //色は001122330011....のようにDつずつ並ぶ
+    //なので最初の部屋は色labels[0]なので、最初の部屋はlabels[0]*Dと決め打って良い
 
     // いる場所Vについての制約
 
@@ -368,6 +368,9 @@ fn main() {
 
     eprintln!("色チェックをするよ");
     for t in 0..plans.len() {
+        let (new_c, e) = plans[t];
+
+        // ラベル整合性チェック
         let now_color = now_room_color[now_room];
         if now_color != labels[t] {
             eprintln!(
@@ -376,13 +379,18 @@ fn main() {
             );
         }
 
-        let (new_c, e) = plans[t];
-        if new_c.is_some() {
-            // 色が決まっている場合
-            let new_c = new_c.unwrap();
-            now_room_color[now_room] = new_c;
+        // 色の塗り替え
+        if let Some(c) = new_c {
+            now_room_color[now_room] = c;
         }
-        // ドアを通る
+
+        // セパレータは「初期位置にワープ」扱い。移動しない。
+        if e == !0 {
+            now_room = first_room;
+            continue;
+        }
+
+        // 通常移動
         now_room = guess.graph[now_room][e].0;
     }
 
