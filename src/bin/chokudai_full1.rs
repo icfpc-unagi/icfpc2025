@@ -241,7 +241,7 @@ fn main() {
             let mut step = None;
             if door2.len() == dstart + 1 {
                 for k in 0..qnum2 {
-                    id += (r2[k][dstart] as usize) << (2 * k);
+                    id += (pre_id as usize) << (2 * k);
                 }
             }
             let next_door = rnd.random_range(0..6);
