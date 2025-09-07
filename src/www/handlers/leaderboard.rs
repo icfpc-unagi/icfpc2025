@@ -404,10 +404,11 @@ async fn fetch_snapshots(problem: &str) -> Result<Vec<Snapshot>> {
     snaps.sort_by(|a, b| a.0.cmp(&b.0));
     Ok(snaps
         .into_iter()
-        .map(|(ts, bytes)| Snapshot {
-            ts,
-            data: serde_json::from_slice::<Vec<LeaderboardEntry>>(&bytes)
-                .expect("Failed to parse leaderboard snapshot JSON"),
+        .map(|(ts, bytes)| {
+            let data = serde_json::from_slice::<Vec<LeaderboardEntry>>(&bytes)
+                .inspect_err(|e| eprintln!("Failed to parse snapshot JSON for {}: {}", ts, e))
+                .unwrap_or_default();
+            Snapshot { ts, data }
         })
         .collect())
 }
