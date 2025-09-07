@@ -185,17 +185,28 @@ fn main() {
 
         if let Some(new_c) = plans[t].0 {
             for ui in 0..n * D {
-                // V[t][ui] => C[t+1][ui][new_c]
+                // 訪問頂点のみ「new_c に上書き」
+                //   V[t][ui] => C[t+1][ui][new_c]
                 cnf.clause([-V[t][ui], C[t + 1][ui][new_c]]);
-                // V[t][ui] => !C[t+1][ui][c]  (c != new_c)
                 for c in 0..4 {
                     if c != new_c {
+                        //   V[t][ui] => !C[t+1][ui][c != new_c]
                         cnf.clause([-V[t][ui], -C[t + 1][ui][c]]);
                     }
-                    // 正色の持ち上げ
-                    cnf.clause([V[t][ui], -C[t][ui][c], C[t + 1][ui][c]]);
-                    // 反色の持ち上げ
-                    cnf.clause([V[t][ui], C[t][ui][c], -C[t + 1][ui][c]]);
+                }
+            }
+            // 非訪問頂点 uj については等式保持（V[t][ui] をガードに、uj != ui）
+            for ui in 0..n * D {
+                for uj in 0..n * D {
+                    if uj == ui {
+                        continue;
+                    }
+                    for c in 0..4 {
+                        // (V[t][ui] && C[t][uj][c]) -> C[t+1][uj][c]
+                        cnf.clause([-V[t][ui], -C[t][uj][c], C[t + 1][uj][c]]);
+                        // (V[t][ui] && !C[t][uj][c]) -> !C[t+1][uj][c]
+                        cnf.clause([-V[t][ui], C[t][uj][c], -C[t + 1][uj][c]]);
+                    }
                 }
             }
         } else {
