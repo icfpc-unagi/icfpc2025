@@ -206,7 +206,13 @@ pub fn run_task(task: &Task) -> Result<(Option<i64>, i32, u128)> {
         Option<i64>,
         std::process::ExitStatus,
         Option<run::Artifacts>,
-    ) = match run::run_command(&script, Duration::from_secs(600), Arc::clone(&cancel)) {
+    ) = match run::run_command_with_timeout(
+        &script,
+        Duration::from_secs(600),
+        Arc::clone(&cancel),
+        |_| Ok(()),
+        &run::RunOptions::default(),
+    ) {
         Ok((s, st, arts)) => (s, st, Some(arts)),
         Err(e) => {
             eprintln!(
