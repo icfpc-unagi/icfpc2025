@@ -140,7 +140,7 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
             best.map_or("-".to_string(), |s| s.to_string())
         );
         // Unagiのスコアが最良でない場合は赤くする
-        if let (Some(unagi_score), Some(best_score)) = (scores.get(p), best_scores.get(p))
+        if let (Some(unagi_score), Some(best_score)) = (score, best)
             && unagi_score > best_score
         {
             link = format!(r#"<span style="color:red;">{}</span>"#, link);
