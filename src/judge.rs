@@ -158,12 +158,12 @@ impl TryFrom<&Guess> for api::Map {
                     ));
                 }
                 // Add each edge only once to avoid duplicates.
-                if (i, door) <= graph[i][door] {
+                if (i, door) <= (i2, door2) {
                     connections.push(api::MapConnection {
                         from: api::MapConnectionEnd { room: i, door },
                         to: api::MapConnectionEnd {
-                            room: graph[i][door].0,
-                            door: graph[i][door].1,
+                            room: i2,
+                            door: door2,
                         },
                     });
                 }
