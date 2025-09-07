@@ -1521,6 +1521,7 @@ dependencies = [
  "serde_json",
  "sha1",
  "svg",
+ "thiserror",
  "tokio",
 ]
 

@@ -109,7 +109,7 @@ fn main() -> Result<()> {
         start,
         rooms,
         graph,
-    } = map.into();
+    } = (&map).into();
     let n = rooms.len();
 
     eprintln!("start = {}", start);
@@ -213,5 +213,14 @@ fn main() -> Result<()> {
     for i in 0..m {
         eprintln!("{:?}", graph[i]);
     }
+
+    let guess = Guess {
+        start: renamed[start].0,
+        rooms: classes.iter().map(|cls| rooms[cls[0]]).collect(),
+        graph,
+    };
+    let map = icfpc2025::api::Map::try_from(&guess)?;
+    let json_out = serde_json::to_string(&map).unwrap();
+    println!("{}", json_out);
     Ok(())
 }

@@ -27,7 +27,7 @@ pub struct JsonIn {
     #[serde(default)]
     pub num_rooms: Option<usize>,
     #[serde(default)]
-    pub map: Option<crate::api::Map>,
+    pub map: Option<api::Map>,
     // Top-level single explore format
     #[serde(default)]
     pub plans: Option<Vec<String>>, // e.g., ["0123"]
@@ -112,21 +112,69 @@ pub struct Guess {
     pub graph: Vec<[(usize, usize); 6]>,
 }
 
-impl From<crate::api::Map> for Guess {
-    fn from(map: crate::api::Map) -> Self {
+impl From<&api::Map> for Guess {
+    fn from(map: &api::Map) -> Self {
         let n = map.rooms.len();
         let mut graph = vec![[(!0, !0); 6]; n];
-        for c in &map.connections {
+        for c in map.connections.iter() {
             let fr = &c.from;
             let to = &c.to;
             graph[fr.room][fr.door] = (to.room, to.door);
             graph[to.room][to.door] = (fr.room, fr.door);
         }
         Self {
-            rooms: map.rooms,
+            rooms: map.rooms.clone(),
             start: map.starting_room,
             graph,
         }
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum ParseGuessError {
+    #[error("Graph is not undirected {0} {1} -> {2} {3} -> {4} {5}")]
+    GraphIsNotDirected(usize, usize, usize, usize, usize, usize),
+}
+
+impl TryFrom<&Guess> for api::Map {
+    type Error = ParseGuessError;
+
+    fn try_from(
+        Guess {
+            graph,
+            rooms,
+            start,
+        }: &Guess,
+    ) -> Result<Self, Self::Error> {
+        // Convert the Guess struct into the format required by the API.
+        let mut connections = vec![];
+        for i in 0..graph.len() {
+            for door in 0..6 {
+                let (i2, door2) = graph[i][door];
+                let (i3, door3) = graph[i2][door2];
+                if (i3, door3) != (i, door) {
+                    return Err(ParseGuessError::GraphIsNotDirected(
+                        i, door, i2, door2, i3, door3,
+                    ));
+                }
+                // Add each edge only once to avoid duplicates.
+                if (i, door) <= graph[i][door] {
+                    connections.push(api::MapConnection {
+                        from: api::MapConnectionEnd { room: i, door },
+                        to: api::MapConnectionEnd {
+                            room: graph[i][door].0,
+                            door: graph[i][door].1,
+                        },
+                    });
+                }
+            }
+        }
+        // Delegate the guess to the API client.
+        Ok(api::Map {
+            rooms: rooms.clone(),
+            starting_room: *start,
+            connections,
+        })
     }
 }
 
@@ -351,30 +399,9 @@ impl Judge for RemoteJudge {
             );
         }
         // Convert the Guess struct into the format required by the API.
-        let mut connections = vec![];
-        for i in 0..out.graph.len() {
-            for door in 0..6 {
-                let (i2, door2) = out.graph[i][door];
-                assert_eq!(out.graph[i2][door2], (i, door), "Graph is not undirected");
-                // Add each edge only once to avoid duplicates.
-                if (i, door) <= out.graph[i][door] {
-                    connections.push(api::MapConnection {
-                        from: api::MapConnectionEnd { room: i, door },
-                        to: api::MapConnectionEnd {
-                            room: out.graph[i][door].0,
-                            door: out.graph[i][door].1,
-                        },
-                    });
-                }
-            }
-        }
+        let map = api::Map::try_from(out).unwrap();
         // Delegate the guess to the API client.
-        let ret = api::guess(&api::Map {
-            rooms: out.rooms.clone(),
-            starting_room: out.start,
-            connections,
-        })
-        .expect("Failed to guess");
+        let ret = api::guess(&map).expect("Failed to guess");
 
         if ret {
             eprintln!("!log status AC");
@@ -682,7 +709,7 @@ impl LocalJudge {
     }
 
     /// Creates a new `LocalJudge` from a map structure provided in an `api::Map`.
-    pub fn new_json(problem_name: Option<String>, map: &crate::api::Map) -> Self {
+    pub fn new_json(problem_name: Option<String>, map: &api::Map) -> Self {
         let n = map.rooms.len();
         let mut graph = vec![[0usize; 6]; n];
 

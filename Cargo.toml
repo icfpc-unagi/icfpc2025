@@ -58,6 +58,7 @@ rustsat-minisat = "0.7.3"
 rustsat-glucose = "0.7.3"
 ordered-float = "5.0.0"
 cached = { version = "0.56.0", features = ["async", "default"] }
+thiserror = "2.0.16"
 
 [profile.release]
 debug = true
