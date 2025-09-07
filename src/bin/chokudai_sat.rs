@@ -120,13 +120,10 @@ fn main() {
 
     // いる場所Vについての制約
     // V[t][u*D+i] := 時刻 t の開始時点で、存在するのは (u,i) である
-    // 最初の部屋は first_room にいる。uは現在の部屋
-    let mut u = first_room;
     cnf.clause([V[0][u]]);
     for t in 0..plans.len() {
         //plants[t].1 == !0 のときは区切りなので最初に戻る
         if plans[t].1 == !0 {
-            u = first_room;
             cnf.clause([V[t + 1][0]]);
         } else {
             // 時刻tではドアeを選択する
@@ -141,12 +138,12 @@ fn main() {
                     }
                 }
             }
-            u = v;
         }
     }
 
     // 色についての制約
-    u = first_room;
+    // 最初の部屋は first_room にいる。uは現在の部屋
+    let mut u = first_room;
     // prev_t[u] := u に最後に訪れた時刻
     // C[t][ui][c] := 時刻 t の開始時点で、(u,i) の色が c である
     let mut C = mat![!0; plans.len() + 1; n * D; 4];
@@ -208,7 +205,7 @@ fn main() {
 
     assert_eq!(cnf.sat.solve(), Some(true));
     let mut guess = Guess {
-        start: super_guess.start * D,
+        start: first_room,
         graph: vec![[(!0, !0); 6]; judge.num_rooms()],
         rooms: vec![0; judge.num_rooms()],
     };
