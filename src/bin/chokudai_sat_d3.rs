@@ -154,6 +154,29 @@ fn main() {
                         } else {
                             eprintln!("バグ? 新しい辺を発見: {}-{} -> {}-{}", u3, e, v3, f);
                         }
+
+                        // 逆向きの辺も貼る
+                        if E[v1][f][u1][e] == !0 {
+                            E[v1][f][u1][e] = now_e;
+                        } else if E2[v1][f][u1][e] == !0 {
+                            E2[v1][f][u1][e] = now_e;
+                        } else {
+                            eprintln!("バグ? 新しい辺を発見: {}-{} -> {}-{}", v1, f, u1, e);
+                        }
+                        if E[v2][f][u2][e] == !0 {
+                            E[v2][f][u2][e] = now_e;
+                        } else if E2[v2][f][u2][e] == !0 {
+                            E2[v2][f][u2][e] = now_e;
+                        } else {
+                            eprintln!("バグ? 新しい辺を発見: {}-{} -> {}-{}", v2, f, u2, e);
+                        }
+                        if E[v3][f][u3][e] == !0 {
+                            E[v3][f][u3][e] = now_e;
+                        } else if E2[v3][f][u3][e] == !0 {
+                            E2[v3][f][u3][e] = now_e;
+                        } else {
+                            eprintln!("バグ? 新しい辺を発見: {}-{} -> {}-{}", v3, f, u3, e);
+                        }
                     }
                 }
             }
@@ -321,13 +344,13 @@ fn main() {
             for v in 0..n * D {
                 for f in 0..6 {
                     if E[u][e][v][f] != !0 && cnf.sat.value(E[u][e][v][f]) == Some(true) {
-                        //assert!(guess.graph[u][e] == (!0, !0));
-                        //assert!(cnf.sat.value(E[v][f][u][e]) == Some(true));
+                        assert!(guess.graph[u][e] == (!0, !0));
+                        assert!(cnf.sat.value(E[v][f][u][e]) == Some(true));
                         guess.graph[u][e] = (v, f);
                     }
                     if E2[u][e][v][f] != !0 && cnf.sat.value(E2[u][e][v][f]) == Some(true) {
-                        //assert!(guess.graph[u][e] == (!0, !0));
-                        //assert!(cnf.sat.value(E2[v][f][u][e]) == Some(true));
+                        assert!(guess.graph[u][e] == (!0, !0));
+                        assert!(cnf.sat.value(E2[v][f][u][e]) == Some(true));
                         guess.graph[u][e] = (v, f);
                     }
                 }
