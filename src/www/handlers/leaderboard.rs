@@ -10,7 +10,6 @@ use anyhow::Result;
 use cached::proc_macro::cached;
 use chrono::NaiveDateTime;
 use mysql::params;
-use mysql::prelude::*;
 use serde::Deserialize;
 use std::fmt::Write;
 use tokio::time::Duration;

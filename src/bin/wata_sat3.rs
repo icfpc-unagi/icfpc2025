@@ -1,4 +1,4 @@
-#![allow(non_snake_case)]
+#![cfg_attr(feature = "skip_lint", allow(clippy::all, clippy::pedantic, warnings))]
 
 use icfpc2025::{
     judge::Guess,
