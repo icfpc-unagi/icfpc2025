@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+
+trap "kill -9 -$$" SIGINT
+
 set -Eeuo pipefail
 
 # Runs the target command, killing and retrying if it exceeds 5 minutes.
