@@ -99,9 +99,12 @@ fn main() {
         }
     }
 
-    let ret = false; //update_graph(&mut graph, n);
+    let ret = update_graph(&mut graph, n);
 
     for _ in 0..100 {
+        if ret {
+            break;
+        }
         //second phase
         //warshall floyd
         let mut dist = vec![vec![!0; n]; n];
@@ -164,8 +167,6 @@ fn main() {
                 now
             );
         }
-
-        //eprintln!("path len: {}, sum_dist: {}", path.len(), sum_dist);
 
         let mut pos = vec![];
         pos.push(path[0]);
@@ -259,8 +260,8 @@ fn main() {
             }
             pre_id = id;
         }
-        let ret2 = false;
-        //let ret2 = update_graph(&mut graph, n);
+        //let ret2 = false;
+        let ret2 = update_graph(&mut graph, n);
         if ret2 {
             break;
         }
