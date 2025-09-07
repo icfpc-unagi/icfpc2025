@@ -142,10 +142,6 @@ fn main() {
     }
 
     // 色についての制約
-    // 最初の部屋は first_room にいる。uは現在の部屋
-    let mut u = first_room;
-    // prev_t[u] := u に最後に訪れた時刻
-    // C[t][ui][c] := 時刻 t の開始時点で、(u,i) の色が c である
     let mut C = mat![!0; plans.len() + 1; n * D; 4];
     // 最初の部屋の色は最初に決まっている
     for ui in 0..n * D {
@@ -183,9 +179,9 @@ fn main() {
             for ui in 0..n * D {
                 for c in 0..4 {
                     // 単純に前ターンのCを引き継げばよい
-                    // C[t-1][ui][c] -> C[t][ui][c]
+                    // C[t][ui][c] -> C[t+1][ui][c]
                     cnf.clause([-C[t][ui][c], C[t + 1][ui][c]]);
-                    // !C[t-1][ui][c] -> !C[t][ui][c]
+                    // !C[t][ui][c] -> !C[t+1][ui][c]
                     cnf.clause([C[t][ui][c], -C[t + 1][ui][c]]);
                 }
             }
@@ -203,6 +199,7 @@ fn main() {
         }
     }
 
+    // 解けたらうれしいな
     assert_eq!(cnf.sat.solve(), Some(true));
     let mut guess = Guess {
         start: first_room,
