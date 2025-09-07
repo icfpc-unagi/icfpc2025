@@ -23,19 +23,11 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "reqwest")]
 use std::collections::HashMap;
 #[cfg(feature = "reqwest")]
-use std::sync::atomic::{AtomicBool, Ordering};
-#[cfg(feature = "reqwest")]
-use std::sync::{Arc, Mutex};
-#[cfg(feature = "reqwest")]
-use std::thread;
-#[cfg(feature = "reqwest")]
 use std::time::Duration;
 
 /// Timeout for API requests in seconds.
 #[cfg(feature = "reqwest")]
 const API_REQUEST_TIMEOUT_SECS: u64 = 120;
-#[cfg(feature = "reqwest")]
-use std::time::Duration;
 
 /// Creates a new reqwest HTTP client with a default timeout.
 #[cfg(feature = "reqwest")]
