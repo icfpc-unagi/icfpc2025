@@ -1,9 +1,10 @@
 use anyhow::{Context, Result};
+use chrono::{Datelike, Timelike};
 use serde_json::Value as JsonValue;
 use std::fs::{self, File};
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStderr, ChildStdout, Command, ExitStatus, Stdio};
+use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},
@@ -29,18 +30,18 @@ pub fn run_command(
     let mut child = spawn_bash(script, artifacts.root_dir())?;
 
     // Take pipes and spawn reader threads
-    let out_pipe = child.stdout.take().unwrap();
-    let err_pipe = child.stderr.take().unwrap();
+    let out_pipe = child.stdout.take().context("child missing stdout pipe")?;
+    let err_pipe = child.stderr.take().context("child missing stderr pipe")?;
     let last_json: Arc<Mutex<Option<JsonValue>>> = Arc::new(Mutex::new(None));
-    let out_thread = spawn_stdout_thread(out_pipe, stdout_file, Arc::clone(&last_json));
-    let err_thread = spawn_stderr_thread(err_pipe, stderr_file);
+    let out_thread = spawn_log_thread(out_pipe, stdout_file, Some(Arc::clone(&last_json)));
+    let err_thread = spawn_log_thread(err_pipe, stderr_file, None);
 
     // Supervise
     let (terminated_due_to_timeout_or_cancel, status_opt) =
         supervise_child(&mut child, timeout, cancel)?;
 
     // Join readers with bounded wait
-    let extra = Duration::from_secs(1);
+    let extra = Duration::from_secs(7);
     join_with_timeout(out_thread, extra);
     join_with_timeout(err_thread, extra);
 
@@ -96,46 +97,41 @@ fn spawn_bash(script: &str, workdir: &Path) -> Result<Child> {
     Ok(child)
 }
 
-fn spawn_stdout_thread(
-    out_pipe: ChildStdout,
-    mut stdout_file: File,
-    last_json: Arc<Mutex<Option<JsonValue>>>,
+fn spawn_log_thread<R: std::io::Read + Send + 'static>(
+    pipe: R,
+    file: File,
+    last_json: Option<Arc<Mutex<Option<JsonValue>>>>,
 ) -> std::thread::JoinHandle<Result<()>> {
-    let mut out_reader = BufReader::new(out_pipe);
     std::thread::spawn(move || -> Result<()> {
-        let mut line = String::new();
+        let mut reader = BufReader::new(pipe);
+        let mut writer = BufWriter::new(file);
+        let mut buf: Vec<u8> = Vec::with_capacity(4096);
+        let mut bytes_written: usize = 0;
+        let max_bytes: usize = 100 * 1024 * 1024; // 100MB
+        let mut last_flush = Instant::now();
         loop {
-            line.clear();
-            let n = out_reader.read_line(&mut line)?;
+            buf.clear();
+            let n = reader.read_until(b'\n', &mut buf)?;
             if n == 0 {
                 break;
             }
-            write_jsonl(&mut stdout_file, &line)?;
-            if let Some(json) = parse_unagi_line(&line)
-                && let Ok(mut slot) = last_json.lock()
+            let line = String::from_utf8_lossy(&buf);
+            if bytes_written < max_bytes {
+                let wrote = write_jsonl(&mut writer, &line)?;
+                bytes_written = bytes_written.saturating_add(wrote);
+            }
+            if let Some(ref slot_arc) = last_json
+                && let Some(json) = parse_unagi_line(&line)
+                && let Ok(mut slot) = slot_arc.lock()
             {
                 *slot = Some(json);
             }
-        }
-        Ok(())
-    })
-}
-
-fn spawn_stderr_thread(
-    err_pipe: ChildStderr,
-    mut stderr_file: File,
-) -> std::thread::JoinHandle<Result<()>> {
-    let mut err_reader = BufReader::new(err_pipe);
-    std::thread::spawn(move || -> Result<()> {
-        let mut line = String::new();
-        loop {
-            line.clear();
-            let n = err_reader.read_line(&mut line)?;
-            if n == 0 {
-                break;
+            if last_flush.elapsed() >= Duration::from_millis(500) {
+                let _ = writer.flush();
+                last_flush = Instant::now();
             }
-            write_jsonl(&mut stderr_file, &line)?;
         }
+        let _ = writer.flush();
         Ok(())
     })
 }
@@ -189,7 +185,7 @@ fn extract_score(last_json: &Arc<Mutex<Option<JsonValue>>>) -> Option<i64> {
         .and_then(|v| v.as_i64())
 }
 
-fn write_jsonl(file: &mut File, text: &str) -> Result<()> {
+fn write_jsonl(file: &mut dyn Write, text: &str) -> Result<usize> {
     let ts = chrono::Utc::now().to_rfc3339();
     let obj = serde_json::json!({
         "timestamp": ts,
@@ -198,8 +194,7 @@ fn write_jsonl(file: &mut File, text: &str) -> Result<()> {
     let line = serde_json::to_string(&obj)?;
     file.write_all(line.as_bytes())?;
     file.write_all(b"\n")?;
-    file.flush()?;
-    Ok(())
+    Ok(line.len() + 1)
 }
 
 fn parse_unagi_line(line: &str) -> Option<JsonValue> {
@@ -211,13 +206,19 @@ fn parse_unagi_line(line: &str) -> Option<JsonValue> {
     }
 }
 
-fn uuid() -> String {
-    let buf: [u8; 8] = rand::random();
-    hex::encode(buf)
-}
-
 fn create_artifacts_dir() -> Result<Artifacts> {
-    let base = std::env::temp_dir().join(format!("executor_run_{}", uuid()));
+    let now = chrono::Utc::now();
+    let ts = format!(
+        "{:04}{:02}{:02}_{:02}{:02}{:02}_{:06}",
+        now.year(),
+        now.month(),
+        now.day(),
+        now.hour(),
+        now.minute(),
+        now.second(),
+        now.timestamp_subsec_micros()
+    );
+    let base = std::env::temp_dir().join(format!("executor_run_{}", ts));
     let root = base.join("root");
     let log = base.join("log");
     fs::create_dir_all(&base)?;
@@ -273,11 +274,6 @@ mod tests {
         let out = fs::read_to_string(artifacts.stdout_file())?;
         assert!(out.contains("start"));
         Ok(())
-    }
-
-    fn uuid() -> String {
-        let buf: [u8; 8] = rand::random();
-        hex::encode(buf)
     }
 }
 /// Artifacts created for a single run. Holds the temporary directory and
