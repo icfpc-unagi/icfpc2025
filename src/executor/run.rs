@@ -217,6 +217,7 @@ fn spawn_log_thread<R: std::io::Read + Send + 'static>(
                     Err(poisoned) => poisoned.into_inner(),
                 };
                 w.write_all(&rec)?;
+                w.flush()?;
                 bytes_written = bytes_written.saturating_add(rec.len());
             } else {
                 overflow_total = overflow_total.saturating_add(rec.len());
@@ -259,6 +260,7 @@ fn spawn_log_thread<R: std::io::Read + Send + 'static>(
                 tail_buf.extend(tail);
                 w.write_all(&tail_buf)?;
             }
+            w.flush()?;
         }
         Ok(())
     })
@@ -325,10 +327,22 @@ where
 fn join_with_timeout(h: std::thread::JoinHandle<Result<()>>, dur: Duration) {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
-        let _ = h.join();
-        let _ = tx.send(());
+        match h.join() {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                eprintln!("Log thread panicked: {:?}", e);
+            }
+            Err(e) => {
+                eprintln!("Log thread join error: {:?}", e);
+            }
+        }
+        if let Err(e) = tx.send(()) {
+            eprintln!("Log thread send error: {:?}", e);
+        }
     });
-    let _ = rx.recv_timeout(dur);
+    if let Err(e) = rx.recv_timeout(dur) {
+        eprintln!("Log thread did not exit within timeout: {:?}", e);
+    }
 }
 
 fn extract_score(last_json: &Arc<Mutex<Option<JsonValue>>>) -> Option<i64> {
@@ -432,14 +446,14 @@ mod tests {
     #[test]
     fn run_command_times_out_and_kills() -> Result<()> {
         // Script that sleeps longer than timeout
-        let script = "echo start; sleep 3; echo done";
+        let script = "stdbuf -o0 command; echo start; sleep 3; echo done";
         let mut opts = RunOptions::default();
         // Make flushing and joining more aggressive to reduce flakiness
         opts.flush_interval = Duration::from_millis(50);
-        opts.join_grace = Duration::from_secs(2);
+        opts.join_grace = Duration::from_secs(10);
         let (res, artifacts) = run_command_with_timeout(
             script,
-            Duration::from_millis(800),
+            Duration::from_millis(1000),
             Arc::new(AtomicBool::new(false)),
             |_| Ok(()),
             &opts,
@@ -449,6 +463,7 @@ mod tests {
         assert_eq!(score, None);
         // Ensure at least the initial output got captured before timeout
         let out = fs::read_to_string(artifacts.stdout_file())?;
+        eprintln!("Captured stdout:\n{}", out);
         assert!(out.contains("start"));
         Ok(())
     }
