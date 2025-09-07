@@ -17,7 +17,7 @@ fn balanced_plan(len: usize, m: usize, rng: &mut impl Rng) -> Vec<usize> {
 fn main() {
     let mut rng = rand::rng();
     let mut judge = icfpc2025::judge::get_judge_from_stdin();
-    let H = judge.num_rooms() * 2; // 色を塗らずに動く回数
+    let H = judge.num_rooms() * 3; // 色を塗らずに動く回数
     let n = judge.num_rooms() / 3;
     let mut plans = balanced_plan(judge.num_rooms() * 6, 6, &mut rng)
         .into_iter()
