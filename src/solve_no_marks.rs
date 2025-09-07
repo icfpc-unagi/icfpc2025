@@ -611,3 +611,54 @@ pub fn solve(num_rooms: usize, plans: &Vec<Vec<usize>>, labels: &Vec<Vec<usize>>
     assert!(check_explore(&guess, plans, labels));
     guess
 }
+
+/// Fixes a prefix of edges in the graph irrespective of specific times.
+/// Each tuple is `(u, e, v, f_opt)` meaning force `F[u][e][v]` and optionally `M[u][v][e][f]`.
+/// Returns `None` if the resulting CNF is unsatisfiable.
+pub fn solve_with_edge_prefix_fixed(
+    num_rooms: usize,
+    plans: &Vec<Vec<usize>>,
+    labels: &Vec<Vec<usize>>,
+    prefix: &[(usize, usize, usize, Option<usize>)],
+) -> Option<Guess> {
+    // 1) Build flattened info from provided plans and labels
+    let info = build_info(num_rooms, plans, labels);
+
+    // 2) Build buckets and candidates
+    let buckets = build_buckets(&info);
+    let mut cnf = Cnf::new();
+    let cand = build_candidates(&mut cnf, &info, &buckets);
+
+    // 3) Add pruning and symmetry breaking
+    add_diff_pruning(&mut cnf, &info, &buckets, &cand);
+    add_sbp(&mut cnf, &info, &buckets, &cand);
+    add_same_door_equalization(&mut cnf, &info, &buckets, &cand);
+
+    // 4) Edge layer and plan constraints
+    let edges = build_edge_vars(&mut cnf, &info);
+    // Apply prefix edge constraints
+    for &(u, e, v, f_opt) in prefix.iter() {
+        if u >= info.n || v >= info.n || e >= 6 {
+            return None;
+        }
+        cnf.clause([edges.F[u][e][v]]);
+        if let Some(f) = f_opt {
+            if f >= 6 {
+                return None;
+            }
+            cnf.clause([edges.M[u][v][e][f]]);
+        }
+    }
+    add_plan_constraints(&mut cnf, &info, &buckets, &cand, &edges);
+    add_start_room_unification(&mut cnf, &info, &buckets, &cand);
+
+    // 5) Solve
+    match cnf.sat.solve() {
+        Some(true) => {
+            let guess = extract_guess(&cnf, &info, &buckets, &cand, &edges);
+            assert!(check_explore(&guess, plans, labels));
+            Some(guess)
+        }
+        _ => None,
+    }
+}
