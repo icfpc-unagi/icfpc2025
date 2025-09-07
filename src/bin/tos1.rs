@@ -11,6 +11,8 @@ fn fill_doors(graph: &[Vec<usize>]) -> Vec<[(usize, usize); 6]> {
             res[u][door].0 = v;
         }
     }
+    // The official judge data seem containing directed loops of length 3.
+    let mut directed_edge = HashMap::new(); // these should not exist...
     for (u, edges) in graph.iter().enumerate() {
         for (door, &v) in edges.iter().enumerate() {
             if res[u][door].1 == na {
@@ -23,9 +25,25 @@ fn fill_doors(graph: &[Vec<usize>]) -> Vec<[(usize, usize); 6]> {
                         break;
                     }
                 }
-                assert!(ok);
+                if !ok {
+                    eprintln!("*** warning: directed edge {} --{}--> {} found", u, door, v);
+                    let old = directed_edge.insert(u, (door, v));
+                    assert_eq!(old, None); // unknown case
+                }
             }
         }
+    }
+    while let Some((&u, &(u_door, v))) = directed_edge.iter().next() {
+        let (v_door, w) = directed_edge[&v];
+        let (w_door, x) = directed_edge[&w];
+        assert_eq!(x, u);
+        res[u][u_door].1 = v_door;
+        res[v][v_door].1 = w_door;
+        res[w][w_door].1 = u_door;
+        // same door ids?
+        directed_edge.remove(&u);
+        directed_edge.remove(&v);
+        directed_edge.remove(&w);
     }
     res
 }
@@ -206,6 +224,13 @@ fn main() {
         })
         .collect();
     eprintln!("graph: {:?}", graph);
+    if rooms.len() != n {
+        eprintln!(
+            "*** warning: only {} rooms found (expected {})",
+            rooms.len(),
+            n
+        );
+    }
     let graph = fill_doors(&graph);
     judge.guess(&Guess {
         start,
