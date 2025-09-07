@@ -13,11 +13,11 @@ async fn main() -> std::io::Result<()> {
     // Warm up
     sql::cell::<i32>("SELECT 1", mysql::params::Params::Empty).map_err(|e| {
         eprintln!("Database error: {}", e);
-        std::io::Error::new(std::io::ErrorKind::Other, "Database error")
+        std::io::Error::other("Database error")
     })?;
     gcp::auth::get_access_token().await.map_err(|e| {
         eprintln!("GCP Auth error: {}", e);
-        std::io::Error::new(std::io::ErrorKind::Other, "GCP Auth error")
+        std::io::Error::other("GCP Auth error")
     })?;
 
     eprintln!(

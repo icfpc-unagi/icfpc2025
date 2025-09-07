@@ -144,6 +144,23 @@ static LOCK_MANAGER: Lazy<Mutex<Option<LockRunner>>> = Lazy::new(|| Mutex::new(N
 #[cfg(feature = "reqwest")]
 static CTRL_C_INSTALLED: Lazy<AtomicBool> = Lazy::new(|| AtomicBool::new(false));
 
+/// A guard that ensures the lock manager is stopped and the token is unlocked
+/// when the process exits normally or due to a panic unwind.
+#[cfg(feature = "reqwest")]
+struct LockShutdownGuard;
+
+#[cfg(feature = "reqwest")]
+impl Drop for LockShutdownGuard {
+    fn drop(&mut self) {
+        // Best-effort stop and unlock; ignore errors.
+        stop_lock_manager_blocking();
+    }
+}
+
+/// Global optional guard installed when the lock manager starts.
+#[cfg(feature = "reqwest")]
+static LOCK_SHUTDOWN_GUARD: Lazy<Mutex<Option<LockShutdownGuard>>> = Lazy::new(|| Mutex::new(None));
+
 /// Starts the lock manager, acquiring a lock and spawning a renewal thread.
 ///
 /// This function is idempotent. If the lock manager is already running, it does nothing.
@@ -239,6 +256,14 @@ fn start_lock_manager_blocking() -> Result<()> {
         handle: Some(handle),
         token,
     });
+    // Install a process-global shutdown guard so that panic or normal termination
+    // triggers unlocking as a last resort.
+    {
+        let mut g = LOCK_SHUTDOWN_GUARD.lock().unwrap();
+        if g.is_none() {
+            *g = Some(LockShutdownGuard);
+        }
+    }
     Ok(())
 }
 
