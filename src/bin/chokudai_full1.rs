@@ -208,10 +208,11 @@ fn main() {
 
         eprintln!("door2 len: {}", door2.len());
         let dstart = door2.len();
+        let mut pre_id = pos[dstart];
 
         let mut qnum2 = 2;
         let mut q_perf = 16;
-        while q_perf < q_limit {
+        while q_perf < n {
             qnum2 += 1;
             q_perf = 1 << (2 * qnum2);
         }
@@ -238,8 +239,6 @@ fn main() {
         }
 
         let r2 = judge.explore(&step2);
-
-        let mut pre_id = pos[dstart];
 
         //graphの更新
         for i in dstart..q_limit {
