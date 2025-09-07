@@ -104,9 +104,9 @@ fn main() {
                         E[ui][e][vj][f] = E[vj][f][ui][e];
                         // D = 2 決め打ちだと、E[u][i][v][j] が有効な時、 E[v^1][i][u^1][j] も有効
                         // つまり同じものだと見做せる
-                        E[vj ^ 1][e][ui ^ 1][f] = E[vj][f][ui][e];
+                        E[vj ^ 1][f][ui ^ 1][e] = E[vj][f][ui][e];
                         // 逆向きも同じもの
-                        E[ui ^ 1][f][vj ^ 1][e] = E[vj][f][ui][e];
+                        E[ui ^ 1][e][vj ^ 1][f] = E[vj][f][ui][e];
                     }
                     tmp.push(E[ui][e][vj][f]);
                 }
