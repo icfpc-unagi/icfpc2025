@@ -5,6 +5,7 @@ use std::os::unix::process::ExitStatusExt;
 use std::time::{Duration, Instant};
 
 use crate::sql;
+use std::path::Path;
 
 pub mod lock;
 pub mod run;
@@ -16,6 +17,7 @@ pub struct Task {
     pub problem_variant: i64,
     pub agent_name: String,
     pub agent_code: String,
+    pub agent_bin: Option<String>,
     pub task_lock: String,
 }
 
@@ -36,6 +38,7 @@ pub fn acquire_task() -> Result<Option<Task>> {
     );
 
     // 2) Atomically update one candidate task
+    let task_host = current_hostname();
     let affected = sql::exec(
         r#"
         UPDATE tasks t
@@ -50,9 +53,10 @@ pub fn acquire_task() -> Result<Option<Task>> {
         SET
             t.task_failed = t.task_failed + IF(sel.task_lock IS NULL, 0, 1),
             t.task_lock = :task_lock,
-            t.task_locked = DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 30 SECOND)
+            t.task_locked = DATE_ADD(CURRENT_TIMESTAMP, INTERVAL 30 SECOND),
+            t.task_host = :task_host
         "#,
-        params! { "task_lock" => &lock_token },
+        params! { "task_lock" => &lock_token, "task_host" => &task_host },
     )?;
 
     if affected == 0 {
@@ -101,7 +105,7 @@ pub fn acquire_task() -> Result<Option<Task>> {
     // 5) Join agents to get the code
     let row = sql::row(
         r#"
-        SELECT t.task_id, t.problem_name, t.problem_variant, a.agent_name, a.agent_code
+        SELECT t.task_id, t.problem_name, t.problem_variant, a.agent_name, a.agent_code, a.agent_bin
         FROM tasks t
         JOIN agents a ON a.agent_id = :agent_id
         WHERE t.task_id = :task_id
@@ -112,6 +116,7 @@ pub fn acquire_task() -> Result<Option<Task>> {
 
     let agent_name: String = row.get("agent_name")?;
     let agent_code: String = row.get("agent_code")?;
+    let agent_bin: Option<String> = row.get_option("agent_bin")?;
 
     eprintln!(
         "[executor] acquired task: id={} problem={} variant={} agent={}",
@@ -124,6 +129,7 @@ pub fn acquire_task() -> Result<Option<Task>> {
         problem_variant,
         agent_name,
         agent_code,
+        agent_bin,
         task_lock: lock_token,
     }))
 }
@@ -207,7 +213,12 @@ pub fn run_task(task: &Task) -> Result<(Option<i64>, i32, u128)> {
             &script,
             Duration::from_secs(600),
             Arc::clone(&cancel),
-            |_| Ok(()),
+            |arts| {
+                if let Some(ref url) = task.agent_bin {
+                    prepare_agent_bin(url, arts.root_dir())?;
+                }
+                Ok(())
+            },
             &run::RunOptions::default(),
         ) {
             (Ok((s, st)), arts) => (s, st, arts),
@@ -360,4 +371,89 @@ fn upload_logs(task_id: i64, artifacts: &run::Artifacts) -> Result<()> {
         }
         anyhow::Ok(())
     })
+}
+
+fn current_hostname() -> String {
+    if let Ok(os) = hostname::get()
+        && let Ok(s) = os.into_string()
+        && !s.is_empty()
+    {
+        return s;
+    }
+    std::env::var("HOSTNAME")
+        .or_else(|_| std::env::var("COMPUTERNAME"))
+        .unwrap_or_else(|_| "unknown-host".to_string())
+}
+
+fn prepare_agent_bin(agent_url: &str, root_dir: &Path) -> anyhow::Result<()> {
+    use crate::gcp::gcs::{download_object, get_object_metadata, parse_gs_url};
+    use base64::Engine as _;
+    use base64::engine::general_purpose::STANDARD as BASE64;
+    use std::fs;
+    use std::io::Write;
+    #[cfg(unix)]
+    use std::os::unix::fs::PermissionsExt;
+
+    let (bucket, object) = parse_gs_url(agent_url)?;
+    let rt = tokio::runtime::Runtime::new()?;
+    let meta = rt.block_on(get_object_metadata(&bucket, &object))?;
+    let md5_b64 = meta
+        .md5_hash
+        .ok_or_else(|| anyhow::anyhow!("md5Hash missing for {}", agent_url))?;
+    let md5_bytes = BASE64
+        .decode(md5_b64.as_bytes())
+        .map_err(|e| anyhow::anyhow!("invalid md5Hash base64: {}", e))?;
+    let md5_hex = hex::encode(&md5_bytes);
+
+    let cache_path = Path::new("/var/tmp").join(format!("agent-bin-{}", md5_hex));
+    let mut use_cache = false;
+    if cache_path.exists() {
+        let bytes = fs::read(&cache_path)?;
+        let sum = md5::compute(&bytes);
+        if format!("{:x}", sum) == md5_hex {
+            use_cache = true;
+        } else {
+            let _ = fs::remove_file(&cache_path);
+        }
+    }
+
+    if !use_cache {
+        let bytes = rt.block_on(download_object(&bucket, &object))?;
+        let sum = md5::compute(&bytes);
+        if format!("{:x}", sum) != md5_hex {
+            anyhow::bail!("downloaded md5 mismatch for {}", agent_url);
+        }
+        let tmp_name = format!(
+            "agent-tmp-{}-{:<08x}",
+            std::process::id(),
+            rand::random::<u32>()
+        );
+        let tmp_path = Path::new("/var/tmp").join(tmp_name);
+        {
+            let mut f = fs::File::create(&tmp_path)?;
+            f.write_all(&bytes)?;
+        }
+        #[cfg(unix)]
+        let _ = fs::set_permissions(&tmp_path, fs::Permissions::from_mode(0o755));
+        match fs::rename(&tmp_path, &cache_path) {
+            Ok(()) => {}
+            Err(_) => {
+                // If another process raced and created a correct cache, accept it
+                if cache_path.exists()
+                    && format!("{:x}", md5::compute(fs::read(&cache_path)?)) == md5_hex
+                {
+                    let _ = fs::remove_file(&tmp_path);
+                } else {
+                    return Err(anyhow::anyhow!("failed to finalize cache file"));
+                }
+            }
+        }
+    }
+
+    // Copy to artifacts root as main and set executable
+    let dest = root_dir.join("main");
+    fs::copy(&cache_path, &dest)?;
+    #[cfg(unix)]
+    let _ = fs::set_permissions(&dest, fs::Permissions::from_mode(0o755));
+    Ok(())
 }
