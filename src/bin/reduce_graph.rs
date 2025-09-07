@@ -1,14 +1,29 @@
+#![allow(
+    clippy::needless_range_loop,
+    clippy::filter_map_bool_then, // https://github.com/rust-lang/rust-clippy/issues/11617
+)]
 use std::{io::Read as _, vec};
 
 use anyhow::{Context as _, Result};
-use icfpc2025::{api::Map, judge::{Guess, JsonIn}, SetMinMax as _};
+use icfpc2025::{
+    SetMinMax as _,
+    api::Map,
+    judge::{Guess, JsonIn},
+};
 
 fn main() -> Result<()> {
     let mut input = String::new();
     std::io::stdin().read_to_string(&mut input).unwrap();
 
-    let map: Map = serde_json::from_str::<JsonIn>(input.trim()).context("invalid JSON")?.map.context("missing map")?;
-    let Guess { start, rooms, graph } = map.into();
+    let map: Map = serde_json::from_str::<JsonIn>(input.trim())
+        .context("invalid JSON")?
+        .map
+        .context("missing map")?;
+    let Guess {
+        start,
+        rooms,
+        graph,
+    } = map.into();
     let n = rooms.len();
     // let graph = (0..n)
     //     .map(|i| {
@@ -17,7 +32,10 @@ fn main() -> Result<()> {
     //             .collect::<Vec<_>>()
     //     })
     //     .collect::<Vec<_>>();
-    let graph = graph.into_iter().map(|v| v.into_iter().map(|(r, _)| r).collect::<Vec<_>>()).collect::<Vec<_>>();
+    let graph = graph
+        .into_iter()
+        .map(|v| v.into_iter().map(|(r, _)| r).collect::<Vec<_>>())
+        .collect::<Vec<_>>();
     eprintln!("start = {}", start);
     eprintln!("rooms = {:?}", rooms);
     eprintln!("graph = {:?}", graph);
@@ -30,7 +48,7 @@ fn main() -> Result<()> {
     }
 
     loop {
-        let mut new_eq = eq.iter().cloned().collect::<Vec<_>>();
+        let mut new_eq = eq.iter().map(|row| row.to_vec()).collect::<Vec<_>>();
         for i in 0..n {
             for j in 0..n {
                 for d in 0..6 {
