@@ -80,6 +80,10 @@ fn main() {
             vec_nums += 1;
         } else {
             vec_id.push(vec_id[itoid[num]]);
+            eprintln!(
+                "id: {}, label: {}, num {}, same_to {}",
+                i, r[0][i], num, vec_id[itoid[num]]
+            );
         }
     }
 
