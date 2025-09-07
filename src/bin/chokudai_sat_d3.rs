@@ -200,6 +200,8 @@ fn main() {
                     }
                 }
             }
+            col.sort();
+            col.dedup();
             cnf.choose_one(&col);
         }
     }
@@ -222,6 +224,8 @@ fn main() {
                     }
                 }
             }
+            row.sort();
+            row.dedup();
             cnf.choose_one(&row);
         }
     }
