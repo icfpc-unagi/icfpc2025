@@ -10,7 +10,7 @@
 //! 3. The response from the official server is then returned to the original caller,
 //!    with an additional `X-Unagi-Log` header containing the log ID.
 
-pub use crate::client;
+use crate::client;
 use crate::sql;
 
 use actix_web::{HttpRequest, HttpResponse, Responder, http::header, web};

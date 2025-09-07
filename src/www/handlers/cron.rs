@@ -3,7 +3,7 @@
 //! This module contains handlers designed to be called periodically by a cron
 //! job or a similar scheduling service.
 
-pub use crate::client;
+use crate::client;
 use actix_web::{HttpResponse, Responder};
 
 use anyhow::{Context, Result};
