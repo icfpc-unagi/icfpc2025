@@ -60,7 +60,7 @@ fn main() {
         L[i] = i % 4;
     }
     L.sort();
-    if gacha(n, &plans, &labels[..=H]) > 0.0050 {
+    if gacha(n, &plans, &labels[..=H]) > 0.0080 {
         panic!("unlucky");
     }
     let mut cnf = Cnf::new();
