@@ -1,15 +1,16 @@
-//! # Unagi: The Main Library for the ICFP 2025 Contest
-//!
-//! This crate contains all the core logic for the Unagi project, which is designed
-//! to solve the "The Name of the Binding" problem for ICFP 2025.
-//!
-//! The crate is highly modular and uses feature flags (`reqwest`, `tokio`, `mysql`)
-//! to enable different functionalities, such as API communication, database interaction,
-//! and web server capabilities.
+#[cfg(feature = "reqwest")]
+pub mod client;
+
+// # Unagi: The Main Library for the ICFP 2025 Contest
+//
+// This crate contains all the core logic for the Unagi project, which is designed
+// to solve the "The Name of the Binding" problem for ICFP 2025.
+//
+// The crate is highly modular and uses feature flags (`reqwest`, `tokio`, `mysql`)
+// to enable different functionalities, such as API communication, database interaction,
+// and web server capabilities.
 
 use anyhow::Context;
-#[cfg(feature = "reqwest")]
-use reqwest::Client;
 
 /// WWW server implementation. Enabled with `tokio` and `reqwest` features.
 #[cfg(feature = "tokio")]
@@ -88,7 +89,7 @@ macro_rules! mat {
 #[cfg(feature = "reqwest")]
 pub async fn get_bearer_async() -> anyhow::Result<String> {
     let unagi_password = std::env::var("UNAGI_PASSWORD").context("UNAGI_PASSWORD not set")?;
-    let client = Client::new();
+    let client = &*client::CLIENT;
     let res = client
         .get(format!(
             "https://storage.googleapis.com/icfpc2025-data/{}/bearer.txt",

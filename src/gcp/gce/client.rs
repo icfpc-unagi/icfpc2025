@@ -6,6 +6,7 @@
 use anyhow::Result;
 use serde_json::Value;
 
+use crate::client::CLIENT;
 use crate::gcp::gce::types::InstanceRequest;
 use crate::gcp::get_access_token;
 
@@ -33,7 +34,7 @@ pub async fn create_instance(
     // Authenticate to get a bearer token.
     let token = get_access_token().await?;
 
-    let client = reqwest::Client::new();
+    let client = &*CLIENT;
     let url = format!(
         "{}/projects/{}/zones/{}/instances",
         GCE_API_BASE, project_id, zone

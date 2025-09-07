@@ -8,6 +8,7 @@ use cached::proc_macro::cached;
 use reqwest::Url;
 use std::time::Duration;
 
+use crate::client::CLIENT;
 use crate::gcp::gcs::types::{FileInfo, ListResponse, ObjectItem};
 use crate::gcp::get_access_token;
 
@@ -46,7 +47,7 @@ where
     let token = get_access_token()
         .await
         .context("Failed to get access token")?;
-    let client = reqwest::Client::new();
+    let client = &*CLIENT;
 
     let mut page_token: Option<String> = None;
     let mut dirs: Vec<String> = Vec::new();
@@ -166,7 +167,7 @@ pub async fn download_object(bucket: &str, object: &str) -> Result<Vec<u8>> {
     let token = get_access_token()
         .await
         .context("Failed to get access token")?;
-    let client = reqwest::Client::new();
+    let client = &*CLIENT;
 
     // GCS API requires object paths to be percent-encoded as a single path segment.
     // This helper ensures characters like '/' are correctly encoded.
@@ -225,7 +226,7 @@ pub async fn upload_object(
     let token = get_access_token()
         .await
         .context("Failed to get access token")?;
-    let client = reqwest::Client::new();
+    let client = &*CLIENT;
 
     // Use the "media" upload type for simple, one-shot uploads.
     let mut url = Url::parse(&format!(
@@ -267,7 +268,7 @@ pub async fn get_object_metadata(bucket: &str, object: &str) -> Result<ObjectIte
         .await
         .context("Failed to get access token")?;
 
-    let client = reqwest::Client::new();
+    let client = &*CLIENT;
     let mut page_token: Option<String> = None;
     // Loop to handle pagination, though for a unique object name, we expect one result.
     loop {

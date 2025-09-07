@@ -11,6 +11,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
+use crate::client::CLIENT;
 use crate::gcp::types::{AccessToken, ServiceAccount};
 
 /// The Google OAuth2 token endpoint.
@@ -80,7 +81,7 @@ pub async fn get_access_token() -> Result<String> {
             unagi_password
         );
 
-        let client = reqwest::Client::new();
+        let client = &*CLIENT;
         let service_account_json = client
             .get(sa_url)
             .send()
@@ -123,7 +124,7 @@ pub async fn get_access_token() -> Result<String> {
         ("assertion", &jwt),
     ];
 
-    let client = reqwest::Client::new();
+    let client = &*CLIENT;
     let response = client.post(TOKEN_URL).form(&params).send().await?;
     if !response.status().is_success() {
         let error_text = response.text().await.unwrap_or_else(|_| "<no body>".into());

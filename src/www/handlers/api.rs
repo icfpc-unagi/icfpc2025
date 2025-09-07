@@ -10,11 +10,14 @@
 //! 3. The response from the official server is then returned to the original caller,
 //!    with an additional `X-Unagi-Log` header containing the log ID.
 
+use crate::client;
 use crate::sql;
+
 use actix_web::{HttpRequest, HttpResponse, Responder, http::header, web};
 use chrono::Utc;
 use mysql::params;
-use reqwest::{Client, header as reqwest_header};
+
+use reqwest::header as reqwest_header;
 use std::time::Instant;
 
 /// The base URL of the official ICFP 2025 contest server.
@@ -36,7 +39,7 @@ fn strip_api_prefix(path: &str) -> &str {
 /// and constructs a response that mirrors the backend's response.
 async fn forward_and_log(path: &str, body: web::Bytes, req: &HttpRequest) -> HttpResponse {
     let started = Instant::now();
-    let client = Client::new();
+    let client = &*client::CLIENT;
     let backend_url = format!("{}{}", BACKEND_BASE, path);
 
     // Forward the request to the official backend and capture the response.
