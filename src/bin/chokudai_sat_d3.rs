@@ -166,11 +166,37 @@ fn main() {
             let mut col = vec![];
             for u in 0..n * D {
                 for e in 0..6 {
-                    col.push(E[u][e][v][f]);
-                    col.push(E2[u][e][v][f]);
+                    if E[u][e][v][f] != !0 {
+                        col.push(E[u][e][v][f]);
+                    }
+                    if E2[u][e][v][f] != !0 {
+                        col.push(E2[u][e][v][f]);
+                    }
                 }
             }
             cnf.choose_one(&col);
+        }
+    }
+    for u in 0..n * D {
+        for e in 0..6 {
+            let mut row = vec![];
+            for v in 0..n * D {
+                for f in 0..6 {
+                    if E[u][e][v][f] != !0 {
+                        row.push(E[u][e][v][f]);
+                    }
+                    if E2[u][e][v][f] != !0 {
+                        row.push(E2[u][e][v][f]);
+                    }
+                }
+            }
+            assert!(
+                !row.is_empty(),
+                "no outgoing candidates for (u={}, e={})",
+                u,
+                e
+            );
+            cnf.choose_one(&row);
         }
     }
 
@@ -192,9 +218,12 @@ fn main() {
                 for tj in 0..n * D {
                     // 時刻 t に (u,i) にいて、ドア e を選ぶと、時刻 t+1 には (t,j) にいる
                     for f in 0..6 {
-                        // V[t][ui] -> E[ui][e][tj][f] -> V[t+1][tj]
-                        cnf.clause([-V[t][ui], -E[ui][e][tj][f], V[t + 1][tj]]);
-                        cnf.clause([-V[t][ui], -E2[ui][e][tj][f], V[t + 1][tj]]);
+                        if E[ui][e][tj][f] != !0 {
+                            cnf.clause([-V[t][ui], -E[ui][e][tj][f], V[t + 1][tj]]);
+                        }
+                        if E2[ui][e][tj][f] != !0 {
+                            cnf.clause([-V[t][ui], -E2[ui][e][tj][f], V[t + 1][tj]]);
+                        }
                     }
                 }
             }
