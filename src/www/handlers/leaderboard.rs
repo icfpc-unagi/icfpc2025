@@ -383,14 +383,12 @@ async fn fetch_snapshots(problem: &str) -> Result<Vec<Snapshot>> {
         picked
     };
     let mut set = tokio::task::JoinSet::new();
-    const KNOWN_INVALID_STAMPS: [&str; 9] = [
+    const KNOWN_INVALID_STAMPS: [&str; 7] = [
         "20250906-100118",
         "20250906-102610",
         "20250906-105114",
         "20250906-111608",
         "20250906-114110",
-        "20250906-120611",
-        "20250906-123110",
         "20250906-120611",
         "20250906-123110",
     ];
