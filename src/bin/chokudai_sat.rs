@@ -85,8 +85,9 @@ fn main() {
         // 時刻 t にはどれか一つの (u,i) にいる
         cnf.choose_one(&V[t]);
     }
-    // 最初の部屋は labels[0] * 2 で決まっている
-    let first_room = labels[0] * 2;
+
+    // 最初の部屋は labels[0] * D で決まっている
+    let first_room = labels[0] * D;
     cnf.clause([V[0][first_room]]);
 
     // E[u][e][v][f] := 頂点uのe番目のドアが頂点vのf番目のドアに繋がっている
@@ -114,6 +115,19 @@ fn main() {
 
             // u の e 番目のドアはどれか一つの (v,j) と結ぶ
             cnf.choose_one(&tmp);
+        }
+    }
+
+    // v の f 番目のドアに結ぶ u の e 番目のドアはどれか一つ
+    for v in 0..n * D {
+        for f in 0..6 {
+            let mut col = vec![];
+            for u in 0..n * D {
+                for e in 0..6 {
+                    col.push(E[u][e][v][f]);
+                }
+            }
+            cnf.choose_one(&col);
         }
     }
 
@@ -149,8 +163,14 @@ fn main() {
     for ui in 0..n * D {
         for c in 0..4 {
             C[0][ui][c] = cnf.var();
+            if c == ui / D % 4 {
+                // 最初の部屋の色は ui/D%4 で決まっている
+                cnf.clause([C[0][ui][c]]);
+            } else {
+                // 最初の部屋の色は ui/D%4 で決まっている
+                cnf.clause([-C[0][ui][c]]);
+            }
         }
-        cnf.clause([C[0][ui][ui / 2 % 4]]);
     }
 
     // 各ターンの色の更新
@@ -173,6 +193,10 @@ fn main() {
                         cnf.clause([-V[t][ui], -C[t + 1][ui][c]]);
                     }
                 }
+                // 正色の持ち上げ
+                cnf.clause([-V[t][ui], -C[t][ui][c], C[t + 1][ui][c]]);
+                // 反色の持ち上げ
+                cnf.clause([-V[t][ui], C[t][ui][c], -C[t + 1][ui][c]]);
             }
         } else {
             // 色を塗らない場合
