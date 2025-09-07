@@ -86,6 +86,9 @@ fn main() {
         cnf.choose_one(&V[t]);
     }
 
+    // E[u][e][v][f] := 頂点uのe番目のドアが頂点vのf番目のドアに繋がっている
+    let mut E = mat![0; n; 6; n; 6];
+
     // E[u][e][v][f] := u の e 番目のドアが v の f 番目 を結ぶ
     for ui in 0..n * D {
         for e in 0..6 {
