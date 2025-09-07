@@ -32,8 +32,10 @@ pub fn new_engine() -> Handlebars<'static> {
 <meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=yes">
 <link rel="stylesheet" type="text/css" href="/static/style.css">
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+<!--
 <script src="/static/jquery-linedtextarea.js"></script>
 <link href="/static/jquery-linedtextarea.css" rel="stylesheet"/>
+-->
 </head>
 <body>
 <nav>
