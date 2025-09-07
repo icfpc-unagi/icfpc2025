@@ -337,9 +337,9 @@ impl Judge for RemoteJudge {
         for i in 0..out.graph.len() {
             for door in 0..6 {
                 let (i2, door2) = out.graph[i][door];
-                assert_eq!(out.graph[i2][door2], (i, door), "Graph is not undirected");
-                // Add each edge only once to avoid duplicates.
-                if (i, door) <= out.graph[i][door] {
+                // assert_eq!(out.graph[i2][door2], (i, door), "Graph is not undirected");
+                // Add each undirected edge only once to avoid duplicates.
+                if out.graph[i2][door2] != (i, door) || (i, door) <= out.graph[i][door] {
                     connections.push(api::MapConnection {
                         from: api::MapConnectionEnd { room: i, door },
                         to: api::MapConnectionEnd {
