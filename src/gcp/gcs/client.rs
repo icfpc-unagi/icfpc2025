@@ -4,7 +4,9 @@
 //! Google Cloud Storage for operations like listing, downloading, and uploading objects.
 
 use anyhow::{Context, Result, bail};
+use cached::proc_macro::cached;
 use reqwest::Url;
+use std::time::Duration;
 
 use crate::gcp::gcs::types::{FileInfo, ListResponse, ObjectItem};
 use crate::gcp::get_access_token;
@@ -150,6 +152,16 @@ pub async fn list_dir_detailed(bucket: &str, prefix: &str) -> Result<(Vec<String
 ///
 /// # Returns
 /// A `Vec<u8>` containing the raw bytes of the object.
+// Note: Caching is used as a workaround for a performance bottleneck — creating
+// reqwest::Client repeatedly (especially in parallel) was unexpectedly slow.
+#[cached(
+    size = 100,
+    time = 3600,
+    result = true,
+    sync_writes = "by_key",
+    key = "String",
+    convert = r#"{ format!("{bucket}/{object}") }"#
+)]
 pub async fn download_object(bucket: &str, object: &str) -> Result<Vec<u8>> {
     let token = get_access_token()
         .await
