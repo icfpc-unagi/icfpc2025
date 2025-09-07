@@ -82,5 +82,35 @@ fn main() -> Result<()> {
         })
         .collect::<Vec<_>>();
     eprintln!("classes = {:?}", classes);
+
+    let mut renamed = vec![(!0, !0); n];
+    for (i, cls) in classes.iter().enumerate() {
+        for (j, &v) in cls.iter().enumerate() {
+            renamed[v] = (i, j);
+        }
+    }
+
+    let m = classes.len();
+    let k = classes[0].len();
+    assert_eq!(m * k, n);
+    assert!(k <= 3);
+
+    let mut edges = vec![vec![(!0, vec![]); 6]; m];
+    for from in 0..m {
+        for d in 0..6 {
+            let (to, p) = renamed[graph[classes[from][0]][d]];
+            let mut perm = vec![p];
+            for j in 1..k {
+                let (to_j, p) = renamed[graph[classes[from][j]][d]];
+                assert_eq!(to_j, to);
+                perm.push(p);
+            }
+            edges[from][d] = (to, perm);
+        }
+    }
+
+    for (i, edges) in edges.iter().enumerate() {
+        eprintln!("{}: {:?}", i, edges);
+    }
     Ok(())
 }
