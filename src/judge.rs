@@ -448,6 +448,131 @@ pub fn generate_random_edges_v2(
     edges
 }
 
+pub struct MarksInstance {
+    pub num_rooms: usize,
+    pub num_layers: usize,
+    pub num_supers: usize,
+    pub edges: Vec<((usize, usize), (usize, usize))>,
+    pub super_edges: Vec<((usize, usize), (usize, usize))>,
+    pub room_to_layer: Vec<usize>,
+    pub room_to_super: Vec<usize>,
+    pub room_to_label: Vec<usize>,
+    pub super_to_label: Vec<usize>,
+}
+
+fn perm_self_loop(n: usize, rng: &mut impl Rng) -> Vec<(usize, usize)> {
+    let mut perm = vec![None; n];
+    let mut connections = vec![];
+
+    let mut p1 = (0..n).collect_vec();
+    let mut p2 = (0..n).collect_vec();
+    p1.shuffle(rng);
+    p2.shuffle(rng);
+
+    let mut i2 = 0;
+    for i1 in 0..n {
+        let u1 = p1[i1];
+        if perm[u1].is_some() {
+            continue;
+        }
+        while perm[p2[i2]].is_some() {
+            i2 += 1;
+        }
+        let u2 = p2[i2];
+        perm[u1] = Some(u2);
+        perm[u2] = Some(u1);
+        connections.push((u1, u2));
+    }
+
+    connections
+}
+
+pub fn generate_marks_instance(num_rooms: usize, num_layers: usize, seed: u64) -> MarksInstance {
+    let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(seed);
+    assert!(num_rooms % num_layers == 0);
+    let num_supers = num_rooms / num_layers;
+
+    // super graph
+    let super_edges = generate_random_edges_v2(num_supers, seed);
+
+    // room shuffle
+    let room_perm = {
+        let mut v = (0..num_rooms).collect_vec();
+        v.shuffle(&mut rng);
+        v
+    };
+    let super_layer_to_room =
+        |super_room: usize, layer: usize| room_perm[super_room * num_layers + layer];
+
+    // graph
+    let mut edges = vec![];
+    for ((s1, d1), (s2, d2)) in &super_edges {
+        if (s1, d1) == (s2, d2) {
+            // groups of size 1 or 2
+            let perm = perm_self_loop(num_layers, &mut rng);
+            for (l1, l2) in perm {
+                edges.push((
+                    (super_layer_to_room(*s1, l1), *d1),
+                    (super_layer_to_room(*s2, l2), *d2),
+                ));
+            }
+        } else {
+            // permutation
+            let mut perm = (0..num_layers).collect_vec();
+            perm.shuffle(&mut rng);
+            for l1 in 0..num_layers {
+                let l2 = perm[l1];
+                edges.push((
+                    (super_layer_to_room(*s1, l1), *d1),
+                    (super_layer_to_room(*s2, l2), *d2),
+                ));
+            }
+        }
+    }
+
+    let super_to_label = (0..num_supers).map(|i| i % 4).collect_vec();
+    let mut room_to_label = vec![!0; num_rooms];
+    let mut room_to_layer = vec![!0; num_rooms];
+    let mut room_to_super = vec![!0; num_rooms];
+    for s in 0..num_supers {
+        for l in 0..num_layers {
+            let r = super_layer_to_room(s, l);
+            room_to_label[r] = super_to_label[s];
+            room_to_layer[r] = l;
+            room_to_super[r] = s;
+        }
+    }
+
+    MarksInstance {
+        num_rooms,
+        num_layers,
+        num_supers,
+        edges,
+        super_edges,
+        room_to_layer,
+        room_to_super,
+        room_to_label,
+        super_to_label,
+    }
+}
+
+fn check_graph(graph: &[[usize; 6]]) {
+    let n = graph.len();
+    let mut mat = vec![vec![0; n]; n];
+    for u in 0..n {
+        for d in 0..6 {
+            let v = graph[u][d];
+            assert!(v < n, "Invalid room index in graph");
+            mat[u][v] += 1;
+        }
+    }
+    for i in 0..n {
+        for j in 0..n {
+            assert_eq!(mat[i][j], mat[j][i], "Graph is not undirected: {} {}", i, j);
+        }
+    }
+}
+
 impl LocalJudge {
     /// Creates a new `LocalJudge` with a randomly generated map.
     pub fn new(problem_type: &str, num_rooms: usize, seed: u64) -> Self {
@@ -500,6 +625,33 @@ impl LocalJudge {
                 Self {
                     problem_name: problem_type.to_string(),
                     rooms,
+                    starting_room: 0, // Start at room 0 (the fixed starting room in the problem spec)
+                    graph,
+                    cost: 0,
+                    explored_log: Explored {
+                        plans: vec![],
+                        results: vec![],
+                    },
+                }
+            }
+            "random_2layers" | "random_3layers" => {
+                let num_layers = if problem_type == "random_2layers" {
+                    2
+                } else {
+                    3
+                };
+
+                let instance = generate_marks_instance(num_rooms, num_layers, seed);
+                let mut graph = vec![[!0; 6]; num_rooms];
+                for ((u1, d1), (u2, d2)) in instance.edges {
+                    graph[u1][d1] = u2;
+                    graph[u2][d2] = u1;
+                }
+                check_graph(&graph);
+
+                Self {
+                    problem_name: problem_type.to_string(),
+                    rooms: instance.room_to_label,
                     starting_room: 0, // Start at room 0 (the fixed starting room in the problem spec)
                     graph,
                     cost: 0,
