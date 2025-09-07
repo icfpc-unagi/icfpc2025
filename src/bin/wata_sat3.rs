@@ -110,7 +110,8 @@ fn main() {
                 }
             }
         }
-        let super_guess = solve_no_marks::solve(judge.num_rooms() / D, &plans0, &labels0);
+        let super_guess =
+            solve_no_marks::solve_cadical_multi(judge.num_rooms() / D, &plans0, &labels0, 50);
         eprintln!("!!!! super_guess done");
         while plans[0].iter().all(|x| x.0.is_none()) {
             plans.remove(0);
