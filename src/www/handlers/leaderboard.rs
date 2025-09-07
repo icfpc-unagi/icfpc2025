@@ -511,7 +511,7 @@ fn last_correct_guess(problem: &str) -> Result<String> {
         // Data tables
         let mut doors = vec![[usize::MAX; 6]; n];
         let mut adj = vec![vec![0; n]; n];
-        for api::MapConnection { from, to } in &map.connections {
+        for api::MapConnection { from, to, .. } in &map.connections {
             doors[from.room][from.door] = to.room;
             doors[to.room][to.door] = from.room;
             adj[from.room][to.room] += 1;

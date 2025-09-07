@@ -402,6 +402,10 @@ pub struct MapConnectionEnd {
     pub door: usize,
 }
 
+fn isfalse(b: &bool) -> bool {
+    !*b
+}
+
 /// Represents a passage between two doors in two rooms.
 /// The API documentation refers to this as a "connection".
 #[cfg(feature = "reqwest")]
@@ -411,6 +415,8 @@ pub struct MapConnection {
     pub from: MapConnectionEnd,
     /// The "to" side of the passage.
     pub to: MapConnectionEnd,
+    #[serde(skip_serializing_if = "isfalse")]
+    pub directed: bool,
 }
 
 /// Represents the final map structure of the Aedificium to be submitted.

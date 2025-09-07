@@ -90,10 +90,12 @@ pub fn generate_as_api_map(n_rooms: usize, seed: Option<u64>) -> api::Map {
         connections.push(api::MapConnection {
             from: api::MapConnectionEnd { room: r1, door: d1 },
             to: api::MapConnectionEnd { room: r2, door: d2 },
+            directed: false,
         });
         connections.push(api::MapConnection {
             from: api::MapConnectionEnd { room: r2, door: d2 },
             to: api::MapConnectionEnd { room: r1, door: d1 },
+            directed: false,
         });
     }
 

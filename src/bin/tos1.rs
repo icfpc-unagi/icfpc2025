@@ -33,9 +33,9 @@ fn fill_doors(graph: &[Vec<usize>]) -> Vec<[(usize, usize); 6]> {
                     eprintln!("    --{}--> {}", door, x);
                     assert_eq!(x, u);
                     // 適当な値で埋めて提出してみる
-                    res[u][door].1 = door;
-                    res[v][door].1 = door;
-                    res[w][door].1 = door;
+                    res[u][door] = (1000 + v, door);
+                    res[v][door] = (1000 + w, door);
+                    res[w][door] = (1000 + u, door);
                 }
             }
         }
@@ -43,7 +43,7 @@ fn fill_doors(graph: &[Vec<usize>]) -> Vec<[(usize, usize); 6]> {
     res
 }
 
-fn main() {
+fn main() -> Result<(), ()>{
     let senpuku = false;
     let mut judge = get_judge_from_stdin_with(false);
     let n = judge.num_rooms();
@@ -227,9 +227,10 @@ fn main() {
         );
     }
     let graph = fill_doors(&graph);
-    judge.guess(&Guess {
+    let ok = judge.guess(&Guess {
         start,
         rooms,
         graph,
     });
+    if ok { Ok(()) } else { Err(()) }
 }
