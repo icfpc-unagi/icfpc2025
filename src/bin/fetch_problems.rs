@@ -1,7 +1,8 @@
 use anyhow::{Context, Result, anyhow};
 use icfpc2025::sql;
 use mysql::params;
-use serde::ser::Serialize;
+use serde::Serializer;
+use serde::ser::SerializeMap;
 use serde_json::{Map, Value};
 use std::env;
 use std::fs::{File, create_dir_all};
@@ -40,50 +41,62 @@ fn run() -> Result<()> {
 
     for (i, row) in rows.iter().enumerate() {
         let cell: String = row.get("api_log_request")?;
-        let mut v: Value = serde_json::from_str(&cell).with_context(|| {
+        let v: Value = serde_json::from_str(&cell).with_context(|| {
             format!(
                 "failed to parse api_log_request as JSON (index {}): {}",
                 i, cell
             )
         })?;
 
-        // Expect an object; mutate by removing id and inserting problemName first
-        let mut new_obj = Map::new();
-        new_obj.insert(
-            "problemName".to_string(),
-            Value::String(problem_name.clone()),
-        );
-
-        match v {
-            Value::Object(mut map) => {
-                map.remove("id");
-                for (k, vv) in map.into_iter() {
-                    new_obj.insert(k, vv);
-                }
-                v = Value::Object(new_obj);
-            }
-            _ => {
-                // Not an object; still wrap it with problemName and original under "data"
-                new_obj.insert("data".to_string(), v);
-                v = Value::Object(new_obj);
-            }
-        }
-
         let path = out_dir.join(format!("{:03}.json", i));
         let file = File::create(&path)
             .with_context(|| format!("failed to create output file: {:?}", path))?;
-        write_pretty_2space(file, &v)?;
+
+        match v {
+            Value::Object(mut map) => {
+                // problemName first, then all other fields except id (and skipping existing problemName to avoid duplicates)
+                write_object_with_problem_first(file, &problem_name, &mut map)?;
+            }
+            other => {
+                // Wrap non-object into { problemName, data }
+                let mut fmt = serde_json::Serializer::with_formatter(
+                    file,
+                    serde_json::ser::PrettyFormatter::with_indent(b"  "),
+                );
+                let mut m = fmt.serialize_map(None)?;
+                m.serialize_entry("problemName", &problem_name)?;
+                m.serialize_entry("data", &other)?;
+                m.end()?;
+                // Append newline
+                // Serializer writes to the underlying writer directly; nothing to append here.
+            }
+        }
     }
 
     Ok(())
 }
 
-fn write_pretty_2space(mut w: File, v: &Value) -> Result<()> {
-    let mut buf = Vec::new();
-    let fmt = serde_json::ser::PrettyFormatter::with_indent(b"  ");
-    let mut ser = serde_json::Serializer::with_formatter(&mut buf, fmt);
-    v.serialize(&mut ser)?;
-    buf.push(b'\n');
-    w.write_all(&buf)?;
+fn write_object_with_problem_first(
+    mut w: File,
+    problem_name: &str,
+    map: &mut Map<String, Value>,
+) -> Result<()> {
+    let mut ser = serde_json::Serializer::with_formatter(
+        &mut w,
+        serde_json::ser::PrettyFormatter::with_indent(b"  "),
+    );
+    let mut m = ser.serialize_map(None)?;
+    m.serialize_entry("problemName", problem_name)?;
+    map.remove("id");
+    if let Some(v) = map.remove("problemName") {
+        // If original had problemName, we prefer our value; but keep original under data? Spec doesn't require; skip.
+        let _ = v;
+    }
+    for (k, v) in map.iter() {
+        m.serialize_entry(k, v)?;
+    }
+    m.end()?;
+    // Ensure newline at EOF
+    w.write_all(b"\n")?;
     Ok(())
 }
