@@ -24,48 +24,21 @@ impl Counter {
 
 const AMO_PAIRWISE_THRESHOLD: usize = 6;
 
-pub fn amo_pairwise(sat: &mut cadical::Solver, xs: &[i32]) {
+pub fn amo_pairwise(cnf: &mut Cnf, xs: &[i32]) {
     for i in 0..xs.len() {
         for j in i + 1..xs.len() {
-            sat.add_clause([-xs[i], -xs[j]]);
+            cnf.clause([-xs[i], -xs[j]]);
         }
     }
 }
 
-pub fn amo_sequential(sat: &mut cadical::Solver, xs: &[i32], id: &mut Counter) {
-    let k = xs.len();
-    if k <= 1 {
-        return;
-    }
-    let mut s = Vec::with_capacity(k - 1);
-    for _ in 0..(k - 1) {
-        s.push(id.next());
-    }
-    sat.add_clause([-xs[0], s[0]]);
-    for i in 1..k - 1 {
-        sat.add_clause([-xs[i], s[i]]);
-    }
-    for i in 1..k {
-        sat.add_clause([-xs[i], -s[i - 1]]);
-    }
-    for i in 1..k - 1 {
-        sat.add_clause([-s[i - 1], s[i]]);
-    }
-}
-
-pub fn choose_one(sat: &mut cadical::Solver, xs: &[i32], id: &mut Counter) {
-    sat.add_clause(xs.iter().copied());
-    if xs.len() <= AMO_PAIRWISE_THRESHOLD {
-        amo_pairwise(sat, xs);
-    } else {
-        amo_sequential(sat, xs, id);
-    }
-}
+pub fn choose_one(cnf: &mut Cnf, xs: &[i32], id: &mut Counter) {}
 
 pub struct Cnf {
     pub sat: cadical::Solver,
     id: Counter,
     buf: Vec<i32>,
+    clauses: Vec<Vec<i32>>,
 }
 
 impl Cnf {
@@ -74,6 +47,7 @@ impl Cnf {
             sat: cadical::Solver::with_config("sat").unwrap(),
             id: Counter::new(),
             buf: Vec::with_capacity(128),
+            clauses: vec![],
         }
     }
     #[inline]
@@ -82,11 +56,56 @@ impl Cnf {
     }
     #[inline]
     pub fn clause<I: IntoIterator<Item = i32>>(&mut self, lits: I) {
-        self.sat.add_clause(lits);
+        let lits: Vec<i32> = lits.into_iter().collect();
+        self.clauses.push(lits.clone());
+        self.sat.add_clause(lits.clone());
+
+        // caddicalは1変数のclauseをclauseだと認めずカウントしてくれないようだ！
+        // assert_eq!(self.sat.num_clauses(), self.clauses.len());
     }
+
+    pub fn amo_sequential(&mut self, xs: &[i32]) {
+        let k = xs.len();
+        if k <= 1 {
+            return;
+        }
+        let mut s = Vec::with_capacity(k - 1);
+        for _ in 0..(k - 1) {
+            s.push(self.id.next());
+        }
+        self.clause([-xs[0], s[0]]);
+        for i in 1..k - 1 {
+            self.clause([-xs[i], s[i]]);
+        }
+        for i in 1..k {
+            self.clause([-xs[i], -s[i - 1]]);
+        }
+        for i in 1..k - 1 {
+            self.clause([-s[i - 1], s[i]]);
+        }
+    }
+
     #[inline]
     pub fn choose_one(&mut self, xs: &[i32]) {
-        choose_one(&mut self.sat, xs, &mut self.id);
+        self.clause(xs.iter().copied());
+        if xs.len() <= AMO_PAIRWISE_THRESHOLD {
+            amo_pairwise(self, xs);
+        } else {
+            self.amo_sequential(xs);
+        }
+    }
+
+    pub fn write_dimacs(&self, path: &std::path::Path) -> std::io::Result<()> {
+        use std::io::Write;
+        let mut f = std::fs::File::create(path)?;
+        writeln!(f, "p cnf {} {}", self.id.cnt, self.clauses.len())?;
+        for c in &self.clauses {
+            for &l in c {
+                write!(f, "{} ", l)?;
+            }
+            writeln!(f, "0")?;
+        }
+        Ok(())
     }
 }
 
@@ -434,7 +453,7 @@ fn build_edge_vars(cnf: &mut Cnf, info: &PlanInfo) -> EdgeVars {
                 cnf.buf.push(-F[u][e][v]);
                 cnf.buf.extend_from_slice(&row);
                 cnf.clause(cnf.buf.clone());
-                amo_pairwise(&mut cnf.sat, &row);
+                amo_pairwise(cnf, &row);
             }
         }
     }
@@ -450,7 +469,7 @@ fn build_edge_vars(cnf: &mut Cnf, info: &PlanInfo) -> EdgeVars {
                 cnf.buf.push(-F[v][f][u]);
                 cnf.buf.extend_from_slice(&col);
                 cnf.clause(cnf.buf.clone());
-                amo_pairwise(&mut cnf.sat, &col);
+                amo_pairwise(cnf, &col);
             }
         }
     }
@@ -607,6 +626,268 @@ pub fn solve(num_rooms: usize, plans: &Vec<Vec<usize>>, labels: &Vec<Vec<usize>>
     assert_eq!(cnf.sat.solve(), Some(true));
 
     // 6) Extract and verify
+    let guess = extract_guess(&cnf, &info, &buckets, &cand, &edges);
+    assert!(check_explore(&guess, plans, labels));
+    guess
+}
+
+// ------------------------------ External DIMACS solve ---------------------
+
+/*
+// 外部ソルバを使って DIMACS を解かせ、その解を CaDiCaL に単位節で伝えてから
+// 既存の extract_guess で Guess を復元する。
+// 注意: ソルバの標準出力に DIMACS モデル（v ... 0 形式）が出るよう、呼び出し側で
+// 適切なフラグを args に含めてください（例: kissat の --print-solution=1 等）。
+pub fn solve_via_external_dimacs(
+    num_rooms: usize,
+    plans: &Vec<Vec<usize>>,
+    labels: &Vec<Vec<usize>>,
+    solver: &std::path::Path,
+    args: &[&str],
+    dimacs_path: &std::path::Path,
+) -> Guess {
+    use std::collections::HashSet;
+    use std::process::Command;
+
+    // 1) CNF 構築（solve と同一）
+    let info = build_info(num_rooms, plans, labels);
+    let buckets = build_buckets(&info);
+    let mut cnf = Cnf::new();
+    let cand = build_candidates(&mut cnf, &info, &buckets);
+    add_diff_pruning(&mut cnf, &info, &buckets, &cand);
+    add_sbp(&mut cnf, &info, &buckets, &cand);
+    add_same_door_equalization(&mut cnf, &info, &buckets, &cand);
+    let edges = build_edge_vars(&mut cnf, &info);
+    add_plan_constraints(&mut cnf, &info, &buckets, &cand, &edges);
+    add_start_room_unification(&mut cnf, &info, &buckets, &cand);
+
+    // 2) DIMACS 書き出し
+    //cnf.sat
+    //.write_dimacs(dimacs_path)
+    //.expect("failed to write DIMACS");
+    cnf.sat
+        .write_dimacs(dimacs_path)
+        .expect("failed to write DIMACS");
+
+    cnf.sat = cadical::Solver::with_config("sat").unwrap(); // DELETE ME LATER!!!!!!!wefojawefjapojfepaowiej
+
+    // 3) 外部ソルバ呼び出し（最後の引数として DIMACS パスを付与）
+    let output = Command::new(solver)
+        .args(args)
+        .arg(dimacs_path)
+        .output()
+        .expect("failed to spawn external solver");
+
+    // 4) 出力をパースして、正リテラル集合（真の変数）を集める
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let all = format!("{}\n{}", stdout, stderr);
+
+    let mut pos: HashSet<i32> = HashSet::new();
+    let mut saw_unsat = false;
+    let mut saw_v = false;
+    for line in all.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        // UNSAT 検出（s 行）
+        if trimmed.starts_with('s') || trimmed.starts_with('S') {
+            let l = trimmed.to_ascii_lowercase();
+            if l.contains("unsat") {
+                saw_unsat = true;
+            }
+            continue;
+        }
+        // モデルは v 行のみパース
+        if trimmed.starts_with('v') || trimmed.starts_with('V') {
+            saw_v = true;
+            for tok in trimmed.split_whitespace() {
+                if tok == "v" || tok == "V" {
+                    continue;
+                }
+                if let Ok(x) = tok.parse::<i32>() {
+                    if x == 0 {
+                        break;
+                    }
+                    if x > 0 {
+                        pos.insert(x);
+                    }
+                }
+            }
+        }
+    }
+    assert!(!saw_unsat, "external solver reported UNSAT");
+    assert!(
+        saw_v,
+        "external solver did not print any 'v' model lines; pass appropriate flags (e.g., --print-solution=1)"
+    );
+    assert!(!pos.is_empty(), "no assignment parsed from 'v' lines");
+
+    // 5) モデルを単位節として注入 → CaDiCaL で充足化
+    for &v in &pos {
+        cnf.clause([v]);
+    }
+    assert_eq!(cnf.sat.solve(), Some(true));
+
+    // 6) 既存の抽出ロジックをそのまま利用
+    let guess = extract_guess(&cnf, &info, &buckets, &cand, &edges);
+    assert!(check_explore(&guess, plans, labels));
+    guess
+}
+*/
+
+// ストリーミング版: 外部ソルバの標準出力/標準エラーを逐次画面に流しつつ、
+// v 行（モデル）だけをバッファに取り込み、終了後にパースして解を復元する。
+pub fn solve_via_external_dimacs_streaming(
+    num_rooms: usize,
+    plans: &Vec<Vec<usize>>,
+    labels: &Vec<Vec<usize>>,
+    solver: &std::path::Path,
+    args: &[&str],
+    dimacs_path: &std::path::Path,
+) -> Guess {
+    use std::collections::HashSet;
+    use std::io::{BufRead, BufReader};
+    use std::process::{Command, Stdio};
+    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::{Arc, Mutex};
+
+    // 1) CNF 構築（solve と同一）
+    let info = build_info(num_rooms, plans, labels);
+    let buckets = build_buckets(&info);
+    let mut cnf = Cnf::new();
+    let cand = build_candidates(&mut cnf, &info, &buckets);
+    add_diff_pruning(&mut cnf, &info, &buckets, &cand);
+    add_sbp(&mut cnf, &info, &buckets, &cand);
+    add_same_door_equalization(&mut cnf, &info, &buckets, &cand);
+    let edges = build_edge_vars(&mut cnf, &info);
+    add_plan_constraints(&mut cnf, &info, &buckets, &cand, &edges);
+    add_start_room_unification(&mut cnf, &info, &buckets, &cand);
+
+    // 2) DIMACS 書き出し
+    // cnf.sat
+    //.write_dimacs(dimacs_path)
+    // .expect("failed to write DIMACS");
+    cnf.write_dimacs(dimacs_path)
+        .expect("failed to write DIMACS");
+
+    eprintln!(
+        "Original: num_clauses={}, num_variables={}, clauses={}",
+        cnf.sat.num_clauses(),
+        cnf.sat.num_variables(),
+        cnf.clauses.len(),
+    );
+
+    // 3) 外部ソルバをストリーム実行
+    let mut child = Command::new(solver)
+        .args(args)
+        .arg(dimacs_path)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::inherit())
+        .spawn()
+        .expect("failed to spawn external solver");
+
+    let stdout = child.stdout.take().expect("failed to capture stdout");
+
+    let model_buf = Arc::new(Mutex::new(String::new()));
+    let saw_v = Arc::new(AtomicBool::new(false));
+    let saw_unsat = Arc::new(AtomicBool::new(false));
+
+    // stdout スレッド（stderr は親プロセスにそのまま継承して表示）
+    let stdout_handle = {
+        let model_buf = Arc::clone(&model_buf);
+        let saw_v = Arc::clone(&saw_v);
+        let saw_unsat = Arc::clone(&saw_unsat);
+        std::thread::spawn(move || {
+            let reader = BufReader::new(stdout);
+            for line in reader.lines() {
+                let line = match line {
+                    Ok(l) => l,
+                    Err(_) => break,
+                };
+                eprintln!("{}", line);
+                if line.starts_with('s') || line.starts_with('S') {
+                    if line.to_ascii_lowercase().contains("unsat") {
+                        saw_unsat.store(true, Ordering::Relaxed);
+                    }
+                } else if line.starts_with('v') || line.starts_with('V') {
+                    saw_v.store(true, Ordering::Relaxed);
+                    let mut buf = model_buf.lock().unwrap();
+                    buf.push_str(&line);
+                    buf.push('\n');
+                }
+            }
+        })
+    };
+
+    let status = child.wait().expect("failed to wait on solver");
+    // 多くの SAT ソルバは終了コード 10(SAT), 20(UNSAT) を返す（MiniSAT 互換）。
+    // 0 で終了する実装もあるため、0 と 10 を成功扱いにする。
+    if let Some(code) = status.code() {
+        assert!(
+            code == 0 || code == 10,
+            "external solver exited with code {}",
+            code
+        );
+    } else {
+        panic!("external solver terminated by signal");
+    }
+
+    // stdout 読み取りの終了を待つ（バッファ取りこぼし防止）
+    let _ = stdout_handle.join();
+
+    assert!(
+        !saw_unsat.load(Ordering::Relaxed),
+        "external solver reported UNSAT"
+    );
+    assert!(
+        saw_v.load(Ordering::Relaxed),
+        "external solver did not print any 'v' model lines; pass appropriate flags (e.g., --print-solution=1)"
+    );
+
+    // 4) モデルをパース
+    let buf = model_buf.lock().unwrap();
+    let collected = buf.as_str();
+    let mut solution: HashSet<i32> = HashSet::new();
+    for line in collected.lines() {
+        if !(line.starts_with('v') || line.starts_with('V')) {
+            continue;
+        }
+        for tok in line.split_whitespace() {
+            if tok == "v" || tok == "V" {
+                continue;
+            }
+            if let Ok(x) = tok.parse::<i32>() {
+                if x == 0 {
+                    break;
+                }
+                solution.insert(x);
+            }
+        }
+    }
+    drop(buf);
+    assert!(!solution.is_empty(), "no assignment parsed from 'v' lines");
+
+    // 5) モデルを単位節として注入 → CaDiCaL で充足化
+    // dbg!("DELETE ME LATER!!", cnf.var());
+    eprintln!(
+        "Original: num_clauses={}, num_variables={}, solutions={}",
+        cnf.sat.num_clauses(),
+        cnf.sat.num_variables(),
+        solution.len()
+    );
+
+    // cnf.sat = cadical::Solver::with_config("sat").unwrap();
+    for &v in &solution {
+        cnf.clause([v]);
+    }
+    assert_eq!(cnf.sat.solve(), Some(true));
+    for &v in &solution {
+        assert_eq!(cnf.sat.value(v.abs()), Some(v > 0));
+    }
+
+    // 6) 既存の抽出ロジックをそのまま利用
     let guess = extract_guess(&cnf, &info, &buckets, &cand, &edges);
     assert!(check_explore(&guess, plans, labels));
     guess

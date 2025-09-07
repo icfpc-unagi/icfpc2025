@@ -18,8 +18,8 @@ fn main() {
     let n = judge.num_rooms();
 
     // Multiple plans setup
-    let n_plans = 3;
-    let len_plan = 6 * n;
+    let n_plans = 1;
+    let len_plan = 18 * n;
     let mut rng = ChaCha12Rng::seed_from_u64(0xC0FF_EE42);
 
     let plans: Vec<Vec<usize>> = (0..n_plans)
