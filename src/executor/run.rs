@@ -3,7 +3,7 @@ use chrono::{Datelike, Timelike};
 use serde_json::Value as JsonValue;
 use std::collections::VecDeque;
 use std::fs::{self, File};
-use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus, Stdio};
 use std::sync::{
@@ -194,21 +194,9 @@ fn spawn_log_thread<R: std::io::Read + Send + 'static>(
 ) -> std::thread::JoinHandle<Result<()>> {
     std::thread::spawn(move || -> Result<()> {
         let mut reader = BufReader::new(pipe);
-        let writer = Arc::new(Mutex::new(BufWriter::new(file)));
-        let stop = Arc::new(AtomicBool::new(false));
-        let writer_for_flush = Arc::clone(&writer);
-        let stop_for_flush = Arc::clone(&stop);
-        let flusher = std::thread::spawn(move || {
-            while !stop_for_flush.load(Ordering::Relaxed) {
-                std::thread::sleep(opts.flush_interval);
-                if let Ok(mut w) = writer_for_flush.lock() {
-                    let _ = w.flush();
-                }
-            }
-            if let Ok(mut w) = writer_for_flush.lock() {
-                let _ = w.flush();
-            }
-        });
+        // Write directly to the file (no BufWriter) so contents are visible
+        // immediately without relying on periodic flushes.
+        let writer = Arc::new(Mutex::new(file));
         let mut buf: Vec<u8> = Vec::with_capacity(4096);
         let mut bytes_written: usize = 0;
         let max_bytes: usize = opts.log_max_bytes;
@@ -272,8 +260,6 @@ fn spawn_log_thread<R: std::io::Read + Send + 'static>(
                 w.write_all(&tail_buf)?;
             }
         }
-        stop.store(true, Ordering::Relaxed);
-        let _ = flusher.join();
         Ok(())
     })
 }
