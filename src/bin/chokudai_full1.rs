@@ -238,16 +238,21 @@ fn main() {
 
         //set step with random door
         while door2.len() < q_limit {
-            let mut step = None;
+            let mut steps = vec![];
             if door2.len() == dstart + 1 {
+                let mut id = 0;
                 for k in 0..qnum2 {
-                    id += (pre_id as usize) << (2 * k);
+                    steps.push(Some((pos[dstart] >> (2 * k)) % 4));
+                }
+            } else {
+                for _ in 0..qnum2 {
+                    steps.push(None);
                 }
             }
             let next_door = rnd.random_range(0..6);
             door2.push(next_door);
             for k in 0..qnum2 {
-                step2[k].push((step, next_door));
+                step2[k].push((steps[k], next_door));
             }
         }
 
