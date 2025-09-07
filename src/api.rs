@@ -27,19 +27,11 @@ use std::time::Duration;
 #[cfg(feature = "reqwest")]
 use std::time::Instant;
 
+use crate::client;
+
 /// Timeout for API requests in seconds.
 #[cfg(feature = "reqwest")]
 const API_REQUEST_TIMEOUT_SECS: u64 = 120;
-
-/// Creates a new reqwest HTTP client with a default timeout.
-#[cfg(feature = "reqwest")]
-#[once(result = true, sync_writes = true)]
-fn http_client() -> Result<Client> {
-    Client::builder()
-        .timeout(Duration::from_secs(API_REQUEST_TIMEOUT_SECS))
-        .build()
-        .context("Failed to build HTTP client")
-}
 
 /// Fetches `id.json` from the contest's Google Cloud Storage bucket.
 ///
@@ -51,8 +43,10 @@ fn http_client() -> Result<Client> {
 #[cfg(feature = "reqwest")]
 #[once(result = true, sync_writes = true)]
 pub fn get_id_json() -> anyhow::Result<Vec<u8>> {
+    use crate::client;
+
     let unagi_password = std::env::var("UNAGI_PASSWORD").context("UNAGI_PASSWORD not set")?;
-    let client = http_client()?;
+    let client = &*client::BLOCKING_CLIENT;
     let res = client
         .get(format!(
             "https://storage.googleapis.com/icfpc2025-data/{}/id.json",
@@ -223,7 +217,7 @@ struct SelectResponse {
 pub fn select(problem_name: &str) -> Result<String> {
     // Acquire process-wide lock and start renewal thread.
     start_lock_manager_blocking()?;
-    let client = http_client()?;
+    let client = &*client::BLOCKING_CLIENT;
     let url = format!("{}/select", aedificium_base());
 
     // Obtain id via get_id (parsed from id.json).
@@ -279,7 +273,7 @@ where
     I: IntoIterator<Item = S>,
     S: AsRef<str>,
 {
-    let client = http_client()?;
+    let client = &*client::BLOCKING_CLIENT;
     let url = format!("{}/explore", aedificium_base());
     let id = get_id()?;
     // Convert the plans from Vec<usize> to strings of digits for the JSON request.
@@ -361,7 +355,7 @@ struct GuessResponse {
 /// `true` if the map was correct, `false` otherwise.
 #[cfg(feature = "reqwest")]
 pub fn guess(map: &Map) -> Result<bool> {
-    let client = http_client()?;
+    let client = &*client::BLOCKING_CLIENT;
     let url = format!("{}/guess", aedificium_base());
 
     let id = get_id()?;
@@ -381,7 +375,7 @@ pub fn guess(map: &Map) -> Result<bool> {
 #[cfg(feature = "reqwest")]
 #[cached(result = true, time = 300)]
 pub fn scores() -> Result<HashMap<String, i64>> {
-    let client = http_client()?;
+    let client = &*client::BLOCKING_CLIENT;
     // This endpoint is not proxied.
     let url = "https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.com/";
 

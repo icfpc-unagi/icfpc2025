@@ -3,10 +3,12 @@
 //! This module contains handlers designed to be called periodically by a cron
 //! job or a similar scheduling service.
 
+pub use crate::client;
 use actix_web::{HttpResponse, Responder};
+
 use anyhow::{Context, Result};
 use chrono::Utc;
-use reqwest::Client;
+
 use serde::Deserialize;
 use tokio::task::JoinSet;
 
@@ -45,7 +47,7 @@ fn base_endpoint() -> String {
 /// A `Result` containing a JSON value with the timestamp and a list of all
 /// GCS objects that were successfully created.
 async fn run_impl() -> Result<serde_json::Value> {
-    let client = Client::new();
+    let client = &*client::CLIENT;
     let base = base_endpoint();
 
     let ts = Utc::now().format("%Y%m%d-%H%M%S").to_string();
