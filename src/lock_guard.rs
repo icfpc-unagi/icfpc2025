@@ -12,9 +12,9 @@ use std::thread;
 use std::time::Duration;
 
 #[cfg(feature = "reqwest")]
-const LOCK_TTL: Duration = Duration::from_secs(30);
+const LOCK_TTL: Duration = Duration::from_secs(10);
 #[cfg(feature = "reqwest")]
-const LOCK_RENEW_INTERVAL: Duration = Duration::from_secs(5);
+const LOCK_RENEW_INTERVAL: Duration = Duration::from_secs(2);
 
 #[cfg(feature = "reqwest")]
 struct LockRunner {
@@ -104,7 +104,7 @@ pub fn start_lock_manager_blocking() -> Result<()> {
     let handle = thread::spawn(move || {
         let mut consecutive_failures = 0u32;
         loop {
-            for _ in 0..50 {
+            for _ in 0..20 {
                 if stop_clone.load(Ordering::SeqCst) {
                     return;
                 }
