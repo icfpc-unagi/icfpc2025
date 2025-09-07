@@ -2,7 +2,6 @@
 #![allow(non_snake_case)]
 use icfpc2025::judge::*;
 use itertools::Itertools;
-use ordered_float::OrderedFloat;
 use rand::prelude::*;
 
 // copy vvvvvvvvvv
@@ -221,18 +220,18 @@ fn hillclimb(mut crr_plan: Vec<usize>, n_seeds_train_batch: u64, n_seeds_test: u
     }
 }
 
-fn balanced_plan(n: usize) -> Vec<usize> {
-    let mut rng = rand::rng();
-    let len = 18 * n;
-    let mut plan = Vec::with_capacity(len);
-    for d in 0..6 {
-        for _ in 0..(len / 6) {
-            plan.push(d);
-        }
-    }
-    plan.shuffle(&mut rng);
-    plan
-}
+// fn balanced_plan(n: usize) -> Vec<usize> {
+//     let mut rng = rand::rng();
+//     let len = 18 * n;
+//     let mut plan = Vec::with_capacity(len);
+//     for d in 0..6 {
+//         for _ in 0..(len / 6) {
+//             plan.push(d);
+//         }
+//     }
+//     plan.shuffle(&mut rng);
+//     plan
+// }
 
 fn main() {
     let n_seeds_train = 10000;

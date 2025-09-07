@@ -352,7 +352,6 @@ fn find_creek(
 fn main() {
     let judge = get_judge_from_stdin_with(true);
     let fix_label = true;
-    let use_diff = true;
 
     let n = judge.num_rooms();
     // 事前に与えられた explore ログを使用

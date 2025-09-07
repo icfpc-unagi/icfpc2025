@@ -1,6 +1,6 @@
 #![cfg_attr(feature = "skip_lint", allow(clippy::all, clippy::pedantic, warnings))]
 #![allow(non_snake_case)]
-use icfpc2025::{judge::*, *};
+use icfpc2025::judge::*;
 use itertools::Itertools;
 use ordered_float::OrderedFloat;
 use rand::prelude::*;
@@ -47,7 +47,7 @@ fn coverage(local_judge: &LocalJudge, plan: &Vec<usize>) -> (f32, f32, f32) {
 fn generate_plan(num_rooms: usize, n_seeds: usize) -> Vec<usize> {
     let mut rng = rand::rng();
 
-    let mut local_judges = (0..n_seeds)
+    let local_judges = (0..n_seeds)
         .map(|i| LocalJudge::new("random", num_rooms, i as u64))
         .collect_vec();
 
@@ -103,7 +103,7 @@ fn generate_plan(num_rooms: usize, n_seeds: usize) -> Vec<usize> {
 fn generate_plan_v2(num_rooms: usize, n_seeds: usize) -> Vec<usize> {
     let mut rng = rand::rng();
 
-    let mut local_judges = (0..n_seeds)
+    let local_judges = (0..n_seeds)
         .map(|i| LocalJudge::new("random", num_rooms, i as u64))
         .collect_vec();
 

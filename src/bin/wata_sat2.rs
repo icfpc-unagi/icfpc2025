@@ -158,7 +158,7 @@ fn main() {
 
     let n = judge.num_rooms();
 
-    let rng = rand_pcg::Pcg64Mcg::seed_from_u64(84300);
+    let _rng = rand_pcg::Pcg64Mcg::seed_from_u64(84300);
     let explored = judge.explored();
     assert!(
         !explored.plans.is_empty(),

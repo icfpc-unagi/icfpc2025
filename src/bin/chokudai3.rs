@@ -191,7 +191,7 @@ fn dfs2(list: &Vec<usize>, m: &Moves, step: usize, need: usize, st: &mut SameTab
 }
 
 fn main() {
-    let mut judge = get_judge_from_stdin_with(true);
+    let judge = get_judge_from_stdin_with(true);
     let n = judge.num_rooms();
     let mut m = Moves {
         label: vec![],
@@ -308,7 +308,6 @@ fn main() {
         let mut loop_cnt = 0;
         let mut wrong = error_check(&edges, &m, n, &label_id);
         let mut best_wrong = wrong;
-        let mut not_update = 0;
         let mut best_edge = edges.clone();
 
         eprintln!("initial_wrong: {}", best_wrong);
@@ -386,12 +385,9 @@ fn main() {
                     eprintln!("loop_cnt: {}, wrong: {}", loop_cnt, new_wrong);
                     best_wrong = new_wrong;
                     best_edge = new_edges.clone();
-                    not_update = 0;
                 }
                 wrong = new_wrong;
                 edges = new_edges.clone();
-            } else {
-                not_update += 1;
             }
 
             if best_wrong == 0 {
@@ -432,7 +428,6 @@ fn main() {
 }
 
 fn error_check(edges: &Vec<Vec<(usize, usize)>>, m: &Moves, n: usize, label_id: &[usize]) -> usize {
-    let mut wrong = 0;
     let ng = 999999;
     let mm = m.label.len();
     let mut dp = vec![vec![ng; n]; mm];
@@ -471,26 +466,4 @@ fn error_check(edges: &Vec<Vec<(usize, usize)>>, m: &Moves, n: usize, label_id: 
     }
 
     wrong
-}
-
-//toを使ってansを作ってみた時に上手く行くかチェックする
-fn to_check(
-    ans: &[usize],
-    label_id: &[usize],
-    to: &Vec<Vec<usize>>,
-    m: &Moves,
-) -> (usize, Vec<usize>) {
-    let mut ret_ans = vec![0; m.label.len()];
-    let mut now = ans[0];
-    let mut wrong = 0;
-    ret_ans[0] = now;
-    for i in 0..m.door.len() {
-        let next = to[now][m.door[i]];
-        if label_id[next] != m.label[i + 1] {
-            wrong += 1;
-        }
-        now = next;
-        ret_ans[i + 1] = now;
-    }
-    (wrong, ret_ans)
 }

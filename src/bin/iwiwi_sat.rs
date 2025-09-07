@@ -9,7 +9,7 @@ use icfpc2025::judge::*;
 /// SAT variable encoding: the i-th room visited in the path is room u.
 /// i: path index [0, q)
 /// u: room index [0, n)
-fn V(n: usize, q: usize, i: usize, u: usize) -> i32 {
+fn V(n: usize, _q: usize, i: usize, u: usize) -> i32 {
     // i番目の頂点が頂点u
     // i: [0, q), u:[0, n)
     (1 + (i * n) + u) as i32
