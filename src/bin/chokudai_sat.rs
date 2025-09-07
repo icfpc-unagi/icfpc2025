@@ -85,9 +85,12 @@ fn main() {
         // 時刻 t にはどれか一つの (u,i) にいる
         cnf.choose_one(&V[t]);
     }
+    // 最初の部屋は labels[0] * 2 で決まっている
+    let first_room = labels[0] * 2;
+    cnf.clause([V[0][first_room]]);
 
     // E[u][e][v][f] := 頂点uのe番目のドアが頂点vのf番目のドアに繋がっている
-    let mut E = mat![0; n * D; 6; n * D; 6];
+    let mut E = mat![!0; n * D; 6; n * D; 6];
 
     // E[u][e][v][f] := u の e 番目のドアが v の f 番目 を結ぶ
     for ui in 0..n * D {
@@ -105,6 +108,7 @@ fn main() {
                         // 逆向きも同じもの
                         E[ui ^ 1][f][vj ^ 1][e] = E[vj][f][ui][e];
                     }
+                    tmp.push(E[ui][e][vj][f]);
                 }
             }
 
@@ -116,16 +120,13 @@ fn main() {
     //各時間について解く
     //色は001122330011....のように2つずつ並ぶ
     //なので最初の部屋は色labels[0]なので、最初の部屋はlabels[0]*2と決め打って良い
-    let first_room = labels[0] * 2;
 
     // いる場所Vについての制約
-    // V[t][u*D+i] := 時刻 t の開始時点で、存在するのは (u,i) である
-    cnf.clause([V[0][first_room]]);
 
     for t in 0..plans.len() {
         //plants[t].1 == !0 のときは区切りなので最初に戻る
         if plans[t].1 == !0 {
-            cnf.clause([V[t + 1][0]]);
+            cnf.clause([V[t + 1][first_room]]);
         } else {
             // 時刻tではドアeを選択する
             let (_, e) = plans[t];
@@ -156,10 +157,10 @@ fn main() {
     for t in 0..plans.len() {
         for ui in 0..n * D {
             for c in 0..4 {
-                C[t][ui][c] = cnf.var();
+                C[t + 1][ui][c] = cnf.var();
             }
             // uiの色は時間tについて一つに定まる
-            cnf.choose_one(&C[t][ui]);
+            cnf.choose_one(&C[t + 1][ui]);
         }
 
         if let Some(new_c) = plans[t].0 {
