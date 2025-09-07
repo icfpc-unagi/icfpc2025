@@ -1,6 +1,7 @@
 #![allow(non_snake_case)]
 
 use icfpc2025::{
+    judge::Guess,
     solve_no_marks::{self, Cnf},
     *,
 };
@@ -14,7 +15,41 @@ fn main() {
     let K = 1;
     let mut plans = vec![];
     let (super_guess, plans, labels) = match D {
-        2 => unimplemented!(),
+        2 => {
+            let mut plans0 = vec![vec![]; 2];
+            for k in 0..2 {
+                let mut plan = vec![];
+                for _ in 0..judge.num_rooms() * 6 {
+                    let door = rng.random_range(0..6);
+                    plan.push((None, door));
+                    plans0[k].push(door);
+                }
+                plans.push(plan);
+            }
+            for _ in 0..K {
+                let mut plan = vec![];
+                for _ in 0..judge.num_rooms() * 6 {
+                    plan.push((Some(rng.random_range(0..4)), rng.random_range(0..6)));
+                }
+                plans.push(plan);
+            }
+            let mut labels = judge.explore(&plans);
+            let labels0 = vec![labels[0].clone(), labels[1].clone()];
+            let super_guess = solve_no_marks::solve(judge.num_rooms() / D, &plans0, &labels0);
+            labels.remove(0);
+            plans.remove(0);
+            labels.remove(0);
+            plans.remove(0);
+            let mut flat_plans = vec![];
+            let flat_labels = labels.iter().flatten().copied().collect_vec();
+            for i in 0..plans.len() {
+                flat_plans.extend(plans[i].iter().copied());
+                if i + 1 < plans.len() {
+                    flat_plans.push((None, !0));
+                }
+            }
+            (super_guess, flat_plans, flat_labels)
+        }
         3 => {
             let mut plan = vec![];
             let mut plans0 = vec![vec![]];
@@ -48,6 +83,7 @@ fn main() {
         }
         _ => panic!("not supported D"),
     };
+    assert_eq!(plans.len() + 1, labels.len());
     let mut cnf = Cnf::new();
     let n = judge.num_rooms() / D;
     assert_eq!(super_guess.rooms.len(), n);
@@ -150,11 +186,34 @@ fn main() {
                 }
             }
         }
+        prev_t[u] = t;
         if plans[t].1 == !0 {
             prev_t.fill(!0);
         }
-        prev_t[u] = t;
         u = v;
     }
     assert_eq!(cnf.sat.solve(), Some(true));
+    let mut guess = Guess {
+        start: super_guess.start * D,
+        graph: vec![[(0, 0); 6]; judge.num_rooms()],
+        rooms: vec![0; judge.num_rooms()],
+    };
+    for u in 0..n {
+        for i in 0..D {
+            guess.rooms[u * D + i] = super_guess.rooms[u];
+        }
+    }
+    for u in 0..n {
+        for e in 0..6 {
+            let (v, f) = super_guess.graph[u][e];
+            for i in 0..D {
+                for j in 0..D {
+                    if cnf.sat.value(E[u][e][i][j]) == Some(true) {
+                        guess.graph[u * D + i][e] = (v * D + j, f);
+                    }
+                }
+            }
+        }
+    }
+    judge.guess(&guess);
 }
