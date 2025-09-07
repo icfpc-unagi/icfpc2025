@@ -4,7 +4,7 @@
 //! It fetches historical leaderboard data, visualizes it using Chart.js,
 //! and displays the latest solved map for a given problem.
 
-use crate::{api, sql, svg};
+use crate::{api, problems, sql, svg};
 use actix_web::{HttpResponse, Responder, web};
 use anyhow::Result;
 use cached::proc_macro::cached;
@@ -106,25 +106,51 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
     let scores_ms = t0.elapsed().as_millis();
 
     // Build problem navigation links for the top of the page.
+    // scores: Unagiのスコア一覧 (api::scores)
+    // scoresテーブルから各問題ごとの全チーム最新スコアの最小値を取得
+    let mut best_scores = std::collections::HashMap::new();
+    let rows = sql::select(
+        r#"
+        SELECT problem, MIN(score) AS best_score
+        FROM scores
+        WHERE score IS NOT NULL
+        GROUP BY problem
+        "#,
+        params::Params::Empty,
+    )?;
+    for row in rows {
+        let problem = row.at::<String>(0)?;
+        let best_score = row.at::<i64>(1)?;
+        best_scores.insert(problem, best_score);
+    }
+
     let mut nav_links: Vec<String> = Vec::new();
     if problem == "global" {
         nav_links.push("<b>[Global]</b>".to_string());
     } else {
         nav_links.push("[<a href=\"/leaderboard/global\">Global</a>]".to_string());
     }
-    for p in crate::problems::all_problems() {
-        let score = scores
-            .get(&p.problem)
-            .map_or("-".to_string(), |s| s.to_string());
-        nav_links.push(if p.problem == problem {
-            format!("<b>[{}]({})</b>", p.problem, score)
+    for problems::Problem { problem: p, .. } in problems::all_problems() {
+        let score = scores.get(p);
+        let best = best_scores.get(p);
+        let mut link = format!(
+            "[{}]({}/{})",
+            p,
+            score.map_or("-".to_string(), |s| s.to_string()),
+            best.map_or("-".to_string(), |s| s.to_string())
+        );
+        // Unagiのスコアが最良でない場合は赤くする
+        if let (Some(unagi_score), Some(best_score)) = (score, best)
+            && unagi_score > best_score
+        {
+            link = format!(r#"<span style="color:red;">{}</span>"#, link);
+        }
+        if problem == p {
+            link = format!("<b>{link}</b>");
         } else {
-            format!(
-                "[<a href=\"/leaderboard/{problem_name}\">{problem_name}</a>]({score})",
-                problem_name = p.problem,
-                score = score
-            )
-        });
+            link = format!(r#"<a href="/leaderboard/{p}">{link}</a>"#);
+        }
+        nav_links.push(link);
     }
     let nav_html = format!(
         "<div class=\"lb-nav\" style=\"margin:8px 0;\">{}</div>",
