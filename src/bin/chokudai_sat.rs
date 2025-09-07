@@ -183,6 +183,22 @@ fn main() {
             cnf.choose_one(&C[t + 1][ui]);
         }
 
+        if plans[t].1 == !0 {
+            // 位置のリセット
+            cnf.clause([V[t + 1][first_room]]);
+            // 色もリセットしたいなら（初期色 001122.. に戻す）
+            for ui in 0..n * D {
+                for c in 0..4 {
+                    if c == ui / D % 4 {
+                        cnf.clause([C[t + 1][ui][c]]);
+                    } else {
+                        cnf.clause([-C[t + 1][ui][c]]);
+                    }
+                }
+            }
+            continue;
+        }
+
         if let Some(new_c) = plans[t].0 {
             for ui in 0..n * D {
                 // 訪問頂点のみ「new_c に上書き」
@@ -202,10 +218,13 @@ fn main() {
                         continue;
                     }
                     for c in 0..4 {
-                        // (V[t][ui] && C[t][uj][c]) -> C[t+1][uj][c]
-                        cnf.clause([-V[t][ui], -C[t][uj][c], C[t + 1][uj][c]]);
-                        // (V[t][ui] && !C[t][uj][c]) -> !C[t+1][uj][c]
-                        cnf.clause([-V[t][ui], C[t][uj][c], -C[t + 1][uj][c]]);
+                        // (¬V[t][x] ∧  C[t][x][c]) →  C[t+1][x][c]
+                        // ≡  V[t][x] ∨ ¬C[t][x][c] ∨ C[t+1][x][c]
+                        cnf.clause([V[t][x], -C[t][x][c], C[t + 1][x][c]]);
+
+                        // (¬V[t][x] ∧ ¬C[t][x][c]) → ¬C[t+1][x][c]
+                        // ≡  V[t][x] ∨  C[t][x][c] ∨ ¬C[t+1][x][c]
+                        cnf.clause([V[t][x], C[t][x][c], -C[t + 1][x][c]]);
                     }
                 }
             }
