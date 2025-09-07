@@ -1,11 +1,7 @@
 #![cfg_attr(feature = "skip_lint", allow(clippy::all, clippy::pedantic, warnings))]
 #![allow(non_snake_case)]
 
-use icfpc2025::{
-    judge::Guess,
-    solve_no_marks::{Cnf, amo_pairwise},
-    *,
-};
+use icfpc2025::{judge::Guess, solve_no_marks::Cnf, *};
 use itertools::Itertools;
 use rand::prelude::*;
 
@@ -83,7 +79,7 @@ fn main() {
                     }
                     cnf.clause([-E[u][e][v][f], A[u][e][v]]);
                 }
-                amo_pairwise(&mut cnf.sat, &E[u][e][v]);
+                cnf.amo_sequential(&E[u][e][v]);
                 // A[u][e][v] -> OR(E[u][e][v][*])
                 let mut tmp = E[u][e][v].clone();
                 tmp.push(-A[u][e][v]);
