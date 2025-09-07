@@ -97,6 +97,14 @@ pub trait Judge {
     /// Sets the exploration log, useful for replaying or resuming a state.
     fn set_explored(&mut self, explored: Explored);
     fn restart(&mut self);
+    /// Dumps the current judge state as a JSON object.
+    ///
+    /// - For `LocalJudge`, this returns an object equivalent to the Map JSON:
+    ///   { problemName, seed, rooms, startingRoom, connections[{from{room,door}, to{room,door}}] }.
+    ///   Note: doors are based on the judge's current internal numbering.
+    /// - For `RemoteJudge`, only the fields that can be known client-side are filled
+    ///   (e.g., problemName and numRooms).
+    fn dump_json(&self) -> serde_json::Value;
 }
 
 /// Represents a solver's guess for the map's structure.
@@ -145,6 +153,9 @@ pub struct Explored {
 /// This is used for testing solvers without interacting with the remote server.
 pub struct LocalJudge {
     problem_name: String,
+    /// Original problem arguments when constructed via `new`.
+    /// Format: "{problem_type} {num_rooms} {seed}". May be empty for other constructors.
+    problem_args: String,
     /// The signature of each room.
     rooms: Vec<usize>,
     /// The index of the starting room.
@@ -166,12 +177,11 @@ impl Judge for LocalJudge {
         &self.problem_name
     }
     fn explore(&mut self, plans: &[Vec<Step>]) -> Vec<Vec<usize>> {
-        println!("explore {}", plans.len());
+        eprintln!("explore {}", plans.len());
         self.cost += plans.len() + 1;
         let mut ret = vec![];
         for plan in plans {
             let mut labels = self.rooms.clone();
-            println!("{}", plan.iter().map(|&step| format_step(step)).join(""));
             let mut u = self.starting_room;
             let mut route = vec![labels[u]];
             for &(newlabel, door) in plan {
@@ -185,9 +195,19 @@ impl Judge for LocalJudge {
             ret.push(route);
             // assert!(plan.len() <= 6 * self.num_rooms());
         }
-        for r in &ret {
-            println!("{}", r.iter().join(""));
-        }
+        // Emit UNAGI explore request/response in a single JSON line.
+        let str_plans: Vec<String> = plans
+            .iter()
+            .map(|p| p.iter().map(|&step| format_step(step)).join(""))
+            .collect();
+        println!(
+            "<UNAGI::EXPLORE>: {}",
+            serde_json::to_string(&serde_json::json!({
+                "plans": str_plans,
+                "results": ret,
+            }))
+            .unwrap()
+        );
         self.explored_log.plans.extend(plans.to_vec());
         self.explored_log.results.extend(ret.clone());
         ret
@@ -260,7 +280,10 @@ impl Judge for LocalJudge {
 
         // DO NOT REMOVE HERE. THIS IS USED FOR SYSTEM TESTING!!!
         // Output JSON-encoded result for the executor to parse.
-        println!("<UNAGI>: {}", serde_json::json!({ "score": self.cost }));
+        println!(
+            "<UNAGI::SCORE>: {}",
+            serde_json::json!({ "score": self.cost })
+        );
 
         true
     }
@@ -276,6 +299,35 @@ impl Judge for LocalJudge {
             plans: vec![],
             results: vec![],
         };
+    }
+    fn dump_json(&self) -> serde_json::Value {
+        // Gather connections by pairing (u, d) with (v, d2) where graph[u][d] = v and graph[v][d2] = u.
+        // Emit each undirected edge only once (lexicographic order on (u,d) <= (v,d2)).
+        let n = self.graph.len();
+        let mut connections = Vec::new();
+        for u in 0..n {
+            for d in 0..6 {
+                let v = self.graph[u][d];
+                // Find the door on v that returns to u
+                let d2 = (0..6)
+                    .find(|&dd| self.graph[v][dd] == u)
+                    .expect("graph must be undirected");
+                if (u, d) <= (v, d2) {
+                    connections.push(serde_json::json!({
+                        "from": { "room": u, "door": d },
+                        "to":   { "room": v, "door": d2 },
+                    }));
+                }
+            }
+        }
+
+        serde_json::json!({
+            "problemName": self.problem_name,
+            "problemArgs": self.problem_args,
+            "rooms": self.rooms,
+            "startingRoom": self.starting_room,
+            "connections": connections,
+        })
     }
 }
 
@@ -403,6 +455,13 @@ impl Judge for RemoteJudge {
                 results: vec![],
             },
         }
+    }
+    fn dump_json(&self) -> serde_json::Value {
+        // Remote judge cannot know the true map. Return what is known.
+        serde_json::json!({
+            "problemName": self.problem_name,
+            "numRooms": self.num_rooms,
+        })
     }
 }
 
@@ -593,7 +652,8 @@ impl LocalJudge {
     /// Creates a new `LocalJudge` with a randomly generated map.
     pub fn new(problem_type: &str, num_rooms: usize, seed: u64) -> Self {
         let mut rng = rand_chacha::ChaCha20Rng::seed_from_u64(seed);
-        match problem_type {
+        let problem_args = format!("{} {} {}", problem_type, num_rooms, seed);
+        let j = match problem_type {
             "random" => {
                 // Generate room signatures.
                 let mut rooms = (0..num_rooms).map(|i| i % 4).collect_vec();
@@ -615,6 +675,7 @@ impl LocalJudge {
                 }
                 Self {
                     problem_name: problem_type.to_string(),
+                    problem_args: problem_args.clone(),
                     rooms,
                     starting_room: 0, // Start at room 0 (the fixed starting room in the problem spec)
                     graph,
@@ -640,6 +701,7 @@ impl LocalJudge {
                 }
                 Self {
                     problem_name: problem_type.to_string(),
+                    problem_args: problem_args.clone(),
                     rooms,
                     starting_room: 0, // Start at room 0 (the fixed starting room in the problem spec)
                     graph,
@@ -667,6 +729,7 @@ impl LocalJudge {
 
                 Self {
                     problem_name: problem_type.to_string(),
+                    problem_args: problem_args.clone(),
                     rooms: instance.room_to_label,
                     starting_room: 0, // Start at room 0 (the fixed starting room in the problem spec)
                     graph,
@@ -678,7 +741,14 @@ impl LocalJudge {
                 }
             }
             _ => panic!("Unknown problem type: {}", problem_type),
-        }
+        };
+        // Emit map dump for UNAGI harness
+        let map_json = j.dump_json();
+        println!(
+            "<UNAGI::MAP>: {}",
+            serde_json::to_string(&map_json).unwrap()
+        );
+        j
     }
 
     /// Creates a new `LocalJudge` from a map structure provided in an `api::Map`.
@@ -722,8 +792,9 @@ impl LocalJudge {
                 graph[to.room][new_td] = fr.room;
             }
         }
-        Self {
+        let j = Self {
             problem_name: problem_name.unwrap_or_else(|| "json".to_string()),
+            problem_args: String::new(),
             starting_room: map.starting_room,
             rooms: map.rooms.clone(),
             graph,
@@ -732,7 +803,14 @@ impl LocalJudge {
                 plans: vec![],
                 results: vec![],
             },
-        }
+        };
+        // Emit map dump for UNAGI harness
+        let map_json = j.dump_json();
+        println!(
+            "<UNAGI::MAP>: {}",
+            serde_json::to_string(&map_json).unwrap()
+        );
+        j
     }
 }
 
@@ -797,6 +875,7 @@ pub fn get_judge_from_stdin_with(explored: bool) -> Box<dyn Judge> {
                     };
                     Box::new(LocalJudge {
                         problem_name: parsed.problem_name.unwrap_or_else(|| "json".to_string()),
+                        problem_args: String::new(),
                         rooms: vec![0; num_rooms], // True room signatures are unknown
                         starting_room: 0, // Start at room 0 (the fixed starting room in the problem spec)
                         graph: vec![[0; 6]; num_rooms], // True graph is unknown
