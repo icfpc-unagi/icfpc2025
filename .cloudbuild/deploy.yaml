@@ -62,4 +62,4 @@ options:
     - 'DOCKER_BUILDKIT=1'
     - 'UNAGI_PASSWORD=${_UNAGI_PASSWORD}'
   logging: CLOUD_LOGGING_ONLY
-  machineType: 'E2_HIGHCPU_32'
+  machineType: 'E2_HIGHCPU_8'
