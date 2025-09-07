@@ -93,9 +93,10 @@ fn main() {
                 "at {}, error: graph[{}][{}] == {}, but trying to set {}",
                 i, id1, door, graph[id1][door], id2
             );
+        } else if graph[id1][door] == !0 {
+            eprintln!("update: {} --{}--> {}", id1, door, id2);
+            graph[id1][door] = id2;
         }
-
-        graph[id1][door] = id2;
     }
 
     let ret = false; //update_graph(&mut graph, n);
