@@ -51,6 +51,8 @@ fn gen_lock_token() -> String {
 /// * `Err` if a database error occurs.
 pub fn lock(ttl: Duration) -> Result<Option<String>> {
     let user = current_username();
+    let arg0 = std::env::args().next().unwrap_or_default();
+    let lock_user = format!("{}:{}", user, arg0);
     let token = gen_lock_token();
     let ttl_secs = (ttl.as_secs().min(i64::MAX as u64)) as i64;
 
@@ -65,7 +67,7 @@ pub fn lock(ttl: Duration) -> Result<Option<String>> {
             lock_expired = DATE_ADD(CURRENT_TIMESTAMP, INTERVAL :ttl SECOND)
         WHERE lock_id = 1 AND lock_expired < CURRENT_TIMESTAMP
         "#,
-        params! { "lock_user" => &user, "lock_token" => &token, "ttl" => ttl_secs },
+        params! { "lock_user" => &lock_user, "lock_token" => &token, "ttl" => ttl_secs },
     )?;
 
     if affected > 0 {

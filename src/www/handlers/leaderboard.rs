@@ -12,6 +12,7 @@ use chrono::NaiveDateTime;
 use chrono_humanize::Humanize;
 use mysql::params;
 use serde::Deserialize;
+use std::collections::HashMap;
 use std::fmt::Write;
 use tokio::time::Duration;
 
@@ -25,8 +26,8 @@ pub struct LeaderboardQuery {
 
 /// A helper to wrap content in the standard HTML page template.
 fn html_page(title: &str, body: &str, banner: &str) -> String {
-    // Auto-refresh leaderboard pages every 5 minutes
-    let auto_refresh = "<script>setTimeout(() => location.reload(), 5*60*1000);</script>";
+    // Auto-refresh leaderboard pages every minute
+    let auto_refresh = "<script>setTimeout(() => location.reload(), 60*1000);</script>";
     crate::www::handlers::template::render(&format!(
         "{}<h1>{}</h1>\n{}\n{}",
         banner, title, auto_refresh, body
@@ -74,6 +75,7 @@ pub async fn show(
 
 /// The core logic for fetching data and rendering the leaderboard page for a single problem.
 async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<String> {
+    let mut timings = vec![];
     // Fetch active lock
     // Build notification banner if active_lock_user exists
     let t0 = std::time::Instant::now();
@@ -97,31 +99,19 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
     } else {
         String::new()
     };
-    let banner_ms = t0.elapsed().as_millis();
+    timings.push(("banner", t0.elapsed().as_millis()));
 
     // Fetch all scores.
     let t0 = std::time::Instant::now();
     let scores = api::scores()?;
-    let scores_ms = t0.elapsed().as_millis();
+    timings.push(("scores", t0.elapsed().as_millis()));
 
     // Build problem navigation links for the top of the page.
     // scores: Unagiのスコア一覧 (api::scores)
     // scoresテーブルから各問題ごとの全チーム最新スコアの最小値を取得
-    let mut best_scores = std::collections::HashMap::new();
-    let rows = sql::select(
-        r#"
-        SELECT problem, MIN(score) AS best_score
-        FROM scores
-        WHERE score IS NOT NULL
-        GROUP BY problem
-        "#,
-        params::Params::Empty,
-    )?;
-    for row in rows {
-        let problem = row.at::<String>(0)?;
-        let best_score = row.at::<i64>(1)?;
-        best_scores.insert(problem, best_score);
-    }
+    let t0 = std::time::Instant::now();
+    let best_scores = best_scores()?;
+    timings.push(("best_scores", t0.elapsed().as_millis()));
 
     let mut nav_links: Vec<String> = Vec::new();
     if problem == "global" {
@@ -138,11 +128,14 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
             score.map_or("-".to_string(), |s| s.to_string()),
             best.map_or("-".to_string(), |s| s.to_string())
         );
-        // Unagiのスコアが最良でない場合は赤くする
-        if let (Some(unagi_score), Some(best_score)) = (score, best)
-            && unagi_score > best_score
-        {
+        let score = *score.unwrap_or(&i64::MAX);
+        let best = *best.unwrap_or(&i64::MAX);
+        if score > best {
             link = format!(r#"<span style="color:red;">{}</span>"#, link);
+        } else if score <= 2 {
+            link = format!(r#"<span style="color:silver;">{}</span>"#, link);
+        } else if score < best {
+            link = format!(r#"<span style="color:lime;">{}</span>"#, link);
         }
         if problem == p {
             link = format!("<b>{link}</b>");
@@ -159,7 +152,7 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
     // Fetch recent guesses for the problem to display.
     let t0 = std::time::Instant::now();
     let guesses_html = recent_guesses(problem).await?;
-    let recent_ms = t0.elapsed().as_millis();
+    timings.push(("recent_guesses", t0.elapsed().as_millis()));
 
     // Fetch the latest correct guess for the problem, optionally bypassing the cache.
     let t0 = std::time::Instant::now();
@@ -170,11 +163,11 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
     } else {
         last_correct_guess(problem)?
     };
-    let last_guess_ms = t0.elapsed().as_millis();
+    timings.push(("last_guess_ms", t0.elapsed().as_millis()));
 
     let t0 = std::time::Instant::now();
     let snapshots = fetch_snapshots(problem).await?;
-    let fetch_ms = t0.elapsed().as_millis();
+    timings.push(("fetch_snapshots", t0.elapsed().as_millis()));
 
     // Construct the final HTML page, embedding the data and the charting JavaScript.
     let html = format!(
@@ -362,7 +355,12 @@ document.getElementById('lb-table').addEventListener('click', (ev) => {{
     );
     // Append timing information at the end of the HTML body.
     let timings_html = format!(
-        "\n<hr><div style=\"font:12px monospace;opacity:0.7;margin-top:8px;\">timings: fetch_snapshots={fetch_ms}ms, last_correct_guess={last_guess_ms}ms, recent_guesses={recent_ms}ms, banner_html={banner_ms}ms, api::scores={scores_ms}ms</div>",
+        "\n<hr><div style=\"font:12px monospace;opacity:0.7;margin-top:8px;\">timings: {}</div>",
+        timings
+            .iter()
+            .map(|(name, ms)| format!("{name}={ms}ms"))
+            .collect::<Vec<_>>()
+            .join(", ")
     );
     let full_html = format!("{}{}", html, timings_html);
 
@@ -371,6 +369,26 @@ document.getElementById('lb-table').addEventListener('click', (ev) => {{
         &full_html,
         &banner_html,
     ))
+}
+
+#[cached(result = true, time = 300)]
+fn best_scores() -> Result<HashMap<String, i64>> {
+    let mut best_scores = HashMap::new();
+    let rows = sql::select(
+        r#"
+        SELECT problem, MIN(score) AS best_score
+        FROM scores
+        WHERE score IS NOT NULL
+        GROUP BY problem
+        "#,
+        params::Params::Empty,
+    )?;
+    for row in rows {
+        let problem = row.at::<String>(0)?;
+        let best_score = row.at::<i64>(1)?;
+        best_scores.insert(problem, best_score);
+    }
+    Ok(best_scores)
 }
 
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
@@ -403,6 +421,7 @@ async fn fetch_snapshots(problem: &str) -> Result<Vec<Snapshot>> {
         SELECT timestamp, team_name, score
         FROM scores
         WHERE problem = :problem
+          AND score IS NOT NULL
         ORDER BY timestamp ASC
         "#,
         params! { "problem" => problem },
@@ -518,7 +537,7 @@ async fn recent_guesses(problem: &str) -> Result<String> {
     result = true,
     key = "String",
     convert = "{problem.to_string()}",
-    time = 300,
+    time = 1800,
     sync_writes = "by_key"
 )]
 fn last_correct_guess(problem: &str) -> Result<String> {

@@ -27,7 +27,7 @@ async fn main() -> std::io::Result<()> {
     HttpServer::new(|| {
         App::new()
             .route("/", web::get().to(www::handlers::index))
-            // .route("/comm", web::get().to(www::handlers::comm))
+            .route("/comm", web::get().to(www::handlers::comm))
             .route("/cron", web::get().to(www::handlers::cron::run))
             .route(
                 "/leaderboard",
