@@ -262,7 +262,8 @@ fn main() {
     }
 
     // 解けたらうれしいな
-    assert_eq!(cnf.sat.solve(), Some(true));
+    //assert_eq!(cnf.sat.solve(), Some(true));
+    solve_no_marks::solve_cnf_parallel(&mut cnf, 25, 25);
 
     let mut guess = Guess {
         start: first_room,
