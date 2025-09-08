@@ -1,9 +1,7 @@
 # Team Unagi
 [Team Unagi](https://icfpc-unagi.github.io/)'s repository for the ICFP Programming Contest 2025.
 
-
-![dashboard](dashboard.png)
-
+<a href="https://icfpc-unagi.github.io/icfpc2025/dashboard.html"><img src="dashboard.png"></a>
 
 ## Members
 * Takuya Akiba
