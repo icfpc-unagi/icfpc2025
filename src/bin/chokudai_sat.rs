@@ -101,7 +101,8 @@ fn main() {
 
             eprintln!("gacha score {}: {} {}", k, score, score2);
             if score >= 0.0025 || score2 >= 1.5 {
-                panic!("unlucky");
+                //panic!("unlucky");
+                eprintln!("unlucky");
             }
         }
 
