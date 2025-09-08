@@ -160,7 +160,8 @@ fn main() {
             for v in 0..n * D {
                 col.push(A[u][e][v]);
             }
-            cnf.at_most_one(&col);
+            cnf.amo_sequential(&col);
+            //cnf.at_most_one(&col);
         }
     }
 
