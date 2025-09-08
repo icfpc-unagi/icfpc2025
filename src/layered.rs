@@ -2,16 +2,11 @@
     clippy::needless_range_loop,
     clippy::filter_map_bool_then, // https://github.com/rust-lang/rust-clippy/issues/11617
 )]
-use std::io::Read as _;
-
-use anyhow::{Context as _, Result};
-use icfpc2025::{
-    SetMinMax as _, api,
-    judge::{Guess, JsonIn},
-};
+use crate::{SetMinMax as _, api, judge::Guess};
+use anyhow::Result;
 
 #[derive(serde::Serialize, Debug)]
-struct JsonOut {
+pub struct JsonOut {
     map: api::Map,
     classes: Vec<Vec<usize>>,
     permutations: Vec<Vec<Perm3>>,
@@ -103,19 +98,12 @@ where
     first
 }
 
-fn main() -> Result<()> {
-    let mut input = String::new();
-    std::io::stdin().read_to_string(&mut input).unwrap();
-
-    let map: api::Map = serde_json::from_str::<JsonIn>(input.trim())
-        .context("invalid JSON")?
-        .map
-        .context("missing map")?;
+pub fn reduce_graph(map: &api::Map) -> Result<JsonOut> {
     let Guess {
         start,
         rooms,
         graph,
-    } = (&map).into();
+    } = map.into();
     let n = rooms.len();
 
     eprintln!("start = {}", start);
@@ -226,8 +214,10 @@ fn main() -> Result<()> {
         graph,
     };
     let map = api::Map::try_from(&guess)?;
-    let output = JsonOut { map, classes, permutations };
-    let json_out = serde_json::to_string(&output).unwrap();
-    println!("{}", json_out);
-    Ok(())
+    let output = JsonOut {
+        map,
+        classes,
+        permutations,
+    };
+    Ok(output)
 }
