@@ -44,12 +44,32 @@ fn gacha(n: usize, plan: &[(Option<usize>, usize)], labels: &[usize]) -> f64 {
     sum
 }
 
+fn gacha2(n: usize, plan: &[(Option<usize>, usize)], labels: &[usize]) -> f64 {
+    let mut muda = 0.0;
+    let mut now = 1.0;
+    for i in 0..plan.len() {
+        if plan[i].1 == !0 {
+            continue;
+        }
+        if let Some(c) = plan[i].0 {
+            if labels[i] == c {
+                muda += now;
+            } else {
+                muda += 0.0;
+            }
+            now = now * (n as f64 - 1.0) / n as f64;
+        }
+    }
+    dbg!(muda);
+    muda
+}
+
 fn main() {
     let mut rng = rand::rng();
     let mut judge = icfpc2025::judge::get_judge_from_stdin();
     let D = 2; // 倍化率
     let K = 1; // 全体のクエリ数
-    let F = judge.num_rooms() * 3 / 2; // 前半パートの長さ
+    let F = judge.num_rooms() * 1; // 前半パートの長さ
     let n = judge.num_rooms() / D;
     let (plans, labels) = {
         let mut plans = vec![];
@@ -75,14 +95,14 @@ fn main() {
         }
         let mut labels = judge.explore(&plans);
 
-        let mut gacha_scores = vec![];
         for k in 0..K {
             let score = gacha(n, &plans[k], &labels[k]);
-            gacha_scores.push(score);
-            eprintln!("gacha score {}: {}", k, score);
-            if score >= 0.0027 {
-                panic!("unlucky");
-            }
+            let score2 = gacha2(n, &plans[k], &labels[k]);
+
+            eprintln!("gacha score {}: {} {}", k, score, score2);
+            //if score >= 0.0027 {
+            //    panic!("unlucky");
+            //}
         }
 
         let mut labels0 = vec![];
