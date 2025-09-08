@@ -100,9 +100,9 @@ fn main() {
             let score2 = gacha2(n, &plans[k], &labels[k]);
 
             eprintln!("gacha score {}: {} {}", k, score, score2);
-            //if score >= 0.0027 {
-            //    panic!("unlucky");
-            //}
+            if score >= 0.0025 || score2 >= 1.5 {
+                panic!("unlucky");
+            }
         }
 
         let mut labels0 = vec![];
