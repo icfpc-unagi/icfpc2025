@@ -69,7 +69,7 @@ fn main() {
     let mut judge = icfpc2025::judge::get_judge_from_stdin();
     let D = 2; // 倍化率
     let K = 1; // 全体のクエリ数
-    let F = judge.num_rooms() * 5 / 2; // 前半パートの長さ
+    let F = judge.num_rooms() * 3 / 2; // 前半パートの長さ
     let n = judge.num_rooms() / D;
     let (plans, labels) = {
         let mut plans = vec![];
@@ -146,6 +146,17 @@ fn main() {
     let first_room = labels[0] * D;
     cnf.clause([V[0][first_room]]);
 
+    // A[u][e][v] := u の ドア e は v とつながる
+    let mut A = mat![!0; n * D; 6; n * D];
+    for u in 0..n * D {
+        for e in 0..6 {
+            for v in 0..n * D {
+                A[u][e][v] = cnf.var();
+            }
+            cnf.choose_one(&A[u][e]);
+        }
+    }
+
     // E[u][e][v][f] := 頂点uのe番目のドアが頂点vのf番目のドアに繋がっている
     let mut E = mat![!0; n * D; 6; n * D; 6];
 
@@ -171,6 +182,9 @@ fn main() {
                         E[ui ^ 1][e][vj ^ 1][f] = E[vj][f][ui][e];
                     }
                     tmp.push(E[ui][e][vj][f]);
+
+                    //AとEの整合性
+                    cnf.clause([-A[ui][e][vj], E[ui][e][vj][f]]);
                 }
             }
 
@@ -211,7 +225,11 @@ fn main() {
                     // 時刻 t に (u,i) にいて、ドア e を選ぶと、時刻 t+1 には (t,j) にいる
                     for f in 0..6 {
                         // V[t][ui] -> E[ui][e][tj][f] -> V[t+1][tj]
-                        cnf.clause([-V[t][ui], -E[ui][e][tj][f], V[t + 1][tj]]);
+                        //cnf.clause([-V[t][ui], -E[ui][e][tj][f], V[t + 1][tj]]);
+
+                        //EではなくAを使う
+                        // V[t][ui] & A[ui][e][tj] -> V[t+1][tj]
+                        cnf.clause([-V[t][ui], -A[ui][e][tj], V[t + 1][tj]]);
                     }
                 }
             }
