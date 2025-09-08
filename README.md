@@ -55,6 +55,17 @@ We created two main variations of this one-stage solver. The first used a relati
 
 The other variation used a SAT representation inspired by our two-stage approach. By representing the base graph's topology and the multiplexing method as separately as possible, it encourages the SAT solver to work in a manner similar to the two-stage process, making the problem more approachable for the solver. The plans used for one-stage approaches were generally structured like those in the two-stage method: the first part without charcoal marks (for topology) and the second part with them (for multiplexing). Building the SAT instance to focus on topology first made the solving process more natural. The solvers based on this approach, `wata_sat4` and `wata_sat6`, solved **aleph(2\*6)**, **beth(2\*12)**, **gimel(2\*18)**, and **daleth(2\*24)**. On **daleth**, in particular, we were the only team to have achieved a score of 3 when the leaderboard was frozen.
 
+---
+
+### Unconstrained Cost Solution
+*Code: `bin/src/tos1.rs`*
+
+To gain insight into the official problem's underlying patterns, we also developed a solution approach that disregards cost considerations.
+For a sequence of doors, we aim to determine whether the room reached by following the sequence matches a room based on another sequence. To achieve this, we perform probabilistic verification by appending several sequences of doors.
+For Full Division, we further enhanced the solution by starting from two prefixes of equal length 12 (=4^2-4) where the door sequences are identical but charcoal marks differ.
+This enables differentiation between rooms that would otherwise be indistinguishable in their initial states.
+Since rooms reached through prefix segments carry distinct marks, we can determine when each was next visited. This allows us to detect self-intersections in prefix segments and identify which (post-prefix) door sequence corresponds to the initial room.
+Additionally, regardless of the request size, the response consistently took approximately one second to return. To improve execution time, we implemented batch processing for multiple door sequence requests.
 
 ## Acknowledgements
 
