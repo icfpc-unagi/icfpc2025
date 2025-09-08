@@ -34,6 +34,8 @@ pub mod gcp;
 pub mod executor;
 pub mod lock_guard;
 
+pub mod layered;
+
 /// A trait for conveniently updating a value to its minimum or maximum.
 pub trait SetMinMax {
     /// If `v` is less than `self`, updates `self` to `v` and returns `true`.
