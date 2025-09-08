@@ -63,7 +63,7 @@ fn main() {
     let mut judge = icfpc2025::judge::get_judge_from_stdin();
     let D = 3; // 倍化率
     let K = 2; // 全体のクエリ数
-    let F = judge.num_rooms() * 6; // 前半パートの長さ
+    let F = judge.num_rooms() * 5; // 前半パートの長さ
     let n = judge.num_rooms() / D;
     let (super_guess, plans, labels) = {
         let mut plans = vec![];
@@ -107,8 +107,8 @@ fn main() {
             }
         }
         let mut labels = judge.explore(&plans);
-        if gacha(n, &plans[1], &labels[1]) > 0.0012 {
-            // panic!("unlucky");
+        if gacha(n, &plans[1], &labels[1]) > 0.0010 {
+            panic!("unlucky");
         }
 
         let mut labels0 = vec![];

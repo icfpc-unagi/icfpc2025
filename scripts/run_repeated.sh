@@ -8,12 +8,12 @@ set -Eeuo pipefail
 # Stops entirely if the command exits successfully.
 
 # Config
-TIME_LIMIT="5m"          # Changeable via env before calling this script
+TIME_LIMIT="300m"          # Changeable via env before calling this script
 KILL_GRACE="10s"         # Grace period before SIGKILL after timeout
 
 # Command + input
-CMD=(cargo run --release --bin wata_sat3)
-INPUT="local random_3layers 72 0"
+CMD=(cargo run --release --bin wata_sat6b)
+INPUT="local random_2layers 60 0"
 # INPUT="remote teth"
 
 # Ensure `timeout` exists
