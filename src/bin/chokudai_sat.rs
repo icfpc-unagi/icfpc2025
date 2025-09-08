@@ -185,7 +185,9 @@ fn main() {
                     tmp.push(E[ui][e][vj][f]);
 
                     //AとEの整合性
-                    cnf.clause([-A[ui][e][vj], E[ui][e][vj][f]]);
+                    //EがこれならAがこれみたいな
+                    // E[u][e][v][f] -> A[u][e][v]
+                    cnf.clause([-E[ui][e][vj][f], A[ui][e][vj]]);
                 }
             }
 
