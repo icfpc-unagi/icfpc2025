@@ -453,7 +453,7 @@ fn best_scores() -> Result<HashMap<String, i64>> {
         r#"
         SELECT problem, MIN(score) AS best_score
         FROM scores
-        WHERE score IS NOT NULL
+        WHERE problem <> 'global' AND score > 0 AND team_name <> 'Unagi'
         GROUP BY problem
         "#,
         params::Params::Empty,
