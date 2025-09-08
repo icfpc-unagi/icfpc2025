@@ -216,7 +216,10 @@ struct SelectResponse {
 #[cfg(feature = "reqwest")]
 pub fn select(problem_name: &str) -> Result<String> {
     // Acquire process-wide lock and start renewal thread, unless in direct mode.
-    let is_direct = matches!(std::env::var("AEDIFICIUM_ENDPOINT").ok().as_deref(), Some("direct"));
+    let is_direct = matches!(
+        std::env::var("AEDIFICIUM_ENDPOINT").ok().as_deref(),
+        Some("direct")
+    );
     if !is_direct {
         start_lock_manager_blocking()?;
     }
@@ -376,7 +379,7 @@ pub fn guess(map: &Map) -> Result<bool> {
 }
 
 #[cfg(feature = "reqwest")]
-#[cached(result = true, time = 300)]
+#[cached(result = true, time = 300, result_fallback = true)]
 pub fn scores() -> Result<HashMap<String, i64>> {
     let client = &*client::BLOCKING_CLIENT;
     // This endpoint is not proxied.
@@ -405,10 +408,7 @@ pub fn scores() -> Result<HashMap<String, i64>> {
 pub fn ping_root() -> Result<()> {
     let client = &*client::BLOCKING_CLIENT;
     let url = format!("{}/", aedificium_base());
-    let res = client
-        .get(&url)
-        .send()
-        .context("Failed to GET /")?;
+    let res = client.get(&url).send().context("Failed to GET /")?;
     let status = res.status();
     log_unagi_header(&res);
     // Treat 2xx as well as 400/404 as normal for measurement purposes.

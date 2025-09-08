@@ -104,7 +104,35 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
 
     // Fetch all scores.
     let t0 = std::time::Instant::now();
-    let scores = api::scores()?;
+    let scores = match api::scores() {
+        Ok(scores) => scores,
+        Err(e) => {
+            eprintln!("Failed to fetch scores: {}", e);
+            // latest scores per problem
+            let rows = sql::select(
+                r"
+                SELECT problem, score
+                FROM (
+                    SELECT
+                        problem,
+                        score,
+                        ROW_NUMBER() OVER (PARTITION BY problem ORDER BY timestamp DESC) AS rn
+                    FROM scores
+                    WHERE team_name = 'Unagi' AND problem IS NOT 'global'
+                ) t
+                WHERE rn = 1
+                ",
+                params::Params::Empty,
+            )?;
+            let mut scores = HashMap::new();
+            for row in rows {
+                let problem = row.at::<String>(0)?;
+                let score = row.at::<i64>(1)?;
+                scores.insert(problem, score);
+            }
+            scores
+        }
+    };
     timings.push(("scores", t0.elapsed().as_millis()));
 
     // Build problem navigation links for the top of the page.
@@ -500,9 +528,10 @@ async fn fetch_history(problem: &str) -> Result<HashMap<String, Vec<(String, i64
             }
             // 最後の要素が入っていなければ追加
             if let Some(last) = series.last()
-                && picked.last() != Some(last) {
-                    picked.push(*last);
-                }
+                && picked.last() != Some(last)
+            {
+                picked.push(*last);
+            }
             *series = picked;
         }
     }
