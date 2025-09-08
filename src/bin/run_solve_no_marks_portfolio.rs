@@ -1,3 +1,4 @@
+#![allow(unused_variables, unused_imports)]
 use icfpc2025::solve_no_marks::{self, solve_cadical_multi};
 use itertools::Itertools;
 use rand::prelude::*;

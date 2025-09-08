@@ -1,5 +1,5 @@
 #![cfg_attr(feature = "skip_lint", allow(clippy::all, clippy::pedantic, warnings))]
-#![allow(non_snake_case)]
+#![allow(non_snake_case, dead_code)]
 
 use icfpc2025::{judge::Guess, solve_no_marks::Cnf, *};
 use itertools::Itertools;
