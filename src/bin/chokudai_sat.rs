@@ -19,6 +19,31 @@ fn balanced_plan(len: usize, m: usize, rng: &mut impl Rng) -> Vec<usize> {
     plan
 }
 
+fn gacha(n: usize, plan: &[(Option<usize>, usize)], labels: &[usize]) -> f64 {
+    let mut label_door = mat![0; 4; 6];
+    for i in 0..labels.len() {
+        let door = plan[i].1;
+        if door == !0 {
+            continue;
+        }
+        let label = labels[i];
+        label_door[label][door] += 1;
+    }
+    let mut sum = 0.0;
+    let mut num = vec![0; 4];
+    for i in 0..n {
+        num[i % 4] += 1;
+    }
+    for i in 0..4 {
+        for j in 0..6 {
+            let expected = num[i] as f64 / n as f64 / 6.0;
+            sum += (expected - label_door[i][j] as f64 / labels.len() as f64).powi(2);
+        }
+    }
+    dbg!(sum);
+    sum
+}
+
 fn main() {
     let mut rng = rand::rng();
     let mut judge = icfpc2025::judge::get_judge_from_stdin();
@@ -49,6 +74,14 @@ fn main() {
             }
         }
         let mut labels = judge.explore(&plans);
+
+        let mut gacha_scores = vec![];
+        for k in 0..K {
+            let score = gacha(n, &plans[k], &labels[k]);
+            gacha_scores.push(score);
+            eprintln!("gacha score {}: {}", k, score);
+        }
+
         let mut labels0 = vec![];
         let mut first = 0;
         for k in 0..K {
