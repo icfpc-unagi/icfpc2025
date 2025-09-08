@@ -202,6 +202,9 @@ fn main() {
             let mut col = vec![];
             for u in 0..n * D {
                 for e in 0..6 {
+                    if E[u][e][v][f] == !0 {
+                        continue;
+                    }
                     col.push(E[u][e][v][f]);
                 }
             }
