@@ -90,10 +90,14 @@ pub fn get_id() -> anyhow::Result<String> {
 #[cfg(feature = "reqwest")]
 #[once]
 fn aedificium_base() -> String {
-    std::env::var("AEDIFICIUM_ENDPOINT")
-        .ok()
-        .map(|s| s.trim_end_matches('/').to_string())
-        .unwrap_or_else(|| "https://icfpc.sx9.jp/api".to_string())
+    match std::env::var("AEDIFICIUM_ENDPOINT").ok() {
+        Some(ref v) if v == "direct" => {
+            // Direct mode: talk to the AWS API Gateway endpoint directly
+            "https://31pwr5t6ij.execute-api.eu-west-2.amazonaws.com".to_string()
+        }
+        Some(v) => v.trim_end_matches('/').to_string(),
+        None => "https://icfpc.sx9.jp/api".to_string(),
+    }
 }
 
 /// Logs the value of the `x-unagi-log` header if present in the response.
@@ -211,8 +215,11 @@ struct SelectResponse {
 /// The `problemName` echoed by the service on success.
 #[cfg(feature = "reqwest")]
 pub fn select(problem_name: &str) -> Result<String> {
-    // Acquire process-wide lock and start renewal thread.
-    start_lock_manager_blocking()?;
+    // Acquire process-wide lock and start renewal thread, unless in direct mode.
+    let is_direct = matches!(std::env::var("AEDIFICIUM_ENDPOINT").ok().as_deref(), Some("direct"));
+    if !is_direct {
+        start_lock_manager_blocking()?;
+    }
     let client = &*client::BLOCKING_CLIENT;
     let url = format!("{}/select", aedificium_base());
 
@@ -389,6 +396,32 @@ pub fn scores() -> Result<HashMap<String, i64>> {
 
     let body = res.json().context("Failed to parse scores response")?;
     Ok(body)
+}
+
+/// Issues a GET request to `aedificium_base()/` and discards the response.
+///
+/// Intended for basic latency measurements; it does not interpret the body.
+#[cfg(feature = "reqwest")]
+pub fn ping_root() -> Result<()> {
+    let client = &*client::BLOCKING_CLIENT;
+    let url = format!("{}/", aedificium_base());
+    let res = client
+        .get(&url)
+        .send()
+        .context("Failed to GET /")?;
+    let status = res.status();
+    log_unagi_header(&res);
+    // Treat 2xx as well as 400/404 as normal for measurement purposes.
+    if !(status.is_success()
+        || status == reqwest::StatusCode::BAD_REQUEST
+        || status == reqwest::StatusCode::NOT_FOUND)
+    {
+        let body = res.text().unwrap_or_default();
+        anyhow::bail!("/ returned {}: {}", status, body);
+    }
+    // Read and discard to fully consume the response connection.
+    let _ = res.bytes().context("Failed to read / body")?;
+    Ok(())
 }
 
 #[cfg(test)]
