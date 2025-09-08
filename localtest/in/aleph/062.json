@@ -1,0 +1,422 @@
+{
+  "problemName": "aleph",
+  "map": {
+    "rooms": [
+      0,
+      0,
+      1,
+      1,
+      1,
+      1,
+      2,
+      3,
+      3,
+      0,
+      2,
+      0
+    ],
+    "startingRoom": 0,
+    "connections": [
+      {
+        "from": {
+          "room": 0,
+          "door": 0
+        },
+        "to": {
+          "room": 1,
+          "door": 0
+        }
+      },
+      {
+        "from": {
+          "room": 0,
+          "door": 1
+        },
+        "to": {
+          "room": 2,
+          "door": 0
+        }
+      },
+      {
+        "from": {
+          "room": 0,
+          "door": 2
+        },
+        "to": {
+          "room": 3,
+          "door": 3
+        }
+      },
+      {
+        "from": {
+          "room": 0,
+          "door": 3
+        },
+        "to": {
+          "room": 2,
+          "door": 2
+        }
+      },
+      {
+        "from": {
+          "room": 0,
+          "door": 4
+        },
+        "to": {
+          "room": 3,
+          "door": 4
+        }
+      },
+      {
+        "from": {
+          "room": 0,
+          "door": 5
+        },
+        "to": {
+          "room": 4,
+          "door": 5
+        }
+      },
+      {
+        "from": {
+          "room": 1,
+          "door": 1
+        },
+        "to": {
+          "room": 4,
+          "door": 0
+        }
+      },
+      {
+        "from": {
+          "room": 1,
+          "door": 2
+        },
+        "to": {
+          "room": 5,
+          "door": 3
+        }
+      },
+      {
+        "from": {
+          "room": 1,
+          "door": 3
+        },
+        "to": {
+          "room": 4,
+          "door": 2
+        }
+      },
+      {
+        "from": {
+          "room": 1,
+          "door": 4
+        },
+        "to": {
+          "room": 5,
+          "door": 4
+        }
+      },
+      {
+        "from": {
+          "room": 1,
+          "door": 5
+        },
+        "to": {
+          "room": 2,
+          "door": 5
+        }
+      },
+      {
+        "from": {
+          "room": 2,
+          "door": 1
+        },
+        "to": {
+          "room": 6,
+          "door": 0
+        }
+      },
+      {
+        "from": {
+          "room": 2,
+          "door": 3
+        },
+        "to": {
+          "room": 3,
+          "door": 5
+        }
+      },
+      {
+        "from": {
+          "room": 2,
+          "door": 4
+        },
+        "to": {
+          "room": 7,
+          "door": 4
+        }
+      },
+      {
+        "from": {
+          "room": 3,
+          "door": 0
+        },
+        "to": {
+          "room": 8,
+          "door": 1
+        }
+      },
+      {
+        "from": {
+          "room": 3,
+          "door": 1
+        },
+        "to": {
+          "room": 5,
+          "door": 1
+        }
+      },
+      {
+        "from": {
+          "room": 3,
+          "door": 2
+        },
+        "to": {
+          "room": 9,
+          "door": 5
+        }
+      },
+      {
+        "from": {
+          "room": 4,
+          "door": 1
+        },
+        "to": {
+          "room": 10,
+          "door": 0
+        }
+      },
+      {
+        "from": {
+          "room": 4,
+          "door": 3
+        },
+        "to": {
+          "room": 5,
+          "door": 5
+        }
+      },
+      {
+        "from": {
+          "room": 4,
+          "door": 4
+        },
+        "to": {
+          "room": 8,
+          "door": 4
+        }
+      },
+      {
+        "from": {
+          "room": 5,
+          "door": 0
+        },
+        "to": {
+          "room": 7,
+          "door": 1
+        }
+      },
+      {
+        "from": {
+          "room": 5,
+          "door": 2
+        },
+        "to": {
+          "room": 11,
+          "door": 5
+        }
+      },
+      {
+        "from": {
+          "room": 6,
+          "door": 1
+        },
+        "to": {
+          "room": 11,
+          "door": 0
+        }
+      },
+      {
+        "from": {
+          "room": 6,
+          "door": 2
+        },
+        "to": {
+          "room": 11,
+          "door": 1
+        }
+      },
+      {
+        "from": {
+          "room": 6,
+          "door": 3
+        },
+        "to": {
+          "room": 6,
+          "door": 3
+        }
+      },
+      {
+        "from": {
+          "room": 6,
+          "door": 4
+        },
+        "to": {
+          "room": 11,
+          "door": 3
+        }
+      },
+      {
+        "from": {
+          "room": 6,
+          "door": 5
+        },
+        "to": {
+          "room": 6,
+          "door": 5
+        }
+      },
+      {
+        "from": {
+          "room": 7,
+          "door": 0
+        },
+        "to": {
+          "room": 8,
+          "door": 0
+        }
+      },
+      {
+        "from": {
+          "room": 7,
+          "door": 2
+        },
+        "to": {
+          "room": 7,
+          "door": 2
+        }
+      },
+      {
+        "from": {
+          "room": 7,
+          "door": 3
+        },
+        "to": {
+          "room": 11,
+          "door": 2
+        }
+      },
+      {
+        "from": {
+          "room": 7,
+          "door": 5
+        },
+        "to": {
+          "room": 8,
+          "door": 5
+        }
+      },
+      {
+        "from": {
+          "room": 8,
+          "door": 2
+        },
+        "to": {
+          "room": 8,
+          "door": 2
+        }
+      },
+      {
+        "from": {
+          "room": 8,
+          "door": 3
+        },
+        "to": {
+          "room": 9,
+          "door": 2
+        }
+      },
+      {
+        "from": {
+          "room": 9,
+          "door": 0
+        },
+        "to": {
+          "room": 10,
+          "door": 1
+        }
+      },
+      {
+        "from": {
+          "room": 9,
+          "door": 1
+        },
+        "to": {
+          "room": 10,
+          "door": 2
+        }
+      },
+      {
+        "from": {
+          "room": 9,
+          "door": 3
+        },
+        "to": {
+          "room": 10,
+          "door": 4
+        }
+      },
+      {
+        "from": {
+          "room": 9,
+          "door": 4
+        },
+        "to": {
+          "room": 9,
+          "door": 4
+        }
+      },
+      {
+        "from": {
+          "room": 10,
+          "door": 3
+        },
+        "to": {
+          "room": 10,
+          "door": 3
+        }
+      },
+      {
+        "from": {
+          "room": 10,
+          "door": 5
+        },
+        "to": {
+          "room": 10,
+          "door": 5
+        }
+      },
+      {
+        "from": {
+          "room": 11,
+          "door": 4
+        },
+        "to": {
+          "room": 11,
+          "door": 4
+        }
+      }
+    ]
+  }
+}
