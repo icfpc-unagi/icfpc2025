@@ -3,9 +3,9 @@
   <g stroke-opacity="0.8" fill="none">
     <path stroke="#d62728" stroke-width="1" d="M 110 20 l 70 0" />
     <path stroke="#333" stroke-width="1" d="
-    M 110 40 l 70 0
-    M 110 50 l 70 10
-    M 110 60 l 70 -10
+    M 110 40 l 70 10
+    M 110 50 l 70 -10
+    M 110 60 l 70 0
     " />
     <path stroke="#2ca02c" stroke-width="1" d="M 210 20 l 70 0" />
     <path stroke="#333" stroke-width="1" d="
@@ -15,9 +15,9 @@
     " />
     <path stroke="#1f77b4" stroke-width="1" d="M 310 20 l 70 0" />
     <path stroke="#333" stroke-width="1" d="
-    M 310 40 l 70 10
-    M 310 50 l 70 -10
-    M 310 60 l 70 0
+    M 310 40 l 70 0
+    M 310 50 l 70 10
+    M 310 60 l 70 -10
     " />
     <path stroke="#333" marker-end="url(#MyArrow)" stroke-width="1" d="M 410 20 l 70 0" />
     <path stroke="#333" stroke-width="1" d="
