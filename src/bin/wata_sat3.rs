@@ -107,8 +107,8 @@ fn main() {
             }
         }
         let mut labels = judge.explore(&plans);
-        if gacha2(n, &plans[1], &labels[1]) > 5.0 {
-            panic!("unlucky");
+        if gacha(n, &plans[1], &labels[1]) > 0.0012 {
+            // panic!("unlucky");
         }
 
         let mut labels0 = vec![];
@@ -125,8 +125,9 @@ fn main() {
                 }
             }
         }
-        let super_guess =
-            solve_no_marks::solve_cadical_multi(judge.num_rooms() / D, &plans0, &labels0, 50);
+        let super_guess = solve_no_marks::solve(judge.num_rooms() / D, &plans0, &labels0);
+        // let super_guess =
+        //     solve_no_marks::solve_cadical_multi(judge.num_rooms() / D, &plans0, &labels0, 50);
         eprintln!("!!!! super_guess done");
         while plans[0].iter().all(|x| x.0.is_none()) {
             plans.remove(0);
@@ -140,9 +141,10 @@ fn main() {
                 flat_plans.push((None, !0));
             }
         }
+        flat_plans.push((None, !0));
         (super_guess, flat_plans, flat_labels)
     };
-    assert_eq!(plans.len() + 1, labels.len());
+    assert_eq!(plans.len(), labels.len());
     let mut cnf = Cnf::new();
     assert_eq!(super_guess.rooms.len(), n);
     // V[t][i] := 時刻 t に訪れたのは (u,i) である
@@ -221,7 +223,7 @@ fn main() {
     }
     let mut u = super_guess.start;
     cnf.clause([V[0][0]]);
-    for t in 0..plans.len() {
+    for t in 0..plans.len() - 1 {
         if plans[t].1 == !0 {
             u = super_guess.start;
             cnf.clause([V[t + 1][0]]);
@@ -301,8 +303,8 @@ fn main() {
         }
         u = v;
     }
-    // assert_eq!(cnf.sat.solve(), Some(true));
-    solve_no_marks::solve_cnf_parallel(&mut cnf, 25, 25);
+    assert_eq!(cnf.sat.solve(), Some(true));
+    // solve_no_marks::solve_cnf_parallel(&mut cnf, 25, 25);
     let mut guess = Guess {
         start: super_guess.start * D,
         graph: vec![[(!0, !0); 6]; judge.num_rooms()],
