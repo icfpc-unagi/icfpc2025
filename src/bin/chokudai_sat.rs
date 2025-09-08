@@ -21,7 +21,7 @@ fn balanced_plan(len: usize, m: usize, rng: &mut impl Rng) -> Vec<usize> {
 
 fn gacha(n: usize, plan: &[(Option<usize>, usize)], labels: &[usize]) -> f64 {
     let mut label_door = mat![0; 4; 6];
-    for i in 0..labels.len() {
+    for i in 0..labels.len() - 1 {
         let door = plan[i].1;
         if door == !0 {
             continue;
