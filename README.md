@@ -1,5 +1,5 @@
 # Team Unagi
-Team Unagi's repository for the ICFP Programming Contest 2025.
+[Team Unagi](https://icfpc-unagi.github.io/)'s repository for the ICFP Programming Contest 2025.
 
 
 ![dashboard](dashboard.png)
