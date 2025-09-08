@@ -125,9 +125,9 @@ fn main() {
                 }
             }
         }
-        let super_guess = solve_no_marks::solve(judge.num_rooms() / D, &plans0, &labels0);
-        // let super_guess =
-        //     solve_no_marks::solve_cadical_multi(judge.num_rooms() / D, &plans0, &labels0, 50);
+        // let super_guess = solve_no_marks::solve(judge.num_rooms() / D, &plans0, &labels0);
+        let super_guess =
+            solve_no_marks::solve_cadical_multi(judge.num_rooms() / D, &plans0, &labels0, 50);
         eprintln!("!!!! super_guess done");
         while plans[0].iter().all(|x| x.0.is_none()) {
             plans.remove(0);
@@ -303,8 +303,8 @@ fn main() {
         }
         u = v;
     }
-    assert_eq!(cnf.sat.solve(), Some(true));
-    // solve_no_marks::solve_cnf_parallel(&mut cnf, 25, 25);
+    // assert_eq!(cnf.sat.solve(), Some(true));
+    solve_no_marks::solve_cnf_parallel(&mut cnf, 25, 25);
     let mut guess = Guess {
         start: super_guess.start * D,
         graph: vec![[(!0, !0); 6]; judge.num_rooms()],
