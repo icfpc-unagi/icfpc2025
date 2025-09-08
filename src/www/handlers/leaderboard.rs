@@ -10,7 +10,6 @@ use anyhow::Result;
 use cached::proc_macro::cached;
 use chrono::NaiveDateTime;
 use chrono_humanize::Humanize;
-use itertools::Itertools;
 use mysql::params;
 use serde::Deserialize;
 use std::collections::HashMap;

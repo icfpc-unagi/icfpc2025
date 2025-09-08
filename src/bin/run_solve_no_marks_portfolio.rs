@@ -1,3 +1,4 @@
+#![cfg_attr(feature = "skip_lint", allow(clippy::all, clippy::pedantic, warnings))]
 use icfpc2025::solve_no_marks::{self, solve_cadical_multi};
 use itertools::Itertools;
 use rand::prelude::*;
