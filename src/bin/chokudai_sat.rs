@@ -155,6 +155,12 @@ fn main() {
                 A[u][e][v] = cnf.var();
             }
             //cnf.choose_one(&A[u][e]);
+            //高々1個所に繋がる amo
+            let mut col = vec![];
+            for v in 0..n * D {
+                col.push(A[u][e][v]);
+            }
+            cnf.at_most_one(&col);
         }
     }
 
