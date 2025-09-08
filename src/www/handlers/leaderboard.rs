@@ -10,6 +10,7 @@ use anyhow::Result;
 use cached::proc_macro::cached;
 use chrono::NaiveDateTime;
 use chrono_humanize::Humanize;
+use itertools::Itertools;
 use mysql::params;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -27,7 +28,7 @@ pub struct LeaderboardQuery {
 /// A helper to wrap content in the standard HTML page template.
 fn html_page(title: &str, body: &str, banner: &str) -> String {
     // Auto-refresh leaderboard pages every minute
-    let auto_refresh = "<script>setTimeout(() => location.reload(), 60*1000);</script>";
+    let auto_refresh = "<script>setTimeout(() => location.reload(), 5*60*1000);</script>";
     crate::www::handlers::template::render(&format!(
         "{}<h1>{}</h1>\n{}\n{}",
         banner, title, auto_refresh, body
@@ -166,8 +167,9 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
     timings.push(("last_guess_ms", t0.elapsed().as_millis()));
 
     let t0 = std::time::Instant::now();
-    let snapshots = fetch_snapshots(problem).await?;
-    timings.push(("fetch_snapshots", t0.elapsed().as_millis()));
+    let history = fetch_history(problem).await?;
+
+    timings.push(("fetch_history", t0.elapsed().as_millis()));
 
     // For global leaderboard, also prepare latest per-problem scores per team.
     // This uses a single SQL query to fetch the latest (by timestamp) non-null score
@@ -216,7 +218,6 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
 {nav}
 <div>
   <h2>Problem: {problem}</h2>
-  <p>Snapshots: {count}</p>
 </div>
 <div id="chart" style="width: 100%; height: 500px;"></div>
 <div style="display: flex">
@@ -228,7 +229,7 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon"></script>
 <script>
-const snapshots = {snapshots};
+const history = {history};
 const problem = "{problem}";
 const perProblem = {per_problem_scores};
 const problemList = {problem_list};
@@ -242,21 +243,9 @@ function parseTs(ts) {{
   // Interpret original timestamp as UTC, then Chart.js adapter formats it in client's timezone.
   return new Date(Date.UTC(y, mo, d, h, mi, s));
 }}
-const labels = snapshots.map(s => parseTs(s.ts));
 
 // Transform the snapshot data into a format Chart.js understands: one dataset per team.
-// Each dataset is an array of scores, with `null` for timestamps where the team had no score.
-const teamToData = new Map();
-snapshots.forEach((snap, idx) => {{
-  const arr = Array.isArray(snap.data) ? snap.data : [];
-  for (const rec of arr) {{
-    const team = rec.teamName;
-    const score = rec.score;
-    if (!team || score == null) continue;
-    if (!teamToData.has(team)) teamToData.set(team, Array(labels.length).fill(null));
-    teamToData.get(team)[idx] = +score;
-  }}
-}});
+const teamToData = new Map(Object.entries(history).map(([team, series]) => [team, series.map(([ts, score]) => [parseTs(ts), score])]));
 
 // Generate a consistent color for each team based on its name hash.
 function colorFor(name) {{
@@ -272,7 +261,7 @@ const datasets = Array.from(teamToData.entries()).map(([team, data]) => ({{
   backgroundColor: 'transparent',
   spanGaps: false,
   tension: 0.2,
-  pointRadius: team === 'Unagi' ? 3 : 1,
+  pointRadius: 1,
   borderWidth: team === 'Unagi' ? 3 : 1,
 }}));
 
@@ -284,7 +273,7 @@ container.appendChild(canvas);
 
 const chart = new Chart(canvas.getContext('2d'), {{
   type: 'line',
-  data: {{ labels, datasets }},
+  data: {{ datasets }},
   options: {{
     responsive: true,
     maintainAspectRatio: false,
@@ -315,7 +304,7 @@ const latest = [];
 for (const [team, data] of teamToData.entries()) {{
   let last = null;
   for (let i = data.length - 1; i >= 0; i--) {{
-    if (data[i] != null) {{ last = data[i]; break; }}
+    if (data[i][1] != null) {{ last = data[i][1]; break; }}
   }}
   if (last == null) continue;
   latest.push({{ team, score: last }});
@@ -409,8 +398,7 @@ document.getElementById('lb-table').addEventListener('click', (ev) => {{
 "#,
         nav = nav_html,
         problem = problem,
-        count = snapshots.len(),
-        snapshots = serde_json::to_string(&snapshots)?,
+        history = serde_json::to_string(&history)?,
     );
     // Append timing information at the end of the HTML body.
     let timings_html = format!(
@@ -458,12 +446,6 @@ pub struct LeaderboardEntry {
     pub team_pl: String,
     pub score: Option<i64>,
 }
-// Build JSON structure for the client side: [{ts, data: <json>}]
-#[derive(serde::Serialize, Clone)]
-struct Snapshot {
-    ts: String,
-    data: Vec<LeaderboardEntry>,
-}
 
 /// Fetches and downsamples leaderboard snapshots from GCS for a given problem.
 #[cached(
@@ -473,58 +455,67 @@ struct Snapshot {
     convert = "{problem.to_string()}",
     sync_writes = "by_key"
 )]
-async fn fetch_snapshots(problem: &str) -> Result<Vec<Snapshot>> {
+async fn fetch_history(problem: &str) -> Result<HashMap<String, Vec<(String, i64)>>> {
     // scores テーブルから履歴取得
     let rows = sql::select(
         r#"
-        SELECT timestamp, team_name, score
-        FROM scores
-        WHERE problem = :problem
-          AND score IS NOT NULL
-        ORDER BY timestamp ASC
+        SELECT team_name, timestamp, score
+        FROM (
+          SELECT
+            team_name,
+            timestamp,
+            score,
+            LAG(score) OVER (PARTITION BY team_name ORDER BY timestamp) AS prev_score,
+            LEAD(score) OVER (PARTITION BY team_name ORDER BY timestamp) AS next_score
+          FROM scores
+          WHERE problem = :problem
+            AND score > 0
+          ORDER BY team_name, timestamp
+        ) t
+        WHERE score != prev_score
+          OR prev_score IS NULL
+          OR next_score IS NULL
         "#,
         params! { "problem" => problem },
     )?;
 
-    use std::collections::BTreeMap;
-    let mut map: BTreeMap<chrono::NaiveDateTime, Vec<LeaderboardEntry>> = BTreeMap::new();
+    let mut map: HashMap<_, Vec<_>> = HashMap::new();
     for row in rows {
-        let ts = row.at::<chrono::NaiveDateTime>(0)?;
-        let team_name = row.at::<String>(1)?;
-        let score = row.at::<i64>(2).ok();
-        map.entry(ts).or_default().push(LeaderboardEntry {
-            team_name,
-            team_pl: String::new(), // 空文字で埋める
-            score,
-        });
+        let team = row.at::<String>(0)?;
+        let ts = row.at::<chrono::NaiveDateTime>(1)?;
+        let score = row.at::<i64>(2)?;
+        map.entry(team).or_default().push((ts, score));
     }
+
     // Downsample: 100件程度に間引き
-    let keys: Vec<chrono::NaiveDateTime> = map.keys().cloned().collect();
-    let n = keys.len();
-    let keys = if n <= 100 {
-        keys
-    } else {
-        let stride = n.div_ceil(100);
-        let mut picked = Vec::new();
-        for (i, k) in keys.iter().enumerate() {
-            if i % stride == 0 {
-                picked.push(*k);
+    for (_team, series) in map.iter_mut() {
+        let n = series.len();
+        if n > 100 {
+            let stride = n.div_ceil(100);
+            let mut picked = Vec::new();
+            for (i, item) in series.iter().enumerate() {
+                if i % stride == 0 {
+                    picked.push(*item);
+                }
             }
+            // 最後の要素が入っていなければ追加
+            if let Some(last) = series.last()
+                && picked.last() != Some(last) {
+                    picked.push(*last);
+                }
+            *series = picked;
         }
-        if picked.last() != keys.last()
-            && let Some(last) = keys.last()
-        {
-            picked.push(*last);
-        }
-        picked
-    };
-    let mut snapshots = Vec::new();
-    for k in keys {
-        let ts_str = k.format("%Y%m%d-%H%M%S").to_string();
-        let data = map.get(&k).cloned().unwrap_or_default();
-        snapshots.push(Snapshot { ts: ts_str, data });
     }
-    Ok(snapshots)
+
+    let mut history = HashMap::new();
+    for (team, series) in map {
+        let series: Vec<(String, i64)> = series
+            .into_iter()
+            .map(|(ts, score)| (ts.format("%Y%m%d-%H%M%S").to_string(), score))
+            .collect();
+        history.insert(team, series);
+    }
+    Ok(history)
 }
 
 /// 最近の提出（guess）を取得してHTMLとして返す関数
