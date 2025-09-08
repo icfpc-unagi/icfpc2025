@@ -92,9 +92,9 @@ fn main() {
             }
         }
         let mut labels = judge.explore(&plans);
-        if gacha(n, &plans[0], &labels[0]) > 0.0015 {
-            panic!("unlucky");
-        }
+        // if gacha(n, &plans[0], &labels[0]) > 0.0015 {
+        //     panic!("unlucky");
+        // }
 
         let mut labels0 = vec![];
         let mut first = 0;
