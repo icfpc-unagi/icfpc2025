@@ -154,7 +154,7 @@ fn main() {
             for v in 0..n * D {
                 A[u][e][v] = cnf.var();
             }
-            cnf.choose_one(&A[u][e]);
+            //cnf.choose_one(&A[u][e]);
         }
     }
 
