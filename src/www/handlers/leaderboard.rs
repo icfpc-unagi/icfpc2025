@@ -169,6 +169,47 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
     let snapshots = fetch_snapshots(problem).await?;
     timings.push(("fetch_snapshots", t0.elapsed().as_millis()));
 
+    // For global leaderboard, also prepare latest per-problem scores per team.
+    // This uses a single SQL query to fetch the latest (by timestamp) non-null score
+    // for each (problem, team_name) pair to avoid many round-trips.
+    let (per_problem_scores, problem_list): (serde_json::Value, serde_json::Value) =
+        if problem == "global" {
+            let rows = sql::select(
+                r#"
+            SELECT s.problem, s.team_name, s.score
+            FROM scores s
+            JOIN (
+              SELECT problem, team_name, MAX(timestamp) AS max_ts
+              FROM scores
+              WHERE score IS NOT NULL
+              GROUP BY problem, team_name
+            ) t
+              ON t.problem = s.problem
+             AND t.team_name = s.team_name
+             AND t.max_ts = s.timestamp
+            WHERE s.score IS NOT NULL
+            "#,
+                params::Params::Empty,
+            )?;
+
+            use std::collections::BTreeMap;
+            let mut map: BTreeMap<String, BTreeMap<String, i64>> = BTreeMap::new();
+            for r in rows {
+                let prob: String = r.at(0)?;
+                let team: String = r.at(1)?;
+                let score: i64 = r.at(2)?;
+                map.entry(team).or_default().insert(prob, score);
+            }
+            let per_problem_scores = serde_json::to_value(&map)?;
+            let problem_list: Vec<String> = problems::all_problems()
+                .iter()
+                .map(|p| p.problem.clone())
+                .collect();
+            (per_problem_scores, serde_json::to_value(problem_list)?)
+        } else {
+            (serde_json::json!({}), serde_json::json!([]))
+        };
+
     // Construct the final HTML page, embedding the data and the charting JavaScript.
     let html = format!(
         r#"
@@ -178,13 +219,19 @@ async fn render_problem_leaderboard(problem: &str, nocache: bool) -> Result<Stri
   <p>Snapshots: {count}</p>
 </div>
 <div id="chart" style="width: 100%; height: 500px;"></div>
-<div id="lb-table" style="margin-top:16px;"></div>
+<div style="display: flex">
+<div style="overflow-x: auto; box-sizing: border-box; scrollbar-gutter: stable both-edges;">
+<div id="lb-table" style="margin-top: 16px; overflow-wrap: anywhere;"></div>
+</div>
+</div>
 <script src="https://cdn.jsdelivr.net/npm/luxon@3/build/global/luxon.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-luxon"></script>
 <script>
 const snapshots = {snapshots};
 const problem = "{problem}";
+const perProblem = {per_problem_scores};
+const problemList = {problem_list};
 
 // === Chart.js Data Preparation ===
 
@@ -291,19 +338,31 @@ latest.forEach((r, i) => {{
   const nameHtml = r.team === 'Unagi' ? `<strong>${{esc(r.team)}}</strong>` : esc(r.team);
   const teamAttr = esc(r.team);
   const nameLink = `<a href='#' data-team=\"${{teamAttr}}\">${{nameHtml}}</a>`;
+  let extraCols = '';
+  if (problem === 'global') {{
+    const m = perProblem[r.team] || {{}};
+    extraCols = problemList.map(p => {{
+      const v = m[p];
+      return `<td style=\"padding:4px 8px; text-align:right;\">${{v ?? ''}}</td>`;
+    }}).join('');
+  }}
   rows += `<tr>
     <td style=\"padding:4px 8px; text-align:right;\">${{rank}}</td>
     <td style=\"padding:4px 8px;\">${{nameLink}}</td>
-    <td style=\"padding:4px 8px; text-align:right;\">${{r.score}}</td>
+    <td style=\"padding:4px 8px; text-align:right;\">${{r.score}}</td>${{extraCols}}
   </tr>`;
 }});
+let headerExtra = '';
+if (problem === 'global') {{
+  headerExtra = problemList.map(p => `<th style=\"text-align:right; padding:4px 8px;\">${{esc(p)}}</th>`).join('');
+}}
 document.getElementById('lb-table').innerHTML = `
-  <table style="border-collapse:collapse; width:100%; font: 13px sans-serif;">
+  <table style="border-collapse:collapse; font: 13px sans-serif; box-sizing: border-box;">
     <thead>
       <tr>
         <th style="text-align:right; padding:4px 8px;">Rank</th>
         <th style="text-align:left; padding:4px 8px;">Team</th>
-        <th style="text-align:right; padding:4px 8px;">Score</th>
+        <th style="text-align:right; padding:4px 8px; white-space: nowrap">Score</th>${{headerExtra}}
       </tr>
     </thead>
     <tbody>${{rows}}</tbody>
