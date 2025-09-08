@@ -1,5 +1,5 @@
 #![cfg_attr(feature = "skip_lint", allow(clippy::all, clippy::pedantic, warnings))]
-#![allow(non_snake_case)]
+#![allow(non_snake_case, unused_variables)]
 
 use itertools::Itertools;
 use std::path::Path;
