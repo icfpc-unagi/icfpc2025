@@ -1,5 +1,72 @@
 <!DOCTYPE html>
-<div id="container"></div>
+<svg width="400" height="100" viewBox="100,0,400,100" style="max-width: 100%; height: auto;">
+  <defs><marker id="MyArrow" viewBox="0 0 2 2" refX="3.5" refY="1" markerWidth="8" markerHeight="8" orient="auto"><path d="M0,0 L2,1 0,2 1,1 Z" opacity="0.8" fill="#333"></path></marker></defs>
+  <g stroke-opacity="0.8" fill="none">
+    <path stroke="#d62728" stroke-width="1" d="M 110 20 l 70 0" />
+    <path stroke="#333" stroke-width="1" d="
+    M 110 40 l 70 0
+    M 110 50 l 70 10
+    M 110 60 l 70 -10
+    " />
+    <path stroke="#2ca02c" stroke-width="1" d="M 210 20 l 70 0" />
+    <path stroke="#333" stroke-width="1" d="
+    M 210 40 l 70 20
+    M 210 50 l 70 0
+    M 210 60 l 70 -20
+    " />
+    <path stroke="#1f77b4" stroke-width="1" d="M 310 20 l 70 0" />
+    <path stroke="#333" stroke-width="1" d="
+    M 310 40 l 70 10
+    M 310 50 l 70 -10
+    M 310 60 l 70 0
+    " />
+    <path stroke="#333" marker-end="url(#MyArrow)" stroke-width="1" d="M 410 20 l 70 0" />
+    <path stroke="#333" stroke-width="1" d="
+    M 410 40 l 70 10
+    M 410 50 l 70 10
+    M 410 60 l 70 -20
+    " />
+  </g>
+  <g stroke="#fff" stroke-width="1.5">
+    <circle r="5" fill="#7f7f7f" cx="110" cy="20"></circle>
+    <circle r="5" fill="#7f7f7f" cx="180" cy="20"></circle>
+    <circle r="3" fill="#7f7f7f" cx="110" cy="40"></circle>
+    <circle r="3" fill="#7f7f7f" cx="180" cy="40"></circle>
+    <circle r="3" fill="#7f7f7f" cx="110" cy="50"></circle>
+    <circle r="3" fill="#7f7f7f" cx="180" cy="50"></circle>
+    <circle r="3" fill="#7f7f7f" cx="110" cy="60"></circle>
+    <circle r="3" fill="#7f7f7f" cx="180" cy="60"></circle>
+
+    <circle r="5" fill="#7f7f7f" cx="210" cy="20"></circle>
+    <circle r="5" fill="#7f7f7f" cx="280" cy="20"></circle>
+    <circle r="3" fill="#7f7f7f" cx="210" cy="40"></circle>
+    <circle r="3" fill="#7f7f7f" cx="280" cy="40"></circle>
+    <circle r="3" fill="#7f7f7f" cx="210" cy="50"></circle>
+    <circle r="3" fill="#7f7f7f" cx="280" cy="50"></circle>
+    <circle r="3" fill="#7f7f7f" cx="210" cy="60"></circle>
+    <circle r="3" fill="#7f7f7f" cx="280" cy="60"></circle>
+
+    <circle r="5" fill="#7f7f7f" cx="310" cy="20"></circle>
+    <circle r="5" fill="#7f7f7f" cx="380" cy="20"></circle>
+    <circle r="3" fill="#7f7f7f" cx="310" cy="40"></circle>
+    <circle r="3" fill="#7f7f7f" cx="380" cy="40"></circle>
+    <circle r="3" fill="#7f7f7f" cx="310" cy="50"></circle>
+    <circle r="3" fill="#7f7f7f" cx="380" cy="50"></circle>
+    <circle r="3" fill="#7f7f7f" cx="310" cy="60"></circle>
+    <circle r="3" fill="#7f7f7f" cx="380" cy="60"></circle>
+
+    <circle r="5" fill="#7f7f7f" cx="410" cy="20"></circle>
+    <circle r="5" fill="#7f7f7f" cx="480" cy="20"></circle>
+    <circle r="3" fill="#7f7f7f" cx="410" cy="40"></circle>
+    <circle r="3" fill="#7f7f7f" cx="480" cy="40"></circle>
+    <circle r="3" fill="#7f7f7f" cx="410" cy="50"></circle>
+    <circle r="3" fill="#7f7f7f" cx="480" cy="50"></circle>
+    <circle r="3" fill="#7f7f7f" cx="410" cy="60"></circle>
+    <circle r="3" fill="#7f7f7f" cx="480" cy="60"></circle>
+  </g>
+</svg>
+<div id="container">
+</div>
 <script type="module">
 
 import * as d3 from "https://cdn.jsdelivr.net/npm/d3@7/+esm";
@@ -224,8 +291,7 @@ const vau_array = [
 // container.append(chart(zain000));
 
 for (const [i, vau] of vau_array.entries()) {
-  // container.append("h2").text(`VAU Example ${i + 1}`);
-  container.append(chart(vau, 300, 300)); // .style("border", "1px solid black");
+  container.append(chart(vau, 240, 240));
 }
 
 </script>
