@@ -13,6 +13,7 @@ use icfpc2025::{
 #[derive(serde::Serialize, Debug)]
 struct JsonOut {
     map: api::Map,
+    classes: Vec<Vec<usize>>,
     permutations: Vec<Vec<Perm3>>,
 }
 
@@ -225,7 +226,7 @@ fn main() -> Result<()> {
         graph,
     };
     let map = api::Map::try_from(&guess)?;
-    let output = JsonOut { map, permutations };
+    let output = JsonOut { map, classes, permutations };
     let json_out = serde_json::to_string(&output).unwrap();
     println!("{}", json_out);
     Ok(())
