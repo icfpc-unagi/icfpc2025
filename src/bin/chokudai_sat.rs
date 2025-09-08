@@ -155,6 +155,11 @@ fn main() {
             let mut tmp = vec![];
             for vj in 0..n * D {
                 for f in 0..6 {
+                    // 出入口が違う自己ループは出入り口が一緒な自己ループ2つに置き換えられるので禁止
+                    if ui == vj && e != f {
+                        continue;
+                    }
+
                     if E[vj][f][ui][e] == !0 {
                         E[vj][f][ui][e] = cnf.var();
                         // 反対の辺は同じもの
