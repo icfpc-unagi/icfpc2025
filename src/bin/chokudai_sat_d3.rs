@@ -349,7 +349,7 @@ fn main() {
     let T = V.len();
 
     // Seen[k][i][t] の確保
-    let mut Seen = vec![vec![vec![0usize; T]; D]; n];
+    let mut Seen = vec![vec![vec![0; T]; D]; n];
     for k in 0..n {
         for i in 0..D {
             for t in 0..T {
