@@ -53,9 +53,9 @@ fn main() {
         L[i] = i % 4;
     }
     L.sort();
-    if gacha(&L, &labels[..=H]) > 0.002 {
-        panic!("unlucky");
-    }
+    // if gacha(&L, &labels[..=H]) > 0.002 {
+    //     panic!("unlucky");
+    // }
     let mut cnf = Cnf::new();
 
     // V[t][u] := 時刻 t の開始時点での頂点は u
