@@ -8,6 +8,7 @@ use icfpc2025::{
 };
 use itertools::Itertools;
 use rand::prelude::*;
+use std::collections::HashSet;
 use tokio::time::error::Elapsed;
 
 fn balanced_plan(len: usize, m: usize, rng: &mut impl Rng) -> Vec<usize> {
@@ -117,14 +118,12 @@ fn main() {
                         //u==v, e==fの時は、u1-v2, u2-v3, u3-v1のような辺を貼ると入口と出口が対応しない
                         //これがダメなのは2種類のみ。自己ループは良いので(0,1,2)や(2,1,0)はOK
                         if u == v && e == f {
-                            //u1-v2, u2-v3, u3-v1はだめ
-                            if (u1 == v2) || (u2 == v3) || (u3 == v1) {
+                            let inv = (perm[perm[0]] == 0)
+                                && (perm[perm[1]] == 1)
+                                && (perm[perm[2]] == 2);
+                            if !inv {
                                 continue;
-                            }
-                            //u1-v3, u2-v1, u3-v2はだめ
-                            if (u1 == v3) || (u2 == v1) || (u3 == v2) {
-                                continue;
-                            }
+                            } // 3-cycle を弾く
                         }
 
                         //u1<->v1を結ぶとき、u2<->v2, u3<->v3も結ぶため、3つの辺をまとめて一つの変数にする
@@ -240,13 +239,15 @@ fn main() {
 
             for ui in 0..n * D {
                 for tj in 0..n * D {
-                    // 時刻 t に (u,i) にいて、ドア e を選ぶと、時刻 t+1 には (t,j) にいる
+                    let mut set = HashSet::new();
                     for f in 0..6 {
-                        if E[ui][e][tj][f] != !0 {
-                            cnf.clause([-V[t][ui], -E[ui][e][tj][f], V[t + 1][tj]]);
+                        let x = E[ui][e][tj][f];
+                        if x != !0 && set.insert(x) {
+                            cnf.clause([-V[t][ui], -x, V[t + 1][tj]]);
                         }
-                        if E2[ui][e][tj][f] != !0 {
-                            cnf.clause([-V[t][ui], -E2[ui][e][tj][f], V[t + 1][tj]]);
+                        let y = E2[ui][e][tj][f];
+                        if y != !0 && set.insert(y) {
+                            cnf.clause([-V[t][ui], -y, V[t + 1][tj]]);
                         }
                     }
                 }
