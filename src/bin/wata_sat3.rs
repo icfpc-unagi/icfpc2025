@@ -18,7 +18,7 @@ fn balanced_plan(len: usize, m: usize, rng: &mut impl Rng) -> Vec<usize> {
     plan
 }
 
-fn gacha(n: usize, plan: &[(Option<usize>, usize)], labels: &[usize]) -> f64 {
+pub fn gacha(n: usize, plan: &[(Option<usize>, usize)], labels: &[usize]) -> f64 {
     let mut label_door = mat![0; 4; 6];
     for i in 0..labels.len().min(plan.len()) {
         let door = plan[i].1;
@@ -41,6 +41,21 @@ fn gacha(n: usize, plan: &[(Option<usize>, usize)], labels: &[usize]) -> f64 {
     }
     dbg!(sum);
     sum
+}
+
+pub fn gacha2(n: usize, plan: &[(Option<usize>, usize)], labels: &[usize]) -> f64 {
+    let mut fails = 0.0;
+    let mut mul = 1.0;
+    for t in 0..plan.len() {
+        if let Some(newc) = plan[t].0 {
+            if newc == labels[t] {
+                fails += mul;
+            }
+        }
+        mul *= (n - 1) as f64 / n as f64;
+    }
+    dbg!(fails);
+    fails
 }
 
 fn main() {
@@ -92,8 +107,8 @@ fn main() {
             }
         }
         let mut labels = judge.explore(&plans);
-        if gacha(n, &plans[0], &labels[0]) > 0.0015 {
-            // panic!("unlucky");
+        if gacha2(n, &plans[1], &labels[1]) > 5.0 {
+            panic!("unlucky");
         }
 
         let mut labels0 = vec![];
