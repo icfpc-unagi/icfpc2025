@@ -127,6 +127,10 @@ fn main() {
                             }
                         }
 
+                        if u == v && e != f {
+                            continue;
+                        }
+
                         //u1<->v1を結ぶとき、u2<->v2, u3<->v3も結ぶため、3つの辺をまとめて一つの変数にする
                         let now_e = cnf.var();
 
