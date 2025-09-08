@@ -252,7 +252,9 @@ fn main() {
         }
     }
 
-    assert_eq!(cnf.sat.solve(), Some(true));
+    // assert_eq!(cnf.sat.solve(), Some(true));
+    solve_no_marks::solve_cnf_parallel(&mut cnf, 25, 25);
+
     let mut guess = Guess {
         start: s * 2,
         graph: vec![[(!0, !0); 6]; judge.num_rooms()],
