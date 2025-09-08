@@ -591,17 +591,16 @@ fn last_correct_guess(problem: &str) -> Result<String> {
         }
 
         // Render d3 visualizer.
-        let mut problem = serde_json::value::Map::new();
-        problem.insert("map".to_string(), serde_json::to_value(&crate::layered::reduce_graph(&map)?)?);
         write!(
             w,
             r#"</table>
-            <img src="/static/perm3-legend.svg"><div id="container"></div>
+            <img src="/static/perm3-legend.svg" style="max-width: 100%; height: auto;">
+            <div id="container"></div>
             <script type="module">
               import chart from '/static/d3-visualizer.js';
               document.getElementById('container').append(chart({}));
             </script>"#,
-            serde_json::to_string(&problem)?,
+            serde_json::to_string(&crate::layered::reduce_graph(&map)?)?,
         )?;
 
         // Render the map as an SVG.
