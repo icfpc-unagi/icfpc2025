@@ -595,7 +595,9 @@ fn last_correct_guess(problem: &str) -> Result<String> {
         problem.insert("map".to_string(), serde_json::to_value(&crate::layered::reduce_graph(&map)?)?);
         write!(
             w,
-            r#"</table><img src="/static/perm3-legend.svg"><div id="container"></div><script type="module">
+            r#"</table>
+            <img src="/static/perm3-legend.svg"><div id="container"></div>
+            <script type="module">
               import chart from '/static/d3-visualizer.js';
               document.getElementById('container').append(chart({}));
             </script>"#,
