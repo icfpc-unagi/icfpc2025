@@ -7,7 +7,9 @@ pub static BLOCKING_CLIENT: Lazy<reqwest::blocking::Client> = Lazy::new(|| {
     // Pre-resolve the AWS API Gateway hostname to avoid DNS overhead and variance.
     // SNI/Host header remains the original hostname.
     let addr = SocketAddr::new(
-        "13.43.234.93".parse::<IpAddr>().expect("invalid hardcoded IP"),
+        "13.43.234.93"
+            .parse::<IpAddr>()
+            .expect("invalid hardcoded IP"),
         443,
     );
 
