@@ -31,7 +31,7 @@ fn run() -> Result<()> {
           AND a.api_log_response LIKE "%true%"
           AND b.api_log_response LIKE :like_problem
         ORDER BY a.api_log_id
-        LIMIT 10
+        LIMIT 20
         "#,
         params! { "like_problem" => format!("%{}%", problem_name) },
     )?;
