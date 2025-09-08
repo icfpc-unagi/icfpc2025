@@ -42,7 +42,7 @@ fn gacha(n: usize, plan: &[(Option<usize>, usize)], labels: &[usize]) -> f64 {
 fn main() {
     let mut rng = rand::rng();
     let mut judge = icfpc2025::judge::get_judge_from_stdin();
-    let H = judge.num_rooms() * 5 / 2; // 色を塗らずに動く回数
+    let H = judge.num_rooms() * 2; // 色を塗らずに動く回数
     // let H = rng.random_range(judge.num_rooms()..=judge.num_rooms() * 3);
     let n = judge.num_rooms() / 2;
     let mut plans = balanced_plan(judge.num_rooms() * 6, 6, &mut rng)
@@ -60,7 +60,7 @@ fn main() {
         L[i] = i % 4;
     }
     L.sort();
-    if gacha(n, &plans, &labels[..=H]) > 0.0080 {
+    if gacha(n, &plans, &labels[..=H]) > 0.0120 {
         panic!("unlucky");
     }
     let mut cnf = Cnf::new();

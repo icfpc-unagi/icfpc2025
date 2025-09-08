@@ -592,10 +592,10 @@ fn last_correct_guess(problem: &str) -> Result<String> {
 
         // Render d3 visualizer.
         let mut problem = serde_json::value::Map::new();
-        problem.insert("map".to_string(), serde_json::to_value(&map)?);
+        problem.insert("map".to_string(), serde_json::to_value(&crate::layered::reduce_graph(&map)?)?);
         write!(
             w,
-            r#"</table><div id="container"></div><script type="module">
+            r#"</table><img src="/static/perm3-legend.svg"><div id="container"></div><script type="module">
               import chart from '/static/d3-visualizer.js';
               document.getElementById('container').append(chart({}));
             </script>"#,

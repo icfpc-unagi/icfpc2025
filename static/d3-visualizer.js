@@ -7,6 +7,9 @@ const chart = (guess_json, w = 928, h = 680) => {
 
   // Specify the color scale.
   const color = d3.scaleOrdinal(d3.schemeCategory10);
+  const linkColor = d3.scaleOrdinal()
+    .domain(["I", "X", "Y", "Z", "P", "Q"])
+    .range(["#333", "#d62728", "#2ca02c", "#1f77b4", "#333"]);
 
   const nodes = [];
   const links = [];
@@ -14,7 +17,8 @@ const chart = (guess_json, w = 928, h = 680) => {
   const flinks = [];
 
   for (const [id, room] of guess_json.map.rooms.entries()) {
-    const node = { id: `${id}`, color: color(room), r: 5, isStart: id === guess_json.map.startingRoom };
+    const label = (guess_json.classes?.[id] ?? id).toString();
+    const node = { id: `${id}`, label, color: color(room), r: 5, isStart: id === guess_json.map.startingRoom };
     nodes.push(node);
     fnodes.push(node);
     for (const door of Array(6).keys()) {
@@ -23,11 +27,18 @@ const chart = (guess_json, w = 928, h = 680) => {
     }
   }
   for (const conn of guess_json.map.connections) {
+    let { from, to } = conn;
+    let perm = guess_json.permutations[from.room][from.door];
+    if (perm === "Q") {
+      [from, to] = [to, from];
+      perm = "P";
+    }
     const link = {
-      sourceRoom: conn.from.room,
-      source: `${conn.from.room}door${conn.from.door}`,
-      target: `${conn.to.room}door${conn.to.door}`,
-      targetRoom: conn.to.room,
+      sourceRoom: from.room,
+      source: `${from.room}door${from.door}`,
+      target: `${to.room}door${to.door}`,
+      targetRoom: to.room,
+      perm,
       distance: 10
     };
     // links.push({source: `${conn.from.room}`, target: `${conn.to.room}`});
@@ -73,16 +84,37 @@ const chart = (guess_json, w = 928, h = 680) => {
     .attr("viewBox", [-width / 2, -height / 2, width, height])
     .attr("style", "max-width: 100%; height: auto;");
 
+  svg.append("defs")
+    .append("marker")
+    .attr("id", "MyArrow")
+    .attr("viewBox", "0 0 2 2")
+    .attr("refX", 3.5)  // 始点、終点の丸記号と重ならないように調整
+    .attr("refY", 1)
+    .attr("markerWidth", 8)
+    .attr("markerHeight", 8)
+    .attr("orient", "auto")
+    .append("path")
+    .attr("d", "M0,0 L2,1 0,2 1,1 Z")
+    .attr("opacity", 0.8)
+    .attr("fill", "#333");
+
   // Add a line for each link, and a circle for each node.
   const link = svg.append("g")
-    .attr("stroke", "#999")
-    .attr("stroke-opacity", 0.6)
+    // .attr("stroke", "#999")
+    .attr("stroke-opacity", 0.8)
     .attr("fill", "none")
     .selectAll("path")
     .data(() => { console.log(links); return links; })
     // .join("line")
     //   .attr("stroke-width", d => 1);
     .join("path")
+    .attr("stroke", d => linkColor(d.perm))
+    // .attr("stroke-dasharray", d => {
+    //     if (d.perm === "P") return "1,2,3,2,5,2";
+    //     if (d.perm === "Q") return "5,2,3,2,1,2";
+    //     return null;
+    // })
+    .attr("marker-end", d => d.perm === "P" ? "url(#MyArrow)" : null)
     .attr("stroke-width", d => 1);
   // .join("path")
   //   .attr("stroke-width", 1)
@@ -99,7 +131,7 @@ const chart = (guess_json, w = 928, h = 680) => {
     .attr("fill", d => d.color);
 
   node.append("title")
-    .text(d => d.id);
+    .text(d => d.label);
 
   // Add a drag behavior.
   node.call(d3.drag()
