@@ -205,9 +205,9 @@ pub struct LocalJudge {
     /// Format: "{problem_type} {num_rooms} {seed}". May be empty for other constructors.
     problem_args: String,
     /// The signature of each room.
-    rooms: Vec<usize>,
+    pub rooms: Vec<usize>,
     /// The index of the starting room.
-    starting_room: usize,
+    pub starting_room: usize,
     /// The true graph of the map. `graph[i][d]` is the index of the room
     /// connected to door `d` of room `i`.
     pub graph: Vec<[usize; 6]>,

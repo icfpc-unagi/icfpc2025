@@ -104,15 +104,19 @@ pub fn reduce_graph(map: &api::Map) -> Result<JsonOut> {
         rooms,
         graph,
     } = map.into();
-    let n = rooms.len();
-
     eprintln!("start = {}", start);
     eprintln!("rooms = {:?}", rooms);
-    let graph = graph
-        .iter()
-        .map(|v| v.iter().map(|(r, _)| *r).collect::<Vec<_>>())
-        .collect::<Vec<_>>();
+    let graph = graph.iter().map(|v| v.map(|(r, _)| r)).collect::<Vec<_>>();
     eprintln!("graph = {:?}", graph);
+    reduce_graph_without_to_door(start, rooms, graph)
+}
+
+pub fn reduce_graph_without_to_door(
+    start: usize,
+    rooms: Vec<usize>,
+    graph: Vec<[usize; 6]>,
+) -> Result<JsonOut> {
+    let n = rooms.len();
 
     let mut eq = vec![vec![true; n]; n];
     for i in 0..n {
