@@ -226,14 +226,13 @@ fn main() {
             for ui in 0..n * D {
                 for tj in 0..n * D {
                     // 時刻 t に (u,i) にいて、ドア e を選ぶと、時刻 t+1 には (t,j) にいる
-                    for f in 0..6 {
-                        // V[t][ui] -> E[ui][e][tj][f] -> V[t+1][tj]
-                        //cnf.clause([-V[t][ui], -E[ui][e][tj][f], V[t + 1][tj]]);
-
-                        //EではなくAを使う
-                        // V[t][ui] & A[ui][e][tj] -> V[t+1][tj]
-                        cnf.clause([-V[t][ui], -A[ui][e][tj], V[t + 1][tj]]);
-                    }
+                    //for f in 0..6 {
+                    // V[t][ui] -> E[ui][e][tj][f] -> V[t+1][tj]
+                    //cnf.clause([-V[t][ui], -E[ui][e][tj][f], V[t + 1][tj]]);
+                    //}
+                    //EではなくAを使う
+                    // V[t][ui] & A[ui][e][tj] -> V[t+1][tj]
+                    cnf.clause([-V[t][ui], -A[ui][e][tj], V[t + 1][tj]]);
                 }
             }
         }
