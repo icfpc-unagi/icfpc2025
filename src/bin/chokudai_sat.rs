@@ -69,7 +69,7 @@ fn main() {
     let mut judge = icfpc2025::judge::get_judge_from_stdin();
     let D = 2; // 倍化率
     let K = 1; // 全体のクエリ数
-    let F = judge.num_rooms() * 1; // 前半パートの長さ
+    let F = judge.num_rooms() * 3 / 2; // 前半パートの長さ
     let n = judge.num_rooms() / D;
     let (plans, labels) = {
         let mut plans = vec![];
