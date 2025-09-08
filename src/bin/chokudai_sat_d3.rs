@@ -288,31 +288,43 @@ fn main() {
             cnf.choose_one(&C[t + 1][ui]);
         }
 
-        if let Some(new_c) = plans[t].0 {
+        if plans[t].1 == !0 {
+            // 区切りのときは最初の色に戻る
             for ui in 0..n * D {
-                // V[t][ui] => C[t+1][ui][new_c]
-                cnf.clause([-V[t][ui], C[t + 1][ui][new_c]]);
-                // V[t][ui] => !C[t+1][ui][c]  (c != new_c)
                 for c in 0..4 {
-                    if c != new_c {
-                        cnf.clause([-V[t][ui], -C[t + 1][ui][c]]);
+                    if c == ui / D % 4 {
+                        cnf.clause([C[t + 1][ui][c]]);
+                    } else {
+                        cnf.clause([-C[t + 1][ui][c]]);
                     }
-
-                    // 正色の持ち上げ
-                    cnf.clause([V[t][ui], -C[t][ui][c], C[t + 1][ui][c]]);
-                    // 反色の持ち上げ
-                    cnf.clause([V[t][ui], C[t][ui][c], -C[t + 1][ui][c]]);
                 }
             }
         } else {
-            // 色を塗らない場合
-            for ui in 0..n * D {
-                for c in 0..4 {
-                    // 単純に前ターンのCを引き継げばよい
-                    // C[t][ui][c] -> C[t+1][ui][c]
-                    cnf.clause([-C[t][ui][c], C[t + 1][ui][c]]);
-                    // !C[t][ui][c] -> !C[t+1][ui][c]
-                    cnf.clause([C[t][ui][c], -C[t + 1][ui][c]]);
+            if let Some(new_c) = plans[t].0 {
+                for ui in 0..n * D {
+                    // V[t][ui] => C[t+1][ui][new_c]
+                    cnf.clause([-V[t][ui], C[t + 1][ui][new_c]]);
+                    // V[t][ui] => !C[t+1][ui][c]  (c != new_c)
+                    for c in 0..4 {
+                        if c != new_c {
+                            cnf.clause([-V[t][ui], -C[t + 1][ui][c]]);
+                        }
+
+                        // 非訪問ノードの色の持ち上げ（保持）: V=0 のとき C[t+1] ≡ C[t]
+                        cnf.clause([V[t][ui], -C[t][ui][c], C[t + 1][ui][c]]);
+                        cnf.clause([V[t][ui], C[t][ui][c], -C[t + 1][ui][c]]);
+                    }
+                }
+            } else {
+                // 色を塗らない場合
+                for ui in 0..n * D {
+                    for c in 0..4 {
+                        // 単純に前ターンのCを引き継げばよい
+                        // C[t][ui][c] -> C[t+1][ui][c]
+                        cnf.clause([-C[t][ui][c], C[t + 1][ui][c]]);
+                        // !C[t][ui][c] -> !C[t+1][ui][c]
+                        cnf.clause([C[t][ui][c], -C[t + 1][ui][c]]);
+                    }
                 }
             }
         }
@@ -329,6 +341,69 @@ fn main() {
                     // V[t][ui] -> C[t][ui][c]
                     cnf.clause([-V[t][ui], C[t][ui][c]]);
                 }
+            }
+        }
+    }
+
+    // 対称性破壊
+    let T = V.len();
+
+    // Seen[k][i][t] の確保
+    let mut Seen = vec![vec![vec![0usize; T]; D]; n];
+    for k in 0..n {
+        for i in 0..D {
+            for t in 0..T {
+                Seen[k][i][t] = cnf.var();
+            }
+        }
+    }
+
+    // 定義: Seen[k][i][0] ↔ V[0][k*D+i]
+    for k in 0..n {
+        for i in 0..D {
+            let lit = V[0][k * D + i];
+            // Seen ⇒ V
+            cnf.clause([-Seen[k][i][0], lit]);
+            // V ⇒ Seen
+            cnf.clause([-lit, Seen[k][i][0]]);
+        }
+    }
+
+    // 定義: Seen[k][i][t+1] ↔ Seen[k][i][t] ∨ V[t+1][k*D+i]
+    for k in 0..n {
+        for i in 0..D {
+            for t in 0..T - 1 {
+                let prev = Seen[k][i][t];
+                let here = V[t + 1][k * D + i];
+                let next = Seen[k][i][t + 1];
+
+                // (next ⇒ prev ∨ here)
+                cnf.clause([-next, prev, here]);
+                // prev ⇒ next  （単調性）
+                cnf.clause([-prev, next]);
+                // here ⇒ next
+                cnf.clause([-here, next]);
+            }
+        }
+    }
+
+    // 順序: 1 は 0 の後、2 は 1 の後
+    for k in 0..n {
+        for t in 0..T {
+            // world 1 at t ⇒ Seen0 at t-1
+            let v1 = V[t][k * D + 1];
+            if t == 0 {
+                cnf.clause([-v1]); // t=0 で 1 は出現禁止
+            } else {
+                cnf.clause([-v1, Seen[k][0][t - 1]]);
+            }
+
+            // world 2 at t ⇒ Seen1 at t-1
+            let v2 = V[t][k * D + 2];
+            if t == 0 {
+                cnf.clause([-v2]); // t=0 で 2 は出現禁止
+            } else {
+                cnf.clause([-v2, Seen[k][1][t - 1]]);
             }
         }
     }
